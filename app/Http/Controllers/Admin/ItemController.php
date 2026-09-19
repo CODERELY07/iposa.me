@@ -32,7 +32,7 @@ class ItemController extends Controller
         $items = Item::query()
             ->when(! $showArchived, fn ($query) => $query->whereNull('archived_at'))
             ->when($showArchived, fn ($query) => $query->whereNotNull('archived_at'))
-            ->when($search !== '', fn ($query) => $query->where('name', 'like', '%'.$search.'%'))
+            ->when($search !== '', fn ($query) => $query->whereLike('name', '%'.$search.'%'))
             ->with(['category', 'variants', 'recipeLines.piece', 'recipeLines.variant'])
             ->orderBy('name')
             ->get();

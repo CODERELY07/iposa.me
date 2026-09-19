@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Render (and most hosts) terminate HTTPS at a load balancer: trust its X-Forwarded-* headers
+        // so URLs, secure cookies and signed email-verification links use https.
+        $middleware->trustProxies(at: '*');
+
         $middleware->alias([
             'role' => RoleMiddleware::class,
             'business' => EnsureBusinessAccess::class,

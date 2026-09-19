@@ -10,15 +10,21 @@ class UserSeeder extends Seeder
 {
     /**
      * Demo accounts (password: "password"). Verified, so they can open the app right away.
-     * The owner and cashier are linked to their shop in BusinessSeeder.
+     * The owner and cashier are linked to their shop in DemoShopSeeder.
+     *
+     * In production the platform operator is never seeded with a demo password:
+     * it comes from `php artisan app:ensure-super-admin` (SUPER_ADMIN_* env vars).
      */
     public function run(): void
     {
         $accounts = [
             ['name' => 'Maria Santos', 'email' => 'admin@gmail.com', 'role' => User::ROLE_ADMIN],
-            ['name' => 'Platform Operator', 'email' => 'calipjo.markely@gmail.com', 'role' => User::ROLE_SUPER_ADMIN],
             ['name' => 'Jessa Reyes', 'email' => 'staff@gmail.com', 'role' => User::ROLE_STAFF],
         ];
+
+        if (! app()->isProduction()) {
+            $accounts[] = ['name' => 'Platform Operator', 'email' => 'calipjo.markely@gmail.com', 'role' => User::ROLE_SUPER_ADMIN];
+        }
 
         foreach ($accounts as $account) {
             $user = User::firstOrNew(['email' => $account['email']]);

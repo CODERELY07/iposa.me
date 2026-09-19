@@ -142,11 +142,11 @@ class Business extends Model
         $like = '%'.$term.'%';
 
         $query->where(function (Builder $query) use ($like): void {
-            $query->where('business_name', 'like', $like)
-                ->orWhere('business_type', 'like', $like)
+            $query->whereLike('business_name', $like)
+                ->orWhereLike('business_type', $like)
                 ->orWhereHas('owner', fn (Builder $owner) => $owner
-                    ->where('name', 'like', $like)
-                    ->orWhere('email', 'like', $like));
+                    ->whereLike('name', $like)
+                    ->orWhereLike('email', $like));
         });
     }
 

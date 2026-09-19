@@ -101,6 +101,16 @@ Format PHP before committing:
 vendor/bin/pint --dirty
 ```
 
+## Deploy (Render)
+
+iPOSa ships a production `Dockerfile` (nginx + PHP 8.4-FPM + scheduler) and a Render Blueprint (`render.yaml`: web service + Postgres in Singapore).
+
+1. Push to GitHub.
+2. Render → **New → Blueprint** → pick the repo.
+3. Fill in `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`, the `MAIL_*` values and the billing details, then **Apply**.
+
+Migrations run on every deploy. Full guide, costs and troubleshooting: [docs/DEPLOY-RENDER.md](docs/DEPLOY-RENDER.md).
+
 ## Project structure
 
 ```
