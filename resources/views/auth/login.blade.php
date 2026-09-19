@@ -1,47 +1,57 @@
 <x-guest-layout>
-    <!-- Session Status -->
-    <x-auth-session-status class="mb-4" :status="session('status')" />
+    <div>
+        <h1 class="font-display text-4xl text-ink-900 dark:text-white">Open the shop.</h1>
+        <p class="mt-2 text-sm text-ink-500 dark:text-ink-400">Log in as owner, manager or cashier. You'll land on the right screen.</p>
+    </div>
 
-    <form method="POST" action="{{ route('login') }}">
+    <x-auth-session-status class="mt-6" :status="session('status')" />
+
+    <form method="POST" action="{{ route('login') }}" class="mt-8 space-y-5">
         @csrf
 
-        <!-- Email Address -->
         <div>
             <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autofocus autocomplete="username" />
+            <x-text-input id="email" type="email" name="email" :value="old('email')" required autofocus autocomplete="username" placeholder="you@yourshop.ph" />
             <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
 
-        <!-- Password -->
-        <div class="mt-4">
-            <x-input-label for="password" :value="__('Password')" />
-
-            <x-text-input id="password" class="block mt-1 w-full"
-                            type="password"
-                            name="password"
-                            required autocomplete="current-password" />
-
+        <div>
+            <div class="flex items-center justify-between">
+                <x-input-label for="password" :value="__('Password')" />
+                @if (Route::has('password.request'))
+                    <a class="mb-1.5 text-xs font-medium text-brand-600 hover:underline dark:text-brand-300" href="{{ route('password.request') }}">
+                        {{ __('Forgot it?') }}
+                    </a>
+                @endif
+            </div>
+            <x-text-input id="password" type="password" name="password" required autocomplete="current-password" />
             <x-input-error :messages="$errors->get('password')" class="mt-2" />
         </div>
 
-        <!-- Remember Me -->
-        <div class="block mt-4">
-            <label for="remember_me" class="inline-flex items-center">
-                <input id="remember_me" type="checkbox" class="rounded dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-indigo-600 shadow-sm focus:ring-indigo-500 dark:focus:ring-indigo-600 dark:focus:ring-offset-gray-800" name="remember">
-                <span class="ms-2 text-sm text-gray-600 dark:text-gray-400">{{ __('Remember me') }}</span>
-            </label>
-        </div>
+        <label for="remember_me" class="flex items-center gap-2.5">
+            <input id="remember_me" type="checkbox" class="size-4 rounded border-ink-300 text-brand-500 focus:ring-brand-400 dark:border-white/20 dark:bg-ink-900 dark:focus:ring-offset-ink-950" name="remember">
+            <span class="text-sm text-ink-600 dark:text-ink-400">{{ __('Keep me signed in on this device') }}</span>
+        </label>
 
-        <div class="flex items-center justify-end mt-4">
-            @if (Route::has('password.request'))
-                <a class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800" href="{{ route('password.request') }}">
-                    {{ __('Forgot your password?') }}
-                </a>
-            @endif
-
-            <x-primary-button class="ms-3">
-                {{ __('Log in') }}
-            </x-primary-button>
-        </div>
+        <x-primary-button class="w-full py-3">
+            {{ __('Log in') }}
+            <x-icon name="arrow-right" class="size-4" />
+        </x-primary-button>
     </form>
+
+    <p class="mt-8 text-center text-sm text-ink-500 dark:text-ink-400">
+        New to iPOSa?
+        <a href="{{ route('register') }}" class="font-semibold text-ink-900 hover:underline dark:text-white">Start a free 14-day trial</a>
+    </p>
+
+    @env('local')
+        <div class="mt-8 rounded-xl border border-dashed border-ink-300 p-4 text-xs text-ink-500 dark:border-white/10 dark:text-ink-400">
+            <p class="eyebrow mb-2">Demo accounts · password "password"</p>
+            <ul class="num space-y-1">
+                <li>super_admin@gmail.com — platform operator</li>
+                <li>admin@gmail.com — business owner</li>
+                <li>staff@gmail.com — cashier</li>
+            </ul>
+        </div>
+    @endenv
 </x-guest-layout>

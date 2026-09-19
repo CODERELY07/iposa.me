@@ -15,7 +15,7 @@ class RoleMiddleware
      */
     public function handle(Request $request, Closure $next, string $roles): Response
     {
-        if(!auth()->check()){
+        if (! auth()->check()) {
             return redirect('/login');
         }
 
@@ -26,10 +26,10 @@ class RoleMiddleware
             return $next($request);
         }
 
-        return match($userRole){
+        return match ($userRole) {
             'admin' => redirect()->route('admin.dashboard'),
-            'super_admin' => redirect()->route('super_admin.dashbord'),
-            'staff' => redirect()->route('staff.dashbord'),
+            'super_admin' => redirect()->route('super_admin.dashboard'),
+            'staff' => redirect()->route('pos'),
             default => redirect('/'),
         };
     }

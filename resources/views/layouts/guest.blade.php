@@ -1,30 +1,30 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark">
     <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="csrf-token" content="{{ csrf_token() }}">
-
-        <title>{{ config('app.name', 'Laravel') }}</title>
-
-        <!-- Fonts -->
-        <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
-
-        <!-- Scripts -->
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
+        @include('layouts.partials.head')
     </head>
-    <body class="font-sans text-gray-900 antialiased">
-        <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gray-100 dark:bg-gray-900">
-            <div>
-                <a href="/">
-                    <x-application-logo class="w-20 h-20 fill-current text-gray-500" />
-                </a>
+    <body class="font-sans antialiased">
+        <div class="grid min-h-dvh lg:grid-cols-[1fr_minmax(0,560px)]">
+            <div class="flex flex-col px-5 py-6 sm:px-10">
+                <div class="flex items-center justify-between">
+                    <a href="{{ route('home') }}" class="text-xl"><x-brand-mark /></a>
+                    <x-theme-toggle />
+                </div>
+
+                <div class="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-12">
+                    {{ $slot }}
+                </div>
+
+                <p class="text-center text-xs text-ink-500 lg:text-left">Your data is yours. Export to Excel any time, on every plan.</p>
             </div>
 
-            <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-white dark:bg-gray-800 shadow-md overflow-hidden sm:rounded-lg">
-                {{ $slot }}
-            </div>
+            <aside class="relative hidden overflow-hidden border-l border-white/[0.06] bg-ink-900 lg:flex lg:flex-col lg:items-center lg:justify-center lg:gap-10 lg:p-12">
+                <div class="pointer-events-none absolute -right-24 -top-24 size-96 rounded-full bg-brand-500/20 blur-3xl"></div>
+                <x-closing-receipt class="rotate-[-2deg]" />
+                <p class="max-w-xs text-center font-display text-2xl leading-snug text-ink-100">
+                    Every night, the real number. <span class="italic text-brand-300">Not a guess.</span>
+                </p>
+            </aside>
         </div>
     </body>
 </html>

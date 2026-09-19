@@ -1,3 +1,76 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+    html {
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+        @apply bg-ink-50 text-ink-900 dark:bg-ink-950 dark:text-ink-100;
+    }
+
+    [x-cloak] {
+        display: none !important;
+    }
+}
+
+@layer components {
+    /* Money and counts: always tabular, always the same shape. */
+    .num {
+        @apply font-mono tabular-nums tracking-tight;
+    }
+
+    .surface {
+        @apply rounded-2xl border border-ink-200 bg-white dark:border-white/[0.07] dark:bg-ink-900/60;
+    }
+
+    .eyebrow {
+        @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-500 dark:text-ink-400;
+    }
+
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-40 dark:focus-visible:ring-offset-ink-950;
+    }
+
+    .btn-primary {
+        @apply btn bg-brand-400 text-ink-950 hover:bg-brand-300 active:bg-brand-500;
+    }
+
+    .btn-ghost {
+        @apply btn border border-ink-200 bg-white text-ink-700 hover:bg-ink-100 dark:border-white/10 dark:bg-white/[0.03] dark:text-ink-200 dark:hover:bg-white/[0.07];
+    }
+
+    .btn-quiet {
+        @apply btn px-3 text-ink-600 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-white/5 dark:hover:text-ink-100;
+    }
+
+    .field {
+        @apply block w-full rounded-xl border-ink-200 bg-white text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-400 focus:ring-brand-400 dark:border-white/10 dark:bg-ink-900 dark:text-ink-100 dark:placeholder:text-ink-500;
+    }
+
+    .field-label {
+        @apply mb-1.5 block text-xs font-medium text-ink-600 dark:text-ink-400;
+    }
+
+    .pill {
+        @apply inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold;
+    }
+
+    .kbd {
+        @apply inline-flex h-5 min-w-5 items-center justify-center rounded border border-ink-300 px-1 font-mono text-[10px] text-ink-500 dark:border-white/15 dark:text-ink-400;
+    }
+
+    .table-head {
+        @apply sticky top-0 z-10 bg-ink-50 text-left text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:bg-ink-950 dark:text-ink-400;
+    }
+
+    .tab {
+        @apply rounded-lg px-3 py-1.5 text-sm font-medium text-ink-500 transition hover:text-ink-900 dark:text-ink-400 dark:hover:text-ink-100;
+    }
+
+    .tab-active {
+        @apply bg-white text-ink-900 shadow-sm dark:bg-white/10 dark:text-white;
+    }
+}

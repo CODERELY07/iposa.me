@@ -3,33 +3,52 @@
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+/*
+|--------------------------------------------------------------------------
+| UI prototype routes
+|--------------------------------------------------------------------------
+| Every screen below renders a view with static demo data declared at the
+| top of the view. Swap the closures for controllers when wiring real data.
+*/
+
+Route::view('/', 'welcome')->name('home');
 
 Route::get('/dashboard', function () {
-
-    $role = auth()->user()->role;
-    // dd($role);
-    return match($role){
+    return match (auth()->user()->role) {
+        'super_admin' => redirect()->route('super_admin.dashboard'),
         'admin' => redirect()->route('admin.dashboard'),
-        'super_admin' => redirect()->route('super_admin.dashbord'),
-        'staff' => redirect()->route('staff.dashbord'),
-        default => redirect('/'),
+        'staff' => redirect()->route('pos'),
+        default => redirect()->route('home'),
     };
 })->middleware(['auth', 'verified'])->name('dashboard');
 
-Route::get('super_admin', function(){
-    return view('super_admin.dashboard');
-})->middleware('role:super_admin')->name('super_admin.dashboard');
+// Shared counter screens: cashiers live here, owners can ring up too.
+Route::middleware('role:staff|admin')->group(function () {
+    Route::view('/pos', 'pos.index')->name('pos');
+    Route::view('/audit', 'audit.index')->name('audit');
+});
 
-Route::get('admin', function(){
-    return view('admin.dashboard');
-})->middleware('role:admin')->name('admin.dashboard');
+Route::middleware('role:staff')->prefix('staff')->name('staff.')->group(function () {
+    Route::view('/orders', 'staff.orders')->name('orders');
+});
 
-Route::get('staff', function(){
-    return view('staff.dashboard');
-})->middleware('role:staff')->name('staff.dashboard');
+Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
+    Route::view('/', 'admin.dashboard')->name('dashboard');
+    Route::view('/inventory', 'admin.inventory.index')->name('inventory');
+    Route::view('/inventory/items/new', 'admin.inventory.item')->name('inventory.create');
+    Route::view('/inventory/items/{item}/edit', 'admin.inventory.item')->name('inventory.edit');
+    Route::view('/expenses', 'admin.expenses')->name('expenses');
+    Route::view('/reports', 'admin.reports')->name('reports');
+    Route::view('/team', 'admin.team')->name('team');
+    Route::view('/settings', 'admin.settings')->name('settings');
+});
+
+Route::middleware('role:super_admin')->prefix('super-admin')->name('super_admin.')->group(function () {
+    Route::view('/', 'super_admin.dashboard')->name('dashboard');
+    Route::view('/businesses', 'super_admin.tenants.index')->name('tenants');
+    Route::view('/businesses/{tenant}', 'super_admin.tenants.show')->name('tenants.show');
+    Route::view('/plans', 'super_admin.plans')->name('plans');
+});
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
