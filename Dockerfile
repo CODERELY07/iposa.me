@@ -45,7 +45,8 @@ COPY docker/php-fpm.conf /usr/local/etc/php-fpm.d/zz-iposa.conf
 COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY docker/supervisord.conf /etc/supervisord.conf
 COPY docker/start.sh /usr/local/bin/start
-RUN sed -i 's/\r$//' /usr/local/bin/start && chmod +x /usr/local/bin/start
+RUN sed -i 's/\r$//' /usr/local/bin/start /var/www/html/docker/boot.sh \
+    && chmod +x /usr/local/bin/start /var/www/html/docker/boot.sh
 
 ENV APP_ENV=production \
     APP_DEBUG=false \

@@ -7,7 +7,8 @@ Render has no native PHP runtime, so iPOSa runs as a **Docker web service** plus
 | Piece | File | What it does |
 |---|---|---|
 | Image | `Dockerfile` | Stage 1 builds Vite/Tailwind assets with Node 22. Stage 2 is PHP 8.4-FPM (pgsql, mysql, zip, intl, bcmath, opcache) + nginx + supervisord, with `composer install --no-dev` |
-| Start script | `docker/start.sh` | Fixes the `APP_KEY` prefix, sets `APP_URL` from Render, caches config/routes/views, **runs migrations**, creates the operator account, optionally seeds the demo, then starts supervisord |
+| Start script | `docker/start.sh` | Quick local work only: `APP_KEY` prefix, `APP_URL` from Render, caches config/routes/views, then starts supervisord so the port opens fast |
+| After boot | `docker/boot.sh` | Runs once in the background after the server is listening: migrations (waits for the database), operator account, optional demo data |
 | Processes | `docker/supervisord.conf` | php-fpm, nginx (on Render's `$PORT`), and `schedule:work` (runs the daily `businesses:mark-overdue`) |
 | Web server | `docker/nginx.conf.template` | Laravel front controller, 1-year cache on `/build/*`, security headers |
 | Blueprint | `render.yaml` | Web service + Postgres in Singapore, all environment variables |
@@ -67,7 +68,8 @@ Render dashboard → service → **Settings → Custom Domains** → add `app.ip
 
 | Symptom | Check |
 |---|---|
-| Deploy fails at "Waiting for the database" | The database is still being created. Redeploy after it shows **Available** |
+| Deploy fails with **"Port scan timeout reached, no open ports detected"** | The container never started listening. Check the log for a crash before `Starting web server on port …`. Migrations no longer block this |
+| Log shows `Waiting for the database (n of 20)` | The app is up but the database isn't reachable. Check `DB_*` variables and that the database shows **Available**. Redeploy once it is |
 | 500 error on every page | Render logs. Usually a missing env var; `APP_DEBUG=false` hides details from visitors |
 | Verification email never arrives | `MAIL_*` values; the provider's sending log; the sender address must be verified. Meanwhile nobody is stuck: the verify page offers **“Ask an agent to verify me”**, and you verify them in the platform console under **Verifications** (one button) |
 | Sign-up is slow, then says the email couldn't be sent | SMTP is blocked or wrong. `MAIL_TIMEOUT` (default 10 s) keeps it short. Owners use the agent fallback, and cashiers can be added with a password set by the owner |

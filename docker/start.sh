@@ -1,5 +1,7 @@
 #!/bin/sh
-# Container start: prepare Laravel for this environment, migrate, then hand over to supervisord.
+# Container start. Only quick, local work happens here: the web server must start
+# listening fast, because hosts like Render fail a deploy if no port opens in time.
+# Migrations and seeding run right after, in the background (docker/boot.sh).
 set -e
 cd /var/www/html
 
@@ -11,8 +13,7 @@ if [ -n "$APP_KEY" ] && [ "${APP_KEY#base64:}" = "$APP_KEY" ]; then
 fi
 
 if [ -z "$APP_KEY" ]; then
-    echo "APP_KEY is not set. Generate one with: php artisan key:generate --show" >&2
-    exit 1
+    echo "WARNING: APP_KEY is not set. Pages will fail until you set it (php artisan key:generate --show)." >&2
 fi
 
 # Render provides the public URL of the service; use it unless APP_URL was set explicitly.
@@ -23,33 +24,15 @@ fi
 envsubst '${PORT}' < /etc/nginx/templates/default.conf.template > /etc/nginx/http.d/default.conf
 
 # Cache config/routes/views with the real environment (values are baked in here).
-php artisan optimize:clear > /dev/null
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-php artisan event:cache
-
-# Wait for the database (fresh Render databases can take a moment), then migrate.
-attempt=0
-until php artisan migrate --force; do
-    attempt=$((attempt + 1))
-    if [ "$attempt" -ge 10 ]; then
-        echo "Database still unreachable after $attempt attempts." >&2
-        exit 1
-    fi
-    echo "Waiting for the database ($attempt)..."
-    sleep 3
-done
-
-php artisan app:ensure-super-admin
-
-if [ "$SEED_DEMO_DATA" = "true" ]; then
-    # Only seeders without Faker (a dev dependency that isn't installed in this image).
-    echo "SEED_DEMO_DATA=true: loading the Kape't Burger demo shop (skipped if it already exists)."
-    php artisan db:seed --class=Database\\Seeders\\UserSeeder --force
-    php artisan db:seed --class=Database\\Seeders\\DemoShopSeeder --force
-fi
+# These are local and quick; a failure must not stop the server from starting.
+php artisan optimize:clear > /dev/null 2>&1 || true
+php artisan config:cache || echo "WARNING: config:cache failed; running without cached config." >&2
+php artisan route:cache || true
+php artisan view:cache || true
+php artisan event:cache || true
 
 chown -R www-data:www-data storage bootstrap/cache
+
+echo "Starting web server on port ${PORT}."
 
 exec supervisord -c /etc/supervisord.conf
