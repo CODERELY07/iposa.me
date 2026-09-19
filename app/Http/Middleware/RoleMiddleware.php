@@ -13,12 +13,24 @@ class RoleMiddleware
      *
      * @param  Closure(Request): (Response)  $next
      */
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next, string $roles): Response
     {
-        if(auth()->check()){
+        if(!auth()->check()){
             return redirect('/login');
         }
-        
-        return $next($request);
+
+        $allowedRoutes = explode('|', $roles);
+        $userRole = auth()->user()->role;
+
+        if (in_array($userRole, $allowedRoutes)) {
+            return $next($request);
+        }
+
+        return match($userRole){
+            'admin' => redirect()->route('admin.dashboard'),
+            'super_admin' => redirect()->route('super_admin.dashbord'),
+            'staff' => redirect()->route('staff.dashbord'),
+            default => redirect('/'),
+        };
     }
 }
