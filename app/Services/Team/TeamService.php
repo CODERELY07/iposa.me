@@ -5,6 +5,7 @@ namespace App\Services\Team;
 use App\Models\Business;
 use App\Models\User;
 use App\Notifications\StaffInvitation;
+use App\Support\SafeMail;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
@@ -17,11 +18,14 @@ class TeamService
      * Add a cashier and email them a "set your password" link.
      * The invite link proves the email, so the account starts verified.
      *
-     * @param  array{name: string, email: string}  $data
+     * With a password from the owner, no email is needed at all (useful when mail is down).
+     *
+     * @param  array{name: string, email: string, password?: string|null}  $data
+     * @return array{user: User, emailed: bool}
      *
      * @throws ValidationException
      */
-    public function invite(Business $business, array $data): User
+    public function invite(Business $business, array $data): array
     {
         if ($business->staffSeatsLeft() === 0) {
             throw ValidationException::withMessages([
@@ -33,7 +37,7 @@ class TeamService
             $user = User::create([
                 'name' => $data['name'],
                 'email' => $data['email'],
-                'password' => Hash::make(Str::random(40)),
+                'password' => Hash::make(filled($data['password'] ?? null) ? $data['password'] : Str::random(40)),
             ]);
 
             $user->forceFill([
@@ -45,14 +49,19 @@ class TeamService
             return $user;
         });
 
-        $user->notify(new StaffInvitation($business, Password::broker()->createToken($user)));
+        if (filled($data['password'] ?? null)) {
+            return ['user' => $user, 'emailed' => false];
+        }
 
-        return $user;
+        return ['user' => $user, 'emailed' => $this->resendInvite($business, $user)];
     }
 
-    public function resendInvite(Business $business, User $staff): void
+    /**
+     * Email a fresh "set your password" link. False when the email couldn't be sent.
+     */
+    public function resendInvite(Business $business, User $staff): bool
     {
-        $staff->notify(new StaffInvitation($business, Password::broker()->createToken($staff)));
+        return SafeMail::attempt(fn () => $staff->notify(new StaffInvitation($business, Password::broker()->createToken($staff))));
     }
 
     /**

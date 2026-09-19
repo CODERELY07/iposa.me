@@ -69,7 +69,8 @@ Render dashboard → service → **Settings → Custom Domains** → add `app.ip
 |---|---|
 | Deploy fails at "Waiting for the database" | The database is still being created. Redeploy after it shows **Available** |
 | 500 error on every page | Render logs. Usually a missing env var; `APP_DEBUG=false` hides details from visitors |
-| Verification email never arrives | `MAIL_*` values; the provider's sending log; the sender address must be verified |
+| Verification email never arrives | `MAIL_*` values; the provider's sending log; the sender address must be verified. Meanwhile nobody is stuck: the verify page offers **“Ask an agent to verify me”**, and you verify them in the platform console under **Verifications** (one button) |
+| Sign-up is slow, then says the email couldn't be sent | SMTP is blocked or wrong. `MAIL_TIMEOUT` (default 10 s) keeps it short. Owners use the agent fallback, and cashiers can be added with a password set by the owner |
 | Links or redirects use `http://` | `APP_URL` must start with `https://`. Proxies are trusted in `bootstrap/app.php` |
 | Owners see "trial ended" too early | Server time is correct; the app uses `APP_TIMEZONE=Asia/Manila` |
 

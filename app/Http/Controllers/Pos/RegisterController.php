@@ -12,6 +12,7 @@ use App\Models\RecipeLine;
 use App\Services\Pos\CheckoutService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 
 class RegisterController extends Controller
@@ -65,7 +66,11 @@ class RegisterController extends Controller
      */
     public function store(StoreOrderRequest $request, CheckoutService $checkout): JsonResponse
     {
-        $order = $checkout->checkout($request->user()->business, $request->user(), $request->validated());
+        $paidAt = $request->filled('offline_created_at')
+            ? Carbon::parse($request->validated('offline_created_at'))->setTimezone(config('app.timezone'))
+            : null;
+
+        $order = $checkout->checkout($request->user()->business, $request->user(), $request->validated(), $paidAt);
 
         return response()->json([
             'order' => [

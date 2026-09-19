@@ -12,6 +12,7 @@
             ['label' => 'Overview', 'route' => 'super_admin.dashboard', 'icon' => 'home'],
             ['label' => 'Businesses', 'route' => 'super_admin.businesses.index', 'icon' => 'building', 'match' => 'super_admin.businesses.*'],
             ['label' => 'Plans & billing', 'route' => 'super_admin.plans', 'icon' => 'card'],
+            ['label' => 'Verifications'.(($waitingVerifications = \App\Models\User::whereNull('email_verified_at')->whereNotNull('verification_requested_at')->count()) > 0 ? ' · '.$waitingVerifications : ''), 'route' => 'super_admin.verifications', 'icon' => 'check'],
         ],
         'admin' => array_values(array_filter([
             ['label' => 'Today', 'route' => 'admin.dashboard', 'icon' => 'home'],
@@ -66,7 +67,7 @@
                 <div class="flex h-16 items-center justify-between px-5 {{ $isFocusMode ? 'lg:justify-center lg:px-0' : '' }}">
                     <a href="{{ route('dashboard') }}" class="text-xl">
                         @if ($isFocusMode)
-                            <span class="hidden size-9 items-center justify-center rounded-xl bg-brand-400 font-bold text-ink-950 lg:inline-flex">i.</span>
+                            <x-logo-mark class="hidden size-9 lg:block" />
                             <x-brand-mark class="lg:hidden" />
                         @else
                             <x-brand-mark />
@@ -105,7 +106,9 @@
                             <span x-show="online" class="absolute inline-flex size-full animate-ping rounded-full bg-gain-400 opacity-60"></span>
                             <span :class="online ? 'bg-gain-500' : 'bg-loss-500'" class="relative inline-flex size-2 rounded-full bg-gain-500"></span>
                         </span>
-                        <span @class(['lg:hidden' => $isFocusMode]) x-text="online ? 'Online' : 'Offline · sales need internet'">Online</span>
+                        <span @class(['lg:hidden' => $isFocusMode])
+                            x-text="(online ? ($store.offlineQueue.syncing ? 'Syncing offline sales…' : 'Online') : 'Offline · register still works')
+                                + ($store.offlineQueue.total > 0 ? ' · ' + $store.offlineQueue.total + ' to sync' : '')">Online</span>
                     </div>
 
                     <div @class(['flex items-center justify-between gap-2', 'lg:flex-col' => $isFocusMode])>

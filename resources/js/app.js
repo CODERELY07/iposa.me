@@ -1,4 +1,5 @@
 import Alpine from 'alpinejs';
+import { offlineQueueStore } from './offline-queue';
 
 window.Alpine = Alpine;
 
@@ -141,9 +142,12 @@ Alpine.data('busyAction', (duration = 900, hasDoneState = true) => ({
 
 /**
  * JSON request with the CSRF token. Resolves { ok, status, data }; never throws on HTTP errors.
+ * No answer within 12 seconds counts as "no connection" (status 0).
  */
 window.sendJson = async (url, body, method = 'POST') => {
     const token = document.querySelector('meta[name="csrf-token"]')?.content;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
 
     try {
         const response = await fetch(url, {
@@ -151,12 +155,15 @@ window.sendJson = async (url, body, method = 'POST') => {
             headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': token, 'X-Requested-With': 'XMLHttpRequest' },
             body: JSON.stringify(body),
             credentials: 'same-origin',
+            signal: controller.signal,
         });
         const data = await response.json().catch(() => ({}));
 
         return { ok: response.ok, status: response.status, data };
     } catch (e) {
         return { ok: false, status: 0, data: {} };
+    } finally {
+        clearTimeout(timer);
     }
 };
 
@@ -329,27 +336,55 @@ Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl })
         this.processing = true;
         this.error = null;
 
-        const result = await window.sendJson(this.storeUrl, {
+        const payload = {
             uuid: this.uuid,
             payment_method: this.payment,
             tendered: this.isCash ? parseFloat(this.tendered) : null,
             lines: this.cart.map((line) => ({ variant_id: line.variantId, qty: line.qty })),
-        });
+        };
 
-        this.processing = false;
+        const result = navigator.onLine ? await window.sendJson(this.storeUrl, payload) : { ok: false, status: 0, data: {} };
 
         if (result.ok) {
+            this.processing = false;
             this.lastOrder = result.data.order;
             this.completed = true;
+            Alpine.store('offlineQueue').flush();
 
             return;
         }
 
+        if (result.status === 0) {
+            await this.saveOffline(payload);
+
+            return;
+        }
+
+        this.processing = false;
         this.error = window.errorMessage(result);
     },
 
+    /**
+     * No connection: keep the sale on this device and sync it later with the same uuid.
+     */
+    async saveOffline(payload) {
+        try {
+            await Alpine.store('offlineQueue').queue(
+                { ...payload, offline_created_at: new Date().toISOString() },
+                { total: this.subtotal, items: this.itemCount, lines: this.cart.map((line) => `${line.qty}× ${line.name} ${line.variant}`) },
+            );
+
+            this.lastOrder = { id: null, number: null, offline: true, total: this.subtotal, change: this.isCash ? this.change : null, receipt_url: null };
+            this.completed = true;
+        } catch (e) {
+            this.error = 'No internet, and this device could not store the sale. Nothing was saved. Write it down and ring it up once online.';
+        } finally {
+            this.processing = false;
+        }
+    },
+
     printReceipt() {
-        if (this.lastOrder) {
+        if (this.lastOrder?.receipt_url) {
             window.open(this.lastOrder.receipt_url, '_blank', 'width=420,height=640');
         }
     },
@@ -428,4 +463,50 @@ Alpine.data('closingAudit', ({ items, storeUrl, alreadyClosed }) => ({
     },
 }));
 
+/**
+ * Offline sales: counted in the sidebar and register, synced whenever a connection is available.
+ */
+Alpine.store('offlineQueue', offlineQueueStore(window.sendJson, window.errorMessage));
+
+const syncOfflineSales = () => Alpine.store('offlineQueue').flush();
+
+window.addEventListener('online', syncOfflineSales);
+document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && syncOfflineSales());
+setInterval(syncOfflineSales, 60000);
+
+/**
+ * Logout: warn about unsynced sales, and remove the cached register page from this device.
+ */
+document.addEventListener('submit', (event) => {
+    const form = event.target;
+
+    if (!(form instanceof HTMLFormElement) || !form.action.endsWith('/logout')) {
+        return;
+    }
+
+    const waiting = Alpine.store('offlineQueue').total;
+
+    if (waiting > 0 && !window.confirm(`${waiting} sale(s) saved offline haven't synced yet. They'll sync the next time you log in on this device. Log out anyway?`)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        return;
+    }
+
+    navigator.serviceWorker?.controller?.postMessage('clear-user-pages');
+}, true);
+
+/**
+ * PWA: installable app + offline register. Service workers need https (or localhost).
+ */
+if ('serviceWorker' in navigator && (window.isSecureContext || location.hostname === 'localhost')) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
+            // Offline support is a bonus: the app works without it.
+        });
+    });
+}
+
 Alpine.start();
+
+Alpine.store('offlineQueue').refresh().then(syncOfflineSales);

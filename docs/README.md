@@ -21,7 +21,7 @@ Organized **by module**. Each module file lists its features, and each feature h
 | 02 | [Access control (RBAC)](modules/02-access-control.md) | ✅ roles, middleware, cashier permission gates | `UiScreensTest`, `ClosingAuditTest`, `VoidOrderTest`, `ExpenseTest` |
 | 03 | [Business & tenancy](modules/03-business-tenancy.md) | ✅ staff membership, data scoping, trial, plans, suspension | `TenancyTest`, `SubscriptionAccessTest` |
 | 04 | [Inventory](modules/04-inventory.md) | ✅ | `InventoryTest` |
-| 05 | [Register (POS)](modules/05-pos.md) | ✅ (🟡 no offline selling) | `PosCheckoutTest`, `VoidOrderTest` |
+| 05 | [Register (POS)](modules/05-pos.md) | ✅ including offline selling | `PosCheckoutTest`, `VoidOrderTest`, `PwaTest` |
 | 06 | [Closing audit](modules/06-closing-audit.md) | ✅ (🟡 no reminder notification) | `ClosingAuditTest` |
 | 07 | [Expenses](modules/07-expenses.md) | ✅ | `ExpenseTest` |
 | 08 | [Reports & analytics](modules/08-reports.md) | ✅ | `ReportsTest` |
@@ -41,6 +41,7 @@ Organized **by module**. Each module file lists its features, and each feature h
 | Closing audit | `ClosingAuditService`: one audit per day, owner corrections move stock by the difference, restocks detected |
 | Expenses | `Expense`, `Asset` (installments → Payables expense once), month view, CSV |
 | Reports | `App\Reports\DailyLedger`: one query class for Today, P&L, ledger, best sellers, exports |
+| PWA & offline | `public/manifest.webmanifest`, icons in `public/icons`, service worker `resources/pwa/sw.js` (served by `ServiceWorkerController`, versioned per build), `resources/js/offline-queue.js`: the register opens offline, sales queue in IndexedDB and sync with their uuid and original time (`offline_created_at`). Other pages show `public/offline.html` |
 | Exports | `App\Exports\BusinessExports` + `ExportController`: ledger, expenses, menu, stock, orders, audits, or everything as a zip. Always allowed, even unpaid |
 | Team | `TeamService`: invite (email with set-password link), resend, remove (orders keep the name), permissions |
 | Billing | `SubscriptionService`: change plan (checks staff limit), submit GCash/bank reference, operator confirms (+30 days) or rejects, extend trial, suspend (password required), unsuspend; daily `businesses:mark-overdue` |
@@ -48,7 +49,6 @@ Organized **by module**. Each module file lists its features, and each feature h
 
 ## Remaining gaps (not built)
 
-- **Offline selling** (PWA + IndexedDB queue). The landing page promises it, so change that copy or build it.
 - **Payment gateway** (PayMongo). Billing is manual: the owner sends a reference, the operator confirms it.
 - **Closing-audit reminder** at the configured time (the setting is saved; nothing sends a notification yet).
 - **`.xlsx` exports.** CSV/zip only; `.xlsx` needs a new package.

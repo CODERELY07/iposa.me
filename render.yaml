@@ -84,6 +84,16 @@ services:
         sync: false
       - key: MAIL_FROM_NAME
         value: iPOSa
+      - key: MAIL_TIMEOUT
+        value: "10"             # seconds; if SMTP is blocked, sign-up falls back to "ask an agent" quickly
+
+      # Shown when an email can't be sent ("Please contact our agent").
+      - key: SUPPORT_EMAIL
+        sync: false
+      - key: SUPPORT_PHONE
+        sync: false
+      - key: SUPPORT_MESSENGER_URL
+        sync: false
 
       # Platform operator account, created on first deploy (password: 12+ characters).
       - key: SUPER_ADMIN_EMAIL

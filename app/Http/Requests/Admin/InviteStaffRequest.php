@@ -5,6 +5,7 @@ namespace App\Http\Requests\Admin;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 class InviteStaffRequest extends FormRequest
 {
@@ -26,6 +27,8 @@ class InviteStaffRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique(User::class)],
+            // Optional: set the cashier's password now and share it in person (no email needed).
+            'password' => ['nullable', 'string', Password::min(8)],
         ];
     }
 

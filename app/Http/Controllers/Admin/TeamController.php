@@ -11,6 +11,8 @@ use App\Services\Team\TeamService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
 class TeamController extends Controller
@@ -42,7 +44,17 @@ class TeamController extends Controller
 
     public function store(InviteStaffRequest $request, TeamService $team): RedirectResponse
     {
-        $staff = $team->invite($request->user()->business, $request->validated());
+        ['user' => $staff, 'emailed' => $emailed] = $team->invite($request->user()->business, $request->validated());
+
+        if ($request->filled('password')) {
+            return back()->with('status', "{$staff->name} can log in now with the password you set. Share it with them in person.");
+        }
+
+        if (! $emailed) {
+            return back()->withErrors([
+                'email' => "{$staff->name} was added, but the invite email couldn't be sent. Use “Set password” to give them a password yourself.",
+            ]);
+        }
 
         return back()->with('status', "Invite sent to {$staff->email}.");
     }
@@ -51,9 +63,28 @@ class TeamController extends Controller
     {
         abort_unless($user->business_id === $request->user()->business_id && $user->isStaff(), 404);
 
-        $team->resendInvite($request->user()->business, $user);
+        if (! $team->resendInvite($request->user()->business, $user)) {
+            return back()->withErrors(['email' => "The invite email couldn't be sent. Use “Set password” to give {$user->name} a password yourself."]);
+        }
 
         return back()->with('status', "Invite sent again to {$user->email}.");
+    }
+
+    /**
+     * The owner sets a cashier's password directly (no email needed).
+     */
+    public function setPassword(Request $request, User $user): RedirectResponse
+    {
+        abort_unless($user->business_id === $request->user()->business_id && $user->isStaff(), 404);
+
+        $validated = $request->validateWithBag('staffPassword', [
+            'password' => ['required', 'string', Password::min(8)],
+        ]);
+
+        $user->forceFill(['password' => Hash::make($validated['password'])])->save();
+        DB::table('sessions')->where('user_id', $user->id)->delete();
+
+        return back()->with('status', "New password set for {$user->name}. Share it with them in person.");
     }
 
     public function destroy(Request $request, User $user, TeamService $team): RedirectResponse

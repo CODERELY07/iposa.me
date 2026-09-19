@@ -17,13 +17,18 @@ use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\Pos\OrderController;
 use App\Http\Controllers\Pos\RegisterController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ServiceWorkerController;
 use App\Http\Controllers\Staff\MyOrdersController;
 use App\Http\Controllers\SuperAdmin\PlanController;
 use App\Http\Controllers\SuperAdmin\PlatformDashboardController;
 use App\Http\Controllers\SuperAdmin\SubscriptionPaymentController;
+use App\Http\Controllers\SuperAdmin\VerificationController;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
+
+// PWA service worker (versioned with the Vite build, see ServiceWorkerController).
+Route::get('/sw.js', ServiceWorkerController::class)->name('pwa.service-worker');
 
 Route::get('/dashboard', fn () => redirect()->route(auth()->user()->homeRoute()))
     ->middleware(['auth', 'verified'])
@@ -84,6 +89,7 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
     Route::get('/team', [TeamController::class, 'index'])->name('team');
     Route::post('/team', [TeamController::class, 'store'])->name('team.store');
     Route::post('/team/{user}/resend', [TeamController::class, 'resend'])->name('team.resend');
+    Route::patch('/team/{user}/password', [TeamController::class, 'setPassword'])->name('team.password');
     Route::delete('/team/{user}', [TeamController::class, 'destroy'])->name('team.destroy');
     Route::patch('/team/permissions', [TeamController::class, 'updatePermissions'])->name('team.permissions');
 
@@ -102,6 +108,8 @@ Route::middleware(['auth', 'verified', 'role:super_admin'])->prefix('super-admin
     Route::post('/businesses/{business}/suspend', [BusinessController::class, 'suspend'])->name('businesses.suspend');
     Route::post('/businesses/{business}/unsuspend', [BusinessController::class, 'unsuspend'])->name('businesses.unsuspend');
     Route::get('/plans', PlanController::class)->name('plans');
+    Route::get('/verifications', [VerificationController::class, 'index'])->name('verifications');
+    Route::post('/users/{user}/verify', [VerificationController::class, 'verify'])->name('users.verify');
     Route::post('/payments/{payment}/confirm', [SubscriptionPaymentController::class, 'confirm'])->name('payments.confirm');
     Route::post('/payments/{payment}/reject', [SubscriptionPaymentController::class, 'reject'])->name('payments.reject');
 });

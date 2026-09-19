@@ -12,6 +12,9 @@
     <div class="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-8">
         <x-page-header :eyebrow="'Platform · '.now()->format('l j F')" title="How iPOSa is doing">
             <x-slot:actions>
+                @if ($metrics['pendingVerifications'] > 0)
+                    <a href="{{ route('super_admin.verifications') }}" class="btn-primary">{{ $metrics['pendingVerifications'] }} {{ \Illuminate\Support\Str::plural('verification', $metrics['pendingVerifications']) }} requested</a>
+                @endif
                 @if ($metrics['pendingPayments'] > 0)
                     <a href="{{ route('super_admin.plans', ['status' => 'pending']) }}" class="btn-primary">{{ $metrics['pendingPayments'] }} {{ \Illuminate\Support\Str::plural('payment', $metrics['pendingPayments']) }} to confirm</a>
                 @endif

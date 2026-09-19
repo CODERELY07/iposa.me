@@ -130,6 +130,30 @@
         {{-- Order panel: side column on desktop, bottom sheet on phones --}}
         <aside :class="cartOpen ? 'translate-y-0' : 'translate-y-full'"
             class="fixed inset-x-0 bottom-0 z-40 flex max-h-[88dvh] translate-y-full flex-col rounded-t-3xl border-t border-ink-200 bg-white transition-transform duration-200 lg:static lg:z-auto lg:h-dvh lg:max-h-none lg:w-[380px] lg:translate-y-0 lg:rounded-none lg:border-l lg:border-t-0 dark:border-white/[0.07] dark:bg-ink-900">
+            {{-- Offline sales waiting to sync / refused by the server --}}
+            <div x-data x-show="$store.offlineQueue.total > 0 || $store.offlineQueue.notice" x-cloak class="border-b border-brand-400/30 bg-brand-400/10 px-5 py-3 text-xs">
+                <div class="flex items-center justify-between gap-2">
+                    <p class="font-medium text-brand-800 dark:text-brand-200">
+                        <span x-show="$store.offlineQueue.pending > 0"><span class="num" x-text="$store.offlineQueue.pending"></span> offline sale(s) waiting to sync</span>
+                        <span x-show="$store.offlineQueue.pending === 0 && $store.offlineQueue.failed.length > 0">Offline sales need your attention</span>
+                    </p>
+                    <button type="button" x-show="$store.offlineQueue.pending > 0" @click="$store.offlineQueue.flush()" :disabled="$store.offlineQueue.syncing || ! navigator.onLine"
+                        class="font-semibold text-brand-700 hover:underline disabled:opacity-50 dark:text-brand-300"
+                        x-text="$store.offlineQueue.syncing ? 'Syncing…' : 'Sync now'"></button>
+                </div>
+                <p x-show="$store.offlineQueue.notice" class="mt-1 text-ink-600 dark:text-ink-300" x-text="$store.offlineQueue.notice"></p>
+                <template x-for="entry in $store.offlineQueue.failed" :key="entry.uuid">
+                    <div class="mt-2 rounded-lg bg-white/70 p-2 dark:bg-ink-950/40">
+                        <p class="text-ink-700 dark:text-ink-200"><span class="num" x-text="formatPeso(entry.summary.total)"></span> · <span x-text="entry.summary.lines.join(', ')"></span></p>
+                        <p class="mt-0.5 text-loss-600 dark:text-loss-400" x-text="entry.error"></p>
+                        <div class="mt-1 flex gap-3">
+                            <button type="button" @click="$store.offlineQueue.retry(entry)" class="font-semibold hover:underline">Retry</button>
+                            <button type="button" @click="if (confirm('Discard this offline sale? It will not be recorded.')) $store.offlineQueue.discard(entry.uuid)" class="font-semibold text-loss-600 hover:underline dark:text-loss-400">Discard</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
             <div class="flex items-center justify-between px-5 py-4">
                 <div>
                     <p class="eyebrow">Current order</p>
@@ -239,14 +263,21 @@
 
                 <template x-if="completed">
                     <div class="py-4 text-center">
-                        <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-gain-500/15 text-gain-600 dark:text-gain-300">
+                        <div :class="lastOrder.offline ? 'bg-brand-400/15 text-brand-600 dark:text-brand-300' : 'bg-gain-500/15 text-gain-600 dark:text-gain-300'"
+                            class="mx-auto flex size-14 items-center justify-center rounded-full">
                             <x-icon name="check" class="size-7" />
                         </div>
-                        <p class="mt-4 text-lg font-semibold">Order <span class="num" x-text="'#' + lastOrder.number"></span> paid</p>
+                        <template x-if="! lastOrder.offline">
+                            <p class="mt-4 text-lg font-semibold">Order <span class="num" x-text="'#' + lastOrder.number"></span> paid</p>
+                        </template>
+                        <template x-if="lastOrder.offline">
+                            <p class="mt-4 text-lg font-semibold">Sale saved offline · <span class="num" x-text="formatPeso(lastOrder.total)"></span></p>
+                        </template>
                         <p class="mt-1 text-sm text-ink-500" x-show="lastOrder.change !== null">Give change: <span class="num font-semibold text-ink-900 dark:text-white" x-text="formatPeso(lastOrder.change)"></span></p>
-                        <p class="mt-1 text-xs text-ink-500">Stock for linked ingredients was deducted.</p>
+                        <p class="mt-1 text-xs text-ink-500" x-show="! lastOrder.offline">Stock for linked ingredients was deducted.</p>
+                        <p class="mx-auto mt-2 max-w-xs text-xs text-brand-700 dark:text-brand-300" x-show="lastOrder.offline">No internet right now. It's stored on this device and syncs by itself when the connection is back. Receipt prints after it syncs.</p>
                         <div class="mt-6 grid grid-cols-2 gap-2">
-                            <button type="button" @click="printReceipt()" class="btn-ghost"><x-icon name="printer" class="size-4" /> Receipt</button>
+                            <button type="button" @click="printReceipt()" :disabled="! lastOrder.receipt_url" class="btn-ghost"><x-icon name="printer" class="size-4" /> Receipt</button>
                             <button type="button" @click="newOrder()" x-init="$nextTick(() => $el.focus())" class="btn-primary">New order</button>
                         </div>
                     </div>

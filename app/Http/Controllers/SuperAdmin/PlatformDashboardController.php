@@ -7,6 +7,7 @@ use App\Enums\SubscriptionPaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Business;
 use App\Models\SubscriptionPayment;
+use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
@@ -34,6 +35,7 @@ class PlatformDashboardController extends Controller
                 'suspended' => (int) ($statusCounts[BusinessStatus::Suspended->value] ?? 0),
                 'total' => (int) $statusCounts->sum(),
                 'pendingPayments' => SubscriptionPayment::query()->where('status', SubscriptionPaymentStatus::Pending)->count(),
+                'pendingVerifications' => User::query()->whereNull('email_verified_at')->whereNotNull('verification_requested_at')->count(),
             ],
             'collected' => $this->collectedByMonth(),
             'funnel' => $this->trialFunnel(),

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateBusinessProfileRequest;
 use App\Models\User;
 use App\Services\RegisterBusinessUserService;
+use App\Support\SafeMail;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -42,9 +43,15 @@ class RegisteredUserController extends Controller
 
         $user = $service->register($validated);
 
-        event(new Registered($user));
+        // The account exists either way; if the verification email can't be sent,
+        // the verify page offers "ask an iPOSa agent" instead of an error.
+        $mailed = SafeMail::attempt(fn () => event(new Registered($user)));
 
         Auth::login($user);
+
+        if (! $mailed) {
+            return redirect()->route('verification.notice')->with('status', 'verification-link-failed');
+        }
 
         return redirect(route('dashboard', absolute: false));
     }

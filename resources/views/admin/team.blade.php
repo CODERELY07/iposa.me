@@ -23,6 +23,7 @@
                     <p class="w-28 text-right text-xs text-ink-500">{{ $lastActivity ? 'Active '.\Illuminate\Support\Carbon::createFromTimestamp($lastActivity)->diffForHumans() : 'Not logged in yet' }}</p>
                     @if ($member->isStaff())
                         <div class="flex items-center gap-1">
+                            <button type="button" @click="$dispatch('set-password', {{ $member->id }})" class="btn-quiet px-2 text-xs">Set password</button>
                             <form method="POST" action="{{ route('admin.team.resend', $member) }}">
                                 @csrf
                                 <button type="submit" class="btn-quiet px-2 text-xs" data-loading-text="Sending…">Resend invite</button>
@@ -33,6 +34,23 @@
                                 <button type="submit" class="btn-quiet px-2 text-xs text-loss-600 dark:text-loss-400" data-loading-text="Removing…">Remove</button>
                             </form>
                         </div>
+                        <form method="POST" action="{{ route('admin.team.password', $member) }}"
+                            x-data="{ open: {{ $errors->staffPassword->any() && old('staff_id') == $member->id ? 'true' : 'false' }} }"
+                            @set-password.window="open = $event.detail === {{ $member->id }}" x-show="open" x-cloak
+                            class="flex w-full flex-wrap items-end gap-2 rounded-xl bg-ink-50 p-3 dark:bg-white/[0.03]">
+                            @csrf
+                            @method('PATCH')
+                            <input type="hidden" name="staff_id" value="{{ $member->id }}">
+                            <div class="min-w-[12rem] flex-1">
+                                <label class="field-label" for="staff_password_{{ $member->id }}">New password for {{ $member->name }}</label>
+                                <input id="staff_password_{{ $member->id }}" name="password" type="text" minlength="8" required autocomplete="off" class="field num" placeholder="At least 8 characters">
+                                @if ($errors->staffPassword->any() && old('staff_id') == $member->id)
+                                    <p class="mt-1 text-xs text-loss-600 dark:text-loss-400">{{ $errors->staffPassword->first('password') }}</p>
+                                @endif
+                            </div>
+                            <button type="button" @click="open = false" class="btn-ghost">Cancel</button>
+                            <button type="submit" class="btn-primary" data-loading-text="Saving…">Save password</button>
+                        </form>
                     @endif
                 </div>
             @endforeach
@@ -43,9 +61,9 @@
                 All {{ $plan['staff_limit'] }} staff seats are used. <a href="{{ route('admin.settings') }}#billing" class="font-semibold hover:underline">Switch to Negosyo</a> for unlimited staff.
             </div>
         @else
-            <form method="POST" action="{{ route('admin.team.store') }}" class="surface grid gap-3 p-5 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <form method="POST" action="{{ route('admin.team.store') }}" class="surface grid gap-3 p-5 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
                 @csrf
-                <p class="text-sm font-semibold sm:col-span-3">Invite a cashier <span class="font-normal text-ink-500">· they get an email to set their password</span></p>
+                <p class="text-sm font-semibold sm:col-span-4">Add a cashier <span class="font-normal text-ink-500">· they get an email to set their password, or set one yourself</span></p>
                 <div>
                     <label class="field-label" for="invite_name">Name</label>
                     <input id="invite_name" name="name" type="text" value="{{ old('name') }}" required maxlength="255" class="field" placeholder="Cashier's name">
@@ -54,7 +72,11 @@
                     <label class="field-label" for="invite_email">Email</label>
                     <input id="invite_email" name="email" type="email" value="{{ old('email') }}" required class="field" placeholder="name@email.com">
                 </div>
-                <button type="submit" class="btn-primary" data-loading-text="Sending invite…">Send invite</button>
+                <div>
+                    <label class="field-label" for="invite_password">Password <span class="text-ink-400">(optional)</span></label>
+                    <input id="invite_password" name="password" type="text" minlength="8" autocomplete="off" class="field num" placeholder="Leave empty to email an invite">
+                </div>
+                <button type="submit" class="btn-primary" data-loading-text="Adding…">Add cashier</button>
             </form>
         @endif
 

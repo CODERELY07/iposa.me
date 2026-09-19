@@ -35,6 +35,8 @@ class StoreOrderRequest extends FormRequest
             'lines' => ['required', 'array', 'min:1', 'max:100'],
             'lines.*.variant_id' => ['required', 'integer'],
             'lines.*.qty' => ['required', 'integer', 'min:1', 'max:999'],
+            // When the sale happened, for orders rung up offline and synced later.
+            'offline_created_at' => ['nullable', 'date', 'after:-7 days', 'before:+10 minutes'],
         ];
     }
 
