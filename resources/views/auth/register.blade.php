@@ -59,7 +59,7 @@
             </div>
         </div>
 
-        <x-primary-button class="w-full py-3">
+        <x-primary-button class="w-full py-3" data-loading-text="Setting up your shop…">
             {{ __('Create my shop') }}
             <x-icon name="arrow-right" class="size-4" />
         </x-primary-button>

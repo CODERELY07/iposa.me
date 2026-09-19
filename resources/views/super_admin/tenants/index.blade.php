@@ -23,7 +23,7 @@
     <div x-data="{ status: 'All' }" class="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-8">
         <x-page-header eyebrow="Tenants" title="Businesses" description="One business, one branch, one subscription each.">
             <x-slot:actions>
-                <button type="button" class="btn-ghost"><x-icon name="download" class="size-4" /> Export CSV</button>
+                <x-busy-button class="btn-ghost" loading-text="Preparing file…" done-text="Ready"><x-icon name="download" class="size-4" /> Export CSV</x-busy-button>
             </x-slot:actions>
         </x-page-header>
 
@@ -77,7 +77,7 @@
                 <span>Showing 9 of 128</span>
                 <div class="flex gap-1">
                     <button type="button" class="btn-ghost px-3 py-1.5 text-xs" disabled>Previous</button>
-                    <button type="button" class="btn-ghost px-3 py-1.5 text-xs">Next</button>
+                    <x-busy-button class="btn-ghost px-3 py-1.5 text-xs" loading-text="Loading…">Next</x-busy-button>
                 </div>
             </div>
         </div>

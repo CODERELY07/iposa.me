@@ -100,8 +100,12 @@
                 @else
                     <p class="min-w-0 text-xs text-ink-500"><span class="num" x-text="items.length - touchedCount"></span> items left to check</p>
                 @endif
-                <button type="button" @click="submitted = true" :disabled="touchedCount < items.length" class="btn-primary ml-auto rounded-2xl px-6 py-3.5">
-                    Close the day
+                <button type="button" @click="submit()" :disabled="touchedCount < items.length || saving" :aria-busy="saving.toString()"
+                    :class="saving ? '!opacity-100' : ''" class="btn-primary ml-auto rounded-2xl px-6 py-3.5">
+                    <template x-if="! saving"><span>Close the day</span></template>
+                    <template x-if="saving">
+                        <span class="inline-flex items-center gap-2"><x-spinner /> Saving counts…</span>
+                    </template>
                 </button>
             </div>
         </div>

@@ -4,6 +4,7 @@
         @include('layouts.partials.head')
     </head>
     <body class="font-sans antialiased">
+        <x-page-loader />
         <div class="grid min-h-dvh lg:grid-cols-[1fr_minmax(0,560px)]">
             <div class="flex flex-col px-5 py-6 sm:px-10">
                 <div class="flex items-center justify-between">

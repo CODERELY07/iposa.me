@@ -40,9 +40,9 @@
         <x-page-header :eyebrow="$business['type'].' · '.$business['city']" :title="$business['name']">
             <x-slot:actions>
                 <span class="pill bg-brand-400/15 text-brand-700 dark:text-brand-300">{{ $business['status'] }} · ends {{ $business['trialEnds'] }}</span>
-                <button type="button" class="btn-ghost">Extend trial</button>
-                <button type="button" class="btn-ghost">View as owner</button>
-                <button type="button" class="btn-quiet text-loss-600 dark:text-loss-400">Suspend</button>
+                <x-busy-button class="btn-ghost" loading-text="Extending…" done-text="Extended 7 days">Extend trial</x-busy-button>
+                <x-busy-button class="btn-ghost" loading-text="Opening…">View as owner</x-busy-button>
+                <x-busy-button class="btn-quiet text-loss-600 dark:text-loss-400" loading-text="Suspending…" done-text="Suspended">Suspend</x-busy-button>
             </x-slot:actions>
         </x-page-header>
 

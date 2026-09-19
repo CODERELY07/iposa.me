@@ -40,8 +40,8 @@
         <x-page-header eyebrow="Inventory" title="Everything you buy, store and sell"
             description="Menu items appear on the register. Pieces are deducted automatically when a menu item sells. Bulk & liquids are counted by eye at closing.">
             <x-slot:actions>
-                <button type="button" class="btn-ghost"><x-icon name="upload" class="size-4" /> Import Excel</button>
-                <button type="button" class="btn-ghost"><x-icon name="download" class="size-4" /> Export CSV</button>
+                <label class="btn-ghost cursor-pointer"><x-icon name="upload" class="size-4" /> Import Excel<input type="file" accept=".xlsx,.xls,.csv" class="sr-only"></label>
+                <x-busy-button class="btn-ghost" loading-text="Preparing file…" done-text="Ready"><x-icon name="download" class="size-4" /> Export CSV</x-busy-button>
                 <a href="{{ route('admin.inventory.create') }}" class="btn-primary"><x-icon name="plus" class="size-4" /> Add item</a>
             </x-slot:actions>
         </x-page-header>

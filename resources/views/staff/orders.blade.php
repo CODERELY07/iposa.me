@@ -42,7 +42,7 @@
                         <span class="pill hidden bg-brand-400/15 text-brand-700 sm:inline-flex dark:text-brand-300">{{ $order['status'] }}</span>
                     @endif
                     <span @class(['num w-24 text-right text-sm font-semibold', 'text-ink-400 line-through' => $order['status'] !== 'Paid'])>₱{{ number_format($order['total'], 2) }}</span>
-                    <button type="button" class="btn-quiet hidden size-9 !px-0 sm:inline-flex" title="Reprint receipt"><x-icon name="printer" class="size-4" /></button>
+                    <x-busy-button class="btn-quiet hidden size-9 !px-0 sm:inline-flex" loading-text="" title="Reprint receipt" aria-label="Reprint receipt"><x-icon name="printer" class="size-4" /></x-busy-button>
                 </li>
             @endforeach
         </ul>

@@ -41,7 +41,7 @@
                     <input id="receipt_footer" type="text" value="Salamat po! Balik kayo 🍔" class="field">
                 </div>
                 <div class="sm:col-span-2 sm:text-right">
-                    <button type="submit" class="btn-primary">Save</button>
+                    <x-busy-button type="submit" class="btn-primary" loading-text="Saving…" done-text="Saved">Save</x-busy-button>
                 </div>
             </form>
         </section>
@@ -108,7 +108,7 @@
                     <p class="text-sm font-medium">Download everything as Excel</p>
                     <p class="text-xs text-ink-500">Menu & prices, stock, audits, expenses, daily ledger. One workbook, one sheet each.</p>
                 </div>
-                <button type="button" class="btn-ghost shrink-0"><x-icon name="download" class="size-4" /> Download .xlsx</button>
+                <x-busy-button class="btn-ghost shrink-0" loading-text="Preparing file…" done-text="Ready"><x-icon name="download" class="size-4" /> Download .xlsx</x-busy-button>
             </div>
         </section>
     </div>

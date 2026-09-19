@@ -39,6 +39,7 @@
         @include('layouts.partials.head')
     </head>
     <body class="font-sans antialiased">
+        <x-page-loader />
         <div x-data="{ drawerOpen: false }" class="min-h-dvh lg:flex">
             {{-- Mobile top bar --}}
             <header class="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-ink-200 bg-ink-50/90 px-4 backdrop-blur lg:hidden dark:border-white/[0.06] dark:bg-ink-950/90">
@@ -115,7 +116,7 @@
                             <x-theme-toggle class="hidden lg:inline-flex" />
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf
-                                <button type="submit" class="btn-quiet size-9 !px-0" aria-label="Log out" title="Log out">
+                                <button type="submit" class="btn-quiet size-9 !px-0" aria-label="Log out" title="Log out" data-loading-text="">
                                     <x-icon name="logout" class="size-[18px]" />
                                 </button>
                             </form>

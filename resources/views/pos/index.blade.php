@@ -61,7 +61,7 @@
             <div class="flex-1 overflow-y-auto p-4 pb-28 sm:p-6 lg:pb-6">
                 <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                     <template x-for="item in visibleItems" :key="item.id">
-                        <div :class="item.tile" class="flex min-h-[7.5rem] flex-col rounded-2xl border-l-4 transition">
+                        <div :class="[item.tile, flashItemId === item.id ? 'ring-2 ring-brand-400 animate-[tap-pop_.25s_ease-out]' : '']" class="flex min-h-[7.5rem] flex-col rounded-2xl border-l-4 transition">
                             {{-- Single-variant items: whole tile is the button. --}}
                             <template x-if="item.variants.length === 1">
                                 <button type="button" @click="add(item, item.variants[0])" class="flex flex-1 flex-col justify-between p-3.5 text-left active:scale-[0.98]">
@@ -100,9 +100,18 @@
             </div>
         </section>
 
+        {{-- "Added" confirmation after every tap --}}
+        <div x-show="toast" x-cloak x-transition.opacity.duration.150ms role="status" aria-live="polite"
+            class="pointer-events-none fixed inset-x-0 bottom-24 z-30 flex justify-center px-4 lg:bottom-6 lg:left-[76px] lg:right-[380px]">
+            <div class="flex items-center gap-2 rounded-full bg-ink-900 px-4 py-2 text-sm font-medium text-white shadow-xl dark:bg-white dark:text-ink-950">
+                <span class="flex size-5 items-center justify-center rounded-full bg-gain-500 text-white"><x-icon name="check" class="size-3" /></span>
+                Added <span class="font-semibold" x-text="toast"></span>
+            </div>
+        </div>
+
         {{-- Mobile order bar --}}
         <div x-show="cart.length" x-cloak class="fixed inset-x-0 bottom-0 z-20 p-3 lg:hidden" style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom))">
-            <button type="button" @click="cartOpen = true" class="btn-primary w-full justify-between rounded-2xl py-4 text-base shadow-xl shadow-black/30">
+            <button type="button" @click="cartOpen = true" :class="flashItemId ? 'animate-[tap-pop_.25s_ease-out]' : ''" class="btn-primary w-full justify-between rounded-2xl py-4 text-base shadow-xl shadow-black/30">
                 <span><span x-text="itemCount"></span> items · Review order</span>
                 <span class="num" x-text="formatPeso(subtotal)"></span>
             </button>
@@ -133,7 +142,7 @@
 
                 <ul class="divide-y divide-ink-100 dark:divide-white/[0.06]">
                     <template x-for="line in cart" :key="line.key">
-                        <li class="flex items-center gap-3 py-3">
+                        <li :class="flashLineKey === line.key ? 'bg-brand-400/15' : ''" class="-mx-2 flex items-center gap-3 rounded-xl px-2 py-3 transition-colors duration-300">
                             <span :class="line.tone" class="size-2 shrink-0 rounded-full"></span>
                             <div class="min-w-0 flex-1">
                                 <p class="truncate text-sm font-medium" x-text="line.name"></p>
@@ -169,8 +178,8 @@
         </aside>
 
         {{-- Checkout --}}
-        <div x-show="checkoutOpen" x-cloak class="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/70 p-0 sm:items-center sm:p-6" @keydown.escape.window="checkoutOpen = false">
-            <div @click.outside="if (! completed) checkoutOpen = false" x-transition class="w-full max-w-md rounded-t-3xl border border-ink-200 bg-white p-6 sm:rounded-3xl dark:border-white/10 dark:bg-ink-900">
+        <div x-show="checkoutOpen" x-cloak class="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/70 p-0 sm:items-center sm:p-6" @keydown.escape.window="if (! processing) checkoutOpen = false">
+            <div @click.outside="if (! completed && ! processing) checkoutOpen = false" x-transition class="w-full max-w-md rounded-t-3xl border border-ink-200 bg-white p-6 sm:rounded-3xl dark:border-white/10 dark:bg-ink-900">
                 <template x-if="! completed">
                     <div class="space-y-5">
                         <div class="flex items-start justify-between">
@@ -178,7 +187,7 @@
                                 <p class="eyebrow">Amount due · <span x-text="payment"></span></p>
                                 <p class="num mt-1 text-4xl font-semibold" x-text="formatPeso(subtotal)"></p>
                             </div>
-                            <button type="button" @click="checkoutOpen = false" class="btn-quiet size-9 !px-0" aria-label="Back to order"><x-icon name="x" /></button>
+                            <button type="button" @click="checkoutOpen = false" :disabled="processing" class="btn-quiet size-9 !px-0" aria-label="Back to order"><x-icon name="x" /></button>
                         </div>
 
                         <template x-if="payment === 'Cash'">
@@ -204,9 +213,14 @@
                             </p>
                         </template>
 
-                        <button type="button" @click="complete()" :disabled="! canComplete" class="btn-primary w-full rounded-2xl py-4 text-base">
-                            Complete sale
+                        <button type="button" @click="complete()" :disabled="! canComplete || processing" :aria-busy="processing.toString()"
+                            :class="processing ? '!opacity-100' : ''" class="btn-primary w-full rounded-2xl py-4 text-base">
+                            <template x-if="! processing"><span>Complete sale</span></template>
+                            <template x-if="processing">
+                                <span class="inline-flex items-center gap-2"><x-spinner /> Processing sale, please wait…</span>
+                            </template>
                         </button>
+                        <p x-show="! canComplete && payment === 'Cash'" class="-mt-2 text-center text-xs text-ink-500">Enter the cash received to complete the sale.</p>
                     </div>
                 </template>
 

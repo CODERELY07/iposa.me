@@ -33,7 +33,7 @@
             <span class="text-sm text-ink-600 dark:text-ink-400">{{ __('Keep me signed in on this device') }}</span>
         </label>
 
-        <x-primary-button class="w-full py-3">
+        <x-primary-button class="w-full py-3" data-loading-text="Logging you in…">
             {{ __('Log in') }}
             <x-icon name="arrow-right" class="size-4" />
         </x-primary-button>

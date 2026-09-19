@@ -41,7 +41,7 @@
                 <label class="field-label" for="invite_email">Email</label>
                 <input id="invite_email" type="email" class="field" placeholder="name@email.com">
             </div>
-            <button type="submit" class="btn-primary">Send invite</button>
+            <x-busy-button type="submit" class="btn-primary" loading-text="Sending…" done-text="Invite sent">Send invite</x-busy-button>
         </form>
 
         <section class="surface p-6">

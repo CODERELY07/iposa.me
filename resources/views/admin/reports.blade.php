@@ -40,21 +40,34 @@
 @endphp
 
 <x-app-layout title="Profit & ledger">
-    <div class="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-8">
+    <div x-data="{
+            period: 'Month',
+            refreshing: false,
+            pick(period) {
+                if (period === this.period || this.refreshing) return;
+                this.period = period;
+                this.refreshing = true;
+                setTimeout(() => (this.refreshing = false), 700);
+            },
+        }" class="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-8">
         <x-page-header eyebrow="Profit & loss" title="September, day by day"
             description="Same columns as your spreadsheet. Nothing typed twice: sales come from the register, ingredient costs from recipes, bulk from closing audits.">
             <x-slot:actions>
                 <div class="inline-flex gap-1 rounded-xl bg-ink-100 p-1 dark:bg-white/[0.05]">
-                    <button type="button" class="tab">Week</button>
-                    <button type="button" class="tab tab-active">Month</button>
-                    <button type="button" class="tab">Custom</button>
+                    @foreach (['Week', 'Month', 'Custom'] as $period)
+                        <button type="button" @click="pick('{{ $period }}')" :class="period === '{{ $period }}' ? 'tab-active' : ''" class="tab">{{ $period }}</button>
+                    @endforeach
                 </div>
-                <button type="button" class="btn-primary"><x-icon name="download" class="size-4" /> Export to Excel</button>
+                <x-busy-button class="btn-primary" loading-text="Preparing file…" done-text="Ready"><x-icon name="download" class="size-4" /> Export to Excel</x-busy-button>
             </x-slot:actions>
         </x-page-header>
 
+        <p x-show="refreshing" x-cloak role="status" class="flex items-center gap-2 text-sm text-ink-500">
+            <x-spinner class="size-4 text-brand-500" /> Updating numbers for <span x-text="period.toLowerCase()"></span>, please wait…
+        </p>
+
         {{-- P&L waterfall --}}
-        <section class="surface p-6 lg:p-8">
+        <section :class="refreshing ? 'opacity-40 pointer-events-none' : ''" class="surface p-6 transition-opacity lg:p-8">
             <div class="grid gap-8 lg:grid-cols-[280px_1fr]">
                 <div>
                     <p class="eyebrow">Net profit · Sep 1–18</p>
@@ -100,13 +113,13 @@
         </section>
 
         {{-- Ledger --}}
-        <section class="surface overflow-hidden">
+        <section :class="refreshing ? 'opacity-40 pointer-events-none' : ''" class="surface overflow-hidden transition-opacity">
             <div class="flex items-center justify-between border-b border-ink-200 px-5 py-4 dark:border-white/[0.07]">
                 <div>
                     <h2 class="font-semibold">Daily ledger</h2>
                     <p class="text-xs text-ink-500">Click a day to see every order and expense behind it.</p>
                 </div>
-                <button type="button" class="btn-ghost py-2"><x-icon name="download" class="size-4" /> CSV</button>
+                <x-busy-button class="btn-ghost py-2" loading-text="Preparing…" done-text="Ready"><x-icon name="download" class="size-4" /> CSV</x-busy-button>
             </div>
             <div class="max-h-[560px] overflow-auto">
                 <table class="w-full min-w-[820px] text-sm">

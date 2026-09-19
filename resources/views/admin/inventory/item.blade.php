@@ -37,10 +37,10 @@
         <x-page-header class="mt-3" :title="$isEditing ? $product['name'] : 'Add an item'">
             <x-slot:actions>
                 @if ($isEditing)
-                    <button type="button" class="btn-quiet text-loss-600 dark:text-loss-400"><x-icon name="trash" class="size-4" /> Archive</button>
+                    <x-busy-button class="btn-quiet text-loss-600 dark:text-loss-400" loading-text="Archiving…" done-text="Archived"><x-icon name="trash" class="size-4" /> Archive</x-busy-button>
                 @endif
                 <a href="{{ route('admin.inventory') }}" class="btn-ghost">Cancel</a>
-                <button type="submit" class="btn-primary">Save item</button>
+                <x-busy-button type="submit" class="btn-primary" loading-text="Saving…" done-text="Saved">Save item</x-busy-button>
             </x-slot:actions>
         </x-page-header>
 

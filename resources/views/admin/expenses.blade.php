@@ -41,7 +41,7 @@
                     <option>August 2026</option>
                     <option>July 2026</option>
                 </select>
-                <button type="button" class="btn-ghost"><x-icon name="download" class="size-4" /> Export CSV</button>
+                <x-busy-button class="btn-ghost" loading-text="Preparing file…" done-text="Ready"><x-icon name="download" class="size-4" /> Export CSV</x-busy-button>
             </x-slot:actions>
         </x-page-header>
 
@@ -77,7 +77,7 @@
                             <input id="expense_amount" type="number" step="0.01" min="0" class="field num pl-7 text-right" placeholder="0.00">
                         </div>
                     </div>
-                    <button type="submit" class="btn-primary"><x-icon name="plus" class="size-4" /> Add</button>
+                    <x-busy-button type="submit" class="btn-primary" loading-text="Adding…" done-text="Added"><x-icon name="plus" class="size-4" /> Add</x-busy-button>
                 </form>
 
                 <div class="surface overflow-hidden">

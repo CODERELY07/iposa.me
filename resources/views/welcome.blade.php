@@ -20,6 +20,7 @@
         <meta name="description" content="iPOSa is the register, inventory and daily profit ledger for cafés, burger stands, milk tea shops and carinderias in the Philippines.">
     </head>
     <body class="font-sans antialiased">
+        <x-page-loader />
         {{-- Nav --}}
         <header class="sticky top-0 z-40 border-b border-transparent bg-ink-50/80 backdrop-blur dark:bg-ink-950/80">
             <nav class="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
