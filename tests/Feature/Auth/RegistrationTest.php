@@ -12,8 +12,14 @@ test('new users can register', function () {
         'email' => 'test@example.com',
         'password' => 'password',
         'password_confirmation' => 'password',
+        'business_name' => "Kape't Burger",
+        'business_type' => 'Burger & fast food',
     ]);
 
     $this->assertAuthenticated();
     $response->assertRedirect(route('dashboard', absolute: false));
+    $this->assertDatabaseHas('businesses', [
+        'business_name' => "Kape't Burger",
+        'status' => 'trial',
+    ]);
 });

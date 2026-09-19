@@ -1,59 +1,111 @@
 <?php
 
+use App\Http\Controllers\Admin\AssetController;
+use App\Http\Controllers\Admin\BillingController;
+use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\ExportController;
+use App\Http\Controllers\Admin\ItemController;
+use App\Http\Controllers\Admin\ItemImportController;
+use App\Http\Controllers\Admin\ReportController;
+use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\TeamController;
+use App\Http\Controllers\Admin\VoidRequestController;
+use App\Http\Controllers\AuditController;
+use App\Http\Controllers\BusinessController;
+use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\Pos\OrderController;
+use App\Http\Controllers\Pos\RegisterController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Staff\MyOrdersController;
+use App\Http\Controllers\SuperAdmin\PlanController;
+use App\Http\Controllers\SuperAdmin\PlatformDashboardController;
+use App\Http\Controllers\SuperAdmin\SubscriptionPaymentController;
 use Illuminate\Support\Facades\Route;
-
-/*
-|--------------------------------------------------------------------------
-| UI prototype routes
-|--------------------------------------------------------------------------
-| Every screen below renders a view with static demo data declared at the
-| top of the view. Swap the closures for controllers when wiring real data.
-*/
 
 Route::view('/', 'welcome')->name('home');
 
-Route::get('/dashboard', function () {
-    return match (auth()->user()->role) {
-        'super_admin' => redirect()->route('super_admin.dashboard'),
-        'admin'       => redirect()->route('admin.dashboard'),
-        'staff'       => redirect()->route('pos'),
-        default       => redirect()->route('home'),
-    };
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', fn () => redirect()->route(auth()->user()->homeRoute()))
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
-// Shared counter screens: cashiers live here, owners can ring up too.
-Route::middleware(['auth', 'verified', 'role:staff|admin'])->group(function () {
-    Route::view('/pos', 'pos.index')->name('pos');
-    Route::view('/audit', 'audit.index')->name('audit');
+// Counter screens: cashiers live here, owners can ring up too.
+Route::middleware(['auth', 'verified', 'role:staff|admin', 'business'])->group(function () {
+    Route::get('/pos', [RegisterController::class, 'index'])->name('pos');
+    Route::post('/pos/orders', [RegisterController::class, 'store'])->name('pos.orders.store');
+    Route::get('/pos/orders/{order}/receipt', [OrderController::class, 'receipt'])->name('pos.orders.receipt');
+    Route::post('/pos/orders/{order}/void', [OrderController::class, 'void'])->name('pos.orders.void');
+
+    Route::middleware('can:run-audit')->group(function () {
+        Route::get('/audit', [AuditController::class, 'index'])->name('audit');
+        Route::post('/audit', [AuditController::class, 'store'])->name('audit.store');
+    });
+
+    Route::post('/expenses', [ExpenseController::class, 'store'])
+        ->middleware(['can:log-expenses', 'plan:expenses'])
+        ->name('expenses.store');
 });
 
-// Staff screens
-Route::middleware(['auth', 'verified', 'role:staff'])->prefix('staff')->name('staff.')->group(function () {
-    Route::view('/orders', 'staff.orders')->name('orders');
+// Cashier screens
+Route::middleware(['auth', 'verified', 'role:staff', 'business'])->prefix('staff')->name('staff.')->group(function () {
+    Route::get('/orders', MyOrdersController::class)->name('orders');
 });
 
-// Admin screens
-Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
-    Route::view('/', 'admin.dashboard')->name('dashboard');
-    Route::view('/inventory', 'admin.inventory.index')->name('inventory');
-    Route::view('/inventory/items/new', 'admin.inventory.item')->name('inventory.create');
-    Route::view('/inventory/items/{item}/edit', 'admin.inventory.item')->name('inventory.edit');
-    Route::view('/expenses', 'admin.expenses')->name('expenses');
-    Route::view('/reports', 'admin.reports')->name('reports');
-    Route::view('/team', 'admin.team')->name('team');
-    Route::view('/settings', 'admin.settings')->name('settings');
+// Owner screens
+Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/', DashboardController::class)->name('dashboard');
+
+    Route::get('/inventory', [ItemController::class, 'index'])->name('inventory');
+    Route::get('/inventory/items/new', [ItemController::class, 'create'])->name('inventory.create');
+    Route::post('/inventory/items', [ItemController::class, 'store'])->name('inventory.store');
+    Route::get('/inventory/items/{item}/edit', [ItemController::class, 'edit'])->name('inventory.edit');
+    Route::put('/inventory/items/{item}', [ItemController::class, 'update'])->name('inventory.update');
+    Route::patch('/inventory/items/{item}/archive', [ItemController::class, 'archive'])->name('inventory.archive');
+    Route::patch('/inventory/items/{item}/restore', [ItemController::class, 'restore'])->name('inventory.restore');
+    Route::post('/inventory/import', ItemImportController::class)->name('inventory.import');
+    Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
+
+    Route::post('/orders/{order}/void/approve', [VoidRequestController::class, 'approve'])->name('orders.void.approve');
+    Route::post('/orders/{order}/void/reject', [VoidRequestController::class, 'reject'])->name('orders.void.reject');
+
+    Route::middleware('plan:expenses')->group(function () {
+        Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses');
+        Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');
+        Route::post('/assets', [AssetController::class, 'store'])->name('assets.store');
+        Route::post('/assets/{asset}/pay', [AssetController::class, 'pay'])->name('assets.pay');
+        Route::delete('/assets/{asset}', [AssetController::class, 'destroy'])->name('assets.destroy');
+    });
+
+    Route::get('/reports', ReportController::class)->middleware('plan:reports')->name('reports');
+    Route::get('/exports/{dataset}', ExportController::class)
+        ->whereIn('dataset', ExportController::DATASETS)
+        ->name('exports.download');
+
+    Route::get('/team', [TeamController::class, 'index'])->name('team');
+    Route::post('/team', [TeamController::class, 'store'])->name('team.store');
+    Route::post('/team/{user}/resend', [TeamController::class, 'resend'])->name('team.resend');
+    Route::delete('/team/{user}', [TeamController::class, 'destroy'])->name('team.destroy');
+    Route::patch('/team/permissions', [TeamController::class, 'updatePermissions'])->name('team.permissions');
+
+    Route::get('/settings', [SettingsController::class, 'edit'])->name('settings');
+    Route::patch('/settings/business', [SettingsController::class, 'updateBusiness'])->name('settings.business');
+    Route::patch('/settings/register', [SettingsController::class, 'updateRegister'])->name('settings.register');
+    Route::patch('/billing/plan', [BillingController::class, 'changePlan'])->name('billing.plan');
+    Route::post('/billing/payments', [BillingController::class, 'submitPayment'])->name('billing.payments.store');
 });
 
-// Super Admin screens
+// Platform console (SaaS operator)
 Route::middleware(['auth', 'verified', 'role:super_admin'])->prefix('super-admin')->name('super_admin.')->group(function () {
-    Route::view('/', 'super_admin.dashboard')->name('dashboard');
-    Route::view('/businesses', 'super_admin.tenants.index')->name('tenants');
-    Route::view('/businesses/{tenant}', 'super_admin.tenants.show')->name('tenants.show');
-    Route::view('/plans', 'super_admin.plans')->name('plans');
+    Route::get('/', PlatformDashboardController::class)->name('dashboard');
+    Route::resource('businesses', BusinessController::class)->only(['index', 'show']);
+    Route::post('/businesses/{business}/extend-trial', [BusinessController::class, 'extendTrial'])->name('businesses.extend-trial');
+    Route::post('/businesses/{business}/suspend', [BusinessController::class, 'suspend'])->name('businesses.suspend');
+    Route::post('/businesses/{business}/unsuspend', [BusinessController::class, 'unsuspend'])->name('businesses.unsuspend');
+    Route::get('/plans', PlanController::class)->name('plans');
+    Route::post('/payments/{payment}/confirm', [SubscriptionPaymentController::class, 'confirm'])->name('payments.confirm');
+    Route::post('/payments/{payment}/reject', [SubscriptionPaymentController::class, 'reject'])->name('payments.reject');
 });
 
-// Profile Management screens
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

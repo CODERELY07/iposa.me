@@ -1,58 +1,151 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# iPOSa
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+**POS, inventory and true daily profit for food businesses in the Philippines.**
+Cafés, burger stands, milk tea shops and carinderias ring up orders, count bulk supplies in 60 seconds at closing, and see tonight's real profit in pesos.
 
-## About Laravel
+> Status: early MVP. Authentication, email verification, roles and business sign-up are real. The app screens are a UI prototype with static data. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## What it does
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+| Area | Summary |
+|---|---|
+| **Register (POS)** | Color tiles by category, sizes as separate taps, cart, Cash/GCash/Maya checkout |
+| **Inventory** | Three kinds of stock: *menu items* (sold), *pieces* (buns, patties: deducted by recipe), *bulk & liquids* (oil, mayo: counted by eye) |
+| **Closing audit** | Staff type what's left (e.g. oil 5 → 4.5); the drop becomes the day's bulk cost |
+| **Expenses** | Excel-style entries by date and category, plus equipment installments |
+| **Profit & ledger** | Sales − ingredients − bulk used − expenses = true profit, day by day; CSV export |
+| **Platform console** | For the SaaS operator: businesses, trials, plans, MRR |
 
-## Learning Laravel
+## Roles
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+| Role | Who | Lands on |
+|---|---|---|
+| `super_admin` | SaaS operator (us) | `/super-admin` |
+| `admin` | Business owner, one business with one branch | `/admin` |
+| `staff` | Cashier | `/pos` |
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Details: [Access control module](docs/modules/02-access-control.md).
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+## Tech stack
 
-## Agentic Development
+Laravel 13 · PHP 8.4 · Breeze (Blade) · MySQL · Tailwind CSS 3 · Alpine.js 3 · Vite · Pest 5
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+---
+
+## Getting started
+
+### Requirements
+
+PHP 8.4, Composer, Node 20+, MySQL 8.
+
+### Install
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+git clone <repo-url> iposa.me
+cd iposa.me
+composer run setup
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+`composer run setup` installs PHP and JS dependencies, copies `.env`, generates the app key, runs migrations and builds the assets.
 
-## Contributing
+Then in `.env`:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```dotenv
+APP_NAME=iPOSa
+DB_DATABASE=iposa.me
+DB_USERNAME=root
+DB_PASSWORD=
+MAIL_MAILER=log        # verification emails go to storage/logs/laravel.log
+```
 
-## Code of Conduct
+Seed the demo accounts:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+php artisan migrate:fresh --seed
+```
 
-## Security Vulnerabilities
+### Run
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+composer run dev
+```
 
-## License
+This starts the Laravel server (http://localhost:8000), the queue worker and Vite together.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### Demo accounts
+
+| Email | Password | Role |
+|---|---|---|
+| `super_admin@gmail.com` | `password` | super_admin |
+| `admin@gmail.com` | `password` | admin |
+| `staff@gmail.com` | `password` | staff |
+
+> Every app route requires a verified email, and the seeder doesn't verify these accounts yet. Until that's fixed, verify them by hand:
+> ```bash
+> php artisan tinker --execute 'App\Models\User::whereNull("email_verified_at")->update(["email_verified_at" => now()]);'
+> ```
+
+---
+
+## Testing
+
+```bash
+php artisan test --compact
+```
+
+Format PHP before committing:
+
+```bash
+vendor/bin/pint --dirty
+```
+
+## Project structure
+
+```
+app/
+  Http/Middleware/RoleMiddleware.php    role:<a|b> route guard
+  Services/RegisterBusinessUserService  sign-up: user + business in one transaction
+  Models/User.php, Business.php
+routes/
+  web.php                               app routes grouped by role
+  auth.php                              Breeze auth + email verification
+resources/
+  views/layouts/app.blade.php           role-aware sidebar shell
+  views/components/                     icon, busy-button, page-loader, closing-receipt, …
+  views/pos, audit, staff, admin, super_admin
+  js/app.js                             Alpine stores: theme, loader, POS, audit
+  css/app.css                           design tokens (.num, .btn-*, .field, .surface)
+docs/
+  README.md                             documentation index + status per module
+  modules/NN-<module>.md                one file per module, organized by feature
+  ROADMAP.md                            step-by-step plan to the MVP
+```
+
+## UI conventions
+
+- **Dark mode by default**; the choice is saved per browser.
+- **Money** always uses the `.num` class (tabular monospace), is right-aligned in tables and formatted as `₱1,234.00`.
+- **Every action gives feedback:** `<x-busy-button loading-text="Saving…" done-text="Saved">`, and the page loader shows on navigation.
+- Views hold their demo data as `$name = $name ?? [...]`. A controller that passes `$name` replaces it with no view changes.
+
+## Documentation
+
+Start at **[docs/README.md](docs/README.md)**. Each module has its own file, organized by feature (status, routes, files, how it works, backend to build, done when, tests):
+
+| Module | |
+|---|---|
+| 01 | [Authentication](docs/modules/01-authentication.md): sign-up, login, email verification, password reset, profile |
+| 02 | [Access control (RBAC)](docs/modules/02-access-control.md): roles, role middleware, cashier permissions |
+| 03 | [Business & tenancy](docs/modules/03-business-tenancy.md): business record, staff membership, data scoping, trial |
+| 04 | [Inventory](docs/modules/04-inventory.md): menu items & sizes, pieces, bulk, recipe links, low stock |
+| 05 | [Register (POS)](docs/modules/05-pos.md): menu grid, cart, checkout, stock deduction, receipts |
+| 06 | [Closing audit](docs/modules/06-closing-audit.md): daily count, usage cost |
+| 07 | [Expenses](docs/modules/07-expenses.md): expense log, equipment & payables |
+| 08 | [Reports & analytics](docs/modules/08-reports.md): daily ledger, Today dashboard, P&L, export |
+| 09 | [Team & settings](docs/modules/09-team-settings.md): staff invites, business profile, billing |
+| 10 | [Platform console](docs/modules/10-platform.md): super admin metrics, businesses, plans, payments |
+| 11 | [UI foundation](docs/modules/11-ui-foundation.md): shell, theme, loading feedback, components |
+
+Build order: [docs/ROADMAP.md](docs/ROADMAP.md).

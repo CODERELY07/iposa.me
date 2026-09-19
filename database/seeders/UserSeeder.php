@@ -2,34 +2,32 @@
 
 namespace Database\Seeders;
 
+use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
 {
     /**
-     * Run the database seeds.
+     * Demo accounts (password: "password"). Verified, so they can open the app right away.
+     * The owner and cashier are linked to their shop in BusinessSeeder.
      */
     public function run(): void
     {
-        DB::table('users')->insert([
-            'name' => 'admin',
-            'email' => 'admin@gmail.com',
-            'password' => Hash::make('password'),
-            'role' => 'admin',
-        ]);
-        DB::table('users')->insert([
-            'name' => 'super_admin',
-            'email' => 'super_admin@gmail.com',
-            'password' => Hash::make('password'),
-            'role' => 'super_admin',
-        ]);
-        DB::table('users')->insert([
-            'name' => 'staff',
-            'email' => 'staff@gmail.com',
-            'password' => Hash::make('password'),
-            'role' => 'staff',
-        ]);
+        $accounts = [
+            ['name' => 'Maria Santos', 'email' => 'admin@gmail.com', 'role' => User::ROLE_ADMIN],
+            ['name' => 'Platform Operator', 'email' => 'calipjo.markely@gmail.com', 'role' => User::ROLE_SUPER_ADMIN],
+            ['name' => 'Jessa Reyes', 'email' => 'staff@gmail.com', 'role' => User::ROLE_STAFF],
+        ];
+
+        foreach ($accounts as $account) {
+            $user = User::firstOrNew(['email' => $account['email']]);
+            $user->forceFill([
+                'name' => $account['name'],
+                'password' => Hash::make('password'),
+                'role' => $account['role'],
+                'email_verified_at' => now(),
+            ])->save();
+        }
     }
 }

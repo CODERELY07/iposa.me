@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Business;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -41,5 +42,35 @@ class UserFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
         ]);
+    }
+
+    /**
+     * A shop owner with their own business.
+     */
+    public function owner(): static
+    {
+        return $this->state(fn (): array => ['role' => User::ROLE_ADMIN])
+            ->afterCreating(function (User $user): void {
+                if ($user->business_id === null) {
+                    Business::factory()->for($user, 'owner')->create();
+                    $user->refresh();
+                }
+            });
+    }
+
+    /**
+     * A cashier of the given business.
+     */
+    public function staffOf(Business $business): static
+    {
+        return $this->state(fn (): array => ['role' => User::ROLE_STAFF, 'business_id' => $business->id]);
+    }
+
+    /**
+     * The platform operator.
+     */
+    public function superAdmin(): static
+    {
+        return $this->state(fn (): array => ['role' => User::ROLE_SUPER_ADMIN]);
     }
 }

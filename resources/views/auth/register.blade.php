@@ -1,5 +1,5 @@
 @php
-    $businessTypes = ['Café / coffee shop', 'Burger & fast food', 'Milk tea & drinks', 'Carinderia / eatery', 'Bakery', 'Other food business'];
+    $businessTypes = \App\Http\Requests\Admin\UpdateBusinessProfileRequest::BUSINESS_TYPES;
 @endphp
 
 <x-guest-layout>
@@ -21,7 +21,8 @@
 
             <div>
                 <x-input-label for="business_name" :value="__('Business name')" />
-                <x-text-input id="business_name" type="text" name="business_name" :value="old('business_name')" placeholder="Kape't Burger" />
+                <x-text-input id="business_name" type="text" name="business_name" :value="old('business_name')" required maxlength="255" placeholder="Kape't Burger" />
+                <x-input-error :messages="$errors->get('business_name')" class="mt-2" />
             </div>
         </div>
 
@@ -30,7 +31,7 @@
             <div class="grid grid-cols-2 gap-2">
                 @foreach ($businessTypes as $businessType)
                     <label class="cursor-pointer">
-                        <input type="radio" name="business_type" value="{{ $businessType }}" class="peer sr-only" @checked($loop->first)>
+                        <input type="radio" name="business_type" value="{{ $businessType }}" class="peer sr-only" @checked(old('business_type', $businessTypes[0]) === $businessType)>
                         <span class="block rounded-xl border border-ink-200 px-3 py-2.5 text-sm text-ink-600 transition peer-checked:border-brand-400 peer-checked:bg-brand-400/10 peer-checked:text-ink-900 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-400 dark:border-white/10 dark:text-ink-300 dark:peer-checked:text-white">
                             {{ $businessType }}
                         </span>

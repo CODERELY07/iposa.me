@@ -138,21 +138,74 @@ Alpine.data('busyAction', (duration = 900, hasDoneState = true) => ({
     },
 }));
 
+
 /**
- * POS terminal: UI-only cart state backed by static menu data.
+ * JSON request with the CSRF token. Resolves { ok, status, data }; never throws on HTTP errors.
  */
-Alpine.data('posTerminal', (menu) => ({
+window.sendJson = async (url, body, method = 'POST') => {
+    const token = document.querySelector('meta[name="csrf-token"]')?.content;
+
+    try {
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': token, 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify(body),
+            credentials: 'same-origin',
+        });
+        const data = await response.json().catch(() => ({}));
+
+        return { ok: response.ok, status: response.status, data };
+    } catch (e) {
+        return { ok: false, status: 0, data: {} };
+    }
+};
+
+/**
+ * First readable message from a failed JSON request.
+ */
+window.errorMessage = ({ status, data }) => {
+    if (status === 0) {
+        return 'No internet connection. Nothing was saved — check the Wi-Fi and try again.';
+    }
+
+    if (status === 419) {
+        return 'Your session expired. Refresh the page and log in again.';
+    }
+
+    const firstError = data?.errors ? Object.values(data.errors).flat()[0] : null;
+
+    return firstError || data?.message || 'Something went wrong. Nothing was saved — try again.';
+};
+
+const newUuid = () => (window.crypto?.randomUUID
+    ? window.crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+
+        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+    }));
+
+/**
+ * POS terminal: cart in the browser, sale saved by the server.
+ * Each attempt carries a uuid, so retrying after a dropped connection never charges twice.
+ */
+Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl }) => ({
     menu,
+    paymentMethods,
+    storeUrl,
     category: 'All',
     search: '',
     cart: [],
-    payment: 'Cash',
+    payment: paymentMethods[0]?.value ?? 'cash',
     tendered: '',
     cartOpen: false,
     checkoutOpen: false,
     completed: false,
     processing: false,
-    orderNumber: 1048,
+    error: null,
+    orderNumber: nextOrderNumber,
+    lastOrder: null,
+    uuid: newUuid(),
     flashItemId: null,
     flashLineKey: null,
     toast: null,
@@ -177,7 +230,15 @@ Alpine.data('posTerminal', (menu) => ({
     },
 
     get subtotal() {
-        return this.cart.reduce((total, line) => total + line.qty * line.price, 0);
+        return Math.round(this.cart.reduce((total, line) => total + line.qty * line.price, 0) * 100) / 100;
+    },
+
+    get isCash() {
+        return this.payment === 'cash';
+    },
+
+    get paymentLabel() {
+        return this.paymentMethods.find((method) => method.value === this.payment)?.label ?? this.payment;
     },
 
     get change() {
@@ -185,19 +246,25 @@ Alpine.data('posTerminal', (menu) => ({
     },
 
     get canComplete() {
-        return this.payment !== 'Cash' || (parseFloat(this.tendered) || 0) >= this.subtotal;
+        return !this.isCash || (parseFloat(this.tendered) || 0) >= this.subtotal;
+    },
+
+    cartChanged() {
+        this.uuid = newUuid();
+        this.error = null;
     },
 
     add(item, variant) {
-        const key = `${item.id}-${variant.label}`;
+        const key = `${item.id}-${variant.id}`;
         const line = this.cart.find((entry) => entry.key === key);
 
         if (line) {
             line.qty++;
         } else {
-            this.cart.push({ key, name: item.name, variant: variant.label, price: variant.price, qty: 1, tone: item.tone });
+            this.cart.push({ key, variantId: variant.id, name: item.name, variant: variant.label, price: variant.price, qty: 1, tone: item.tone });
         }
 
+        this.cartChanged();
         this.confirmTap(item, key, `${item.name} · ${variant.label}`);
     },
 
@@ -222,12 +289,24 @@ Alpine.data('posTerminal', (menu) => ({
         }, 1100);
     },
 
+    increment(line) {
+        line.qty++;
+        this.cartChanged();
+    },
+
     decrement(line) {
         line.qty--;
 
         if (line.qty <= 0) {
             this.cart = this.cart.filter((entry) => entry.key !== line.key);
         }
+
+        this.cartChanged();
+    },
+
+    clearCart() {
+        this.cart = [];
+        this.cartChanged();
     },
 
     quickCash(amount) {
@@ -238,51 +317,92 @@ Alpine.data('posTerminal', (menu) => ({
         if (this.cart.length) {
             this.checkoutOpen = true;
             this.tendered = '';
+            this.error = null;
         }
     },
 
-    complete() {
+    async complete() {
         if (this.processing || !this.canComplete) {
             return;
         }
 
-        // Stands in for the checkout request. Keep the button locked until it answers.
         this.processing = true;
-        setTimeout(() => {
-            this.processing = false;
+        this.error = null;
+
+        const result = await window.sendJson(this.storeUrl, {
+            uuid: this.uuid,
+            payment_method: this.payment,
+            tendered: this.isCash ? parseFloat(this.tendered) : null,
+            lines: this.cart.map((line) => ({ variant_id: line.variantId, qty: line.qty })),
+        });
+
+        this.processing = false;
+
+        if (result.ok) {
+            this.lastOrder = result.data.order;
             this.completed = true;
-        }, 900);
+
+            return;
+        }
+
+        this.error = window.errorMessage(result);
+    },
+
+    printReceipt() {
+        if (this.lastOrder) {
+            window.open(this.lastOrder.receipt_url, '_blank', 'width=420,height=640');
+        }
     },
 
     newOrder() {
+        this.orderNumber = (this.lastOrder?.number ?? this.orderNumber) + 1;
         this.cart = [];
         this.completed = false;
         this.processing = false;
         this.checkoutOpen = false;
         this.cartOpen = false;
-        this.payment = 'Cash';
-        this.orderNumber++;
+        this.lastOrder = null;
+        this.payment = this.paymentMethods[0]?.value ?? 'cash';
+        this.cartChanged();
     },
 }));
 
 /**
- * Closing audit: staff type what they see on the shelf, in decimals.
+ * Closing audit: staff type what they see on the shelf, in decimals. Saved by the server.
  */
-Alpine.data('closingAudit', (items) => ({
-    items: items.map((item) => ({ ...item, counted: item.expected, touched: false })),
+Alpine.data('closingAudit', ({ items, storeUrl, alreadyClosed }) => ({
+    items: items.map((item) => ({ ...item, counted: item.counted ?? item.expected, touched: item.counted !== null })),
+    storeUrl,
+    startedAt: new Date().toISOString(),
     submitted: false,
     saving: false,
+    error: null,
+    usageCost: null,
+    editing: !alreadyClosed,
 
-    submit() {
+    async submit() {
         if (this.saving || this.touchedCount < this.items.length) {
             return;
         }
 
         this.saving = true;
-        setTimeout(() => {
-            this.saving = false;
+        this.error = null;
+
+        const result = await window.sendJson(this.storeUrl, {
+            started_at: this.startedAt,
+            counts: this.items.map((item) => ({ item_id: item.id, counted: item.counted })),
+        });
+
+        this.saving = false;
+
+        if (result.ok) {
+            this.usageCost = result.data.audit?.usage_cost ?? null;
             this.submitted = true;
-        }, 1000);
+
+            return;
+        }
+
+        this.error = window.errorMessage(result);
     },
 
     get touchedCount() {

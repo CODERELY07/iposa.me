@@ -1,65 +1,85 @@
 @php
-    $members = $members ?? [
-        ['name' => 'Maria Santos', 'email' => 'maria@kapetburger.ph', 'role' => 'Owner', 'lastActive' => 'Now', 'shiftSales' => null],
-        ['name' => 'Jessa Reyes', 'email' => 'jessa@kapetburger.ph', 'role' => 'Cashier', 'lastActive' => '2 min ago', 'shiftSales' => 7225.00],
-        ['name' => 'Paolo Cruz', 'email' => 'paolo@kapetburger.ph', 'role' => 'Cashier', 'lastActive' => 'Yesterday', 'shiftSales' => null],
-    ];
-
-    $cashierPermissions = [
-        ['label' => 'Run the closing audit', 'hint' => 'Recommended. Whoever closes, counts.', 'enabled' => true],
-        ['label' => 'See cost prices and margins', 'hint' => 'Off keeps your margins private.', 'enabled' => false],
-        ['label' => 'Void a paid order', 'hint' => 'Off sends a void request to you instead.', 'enabled' => false],
-        ['label' => 'Log expenses', 'hint' => 'For ice, LPG and small cash buys.', 'enabled' => true],
-    ];
+    $plan = $business->planDetails();
+    $initials = fn (string $name) => \Illuminate\Support\Str::of($name)->explode(' ')->filter()->take(2)->map(fn ($part) => mb_substr($part, 0, 1))->join('');
 @endphp
 
 <x-app-layout title="Team">
     <div class="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-8">
         <x-page-header eyebrow="Team" title="Who can use the register"
-            description="Your plan includes 3 staff accounts. Cashiers only see the register, the closing audit and their own orders." />
+            :description="$plan['staff_limit'] === null
+                ? 'Your '.$plan['name'].' plan includes unlimited staff. Cashiers only see the register, the closing audit and their own orders.'
+                : 'Your '.$plan['name'].' plan includes '.$plan['staff_limit'].' staff ('.$seatsLeft.' left). Cashiers only see the register, the closing audit and their own orders.'" />
 
         <section class="surface divide-y divide-ink-100 dark:divide-white/[0.06]">
             @foreach ($members as $member)
+                @php($lastActivity = $lastSeen[$member->id] ?? null)
                 <div class="flex flex-wrap items-center gap-4 px-5 py-4">
-                    <span class="flex size-10 items-center justify-center rounded-full bg-ink-100 text-sm font-semibold dark:bg-white/[0.07]">{{ \Illuminate\Support\Str::of($member['name'])->explode(' ')->map(fn ($part) => $part[0])->join('') }}</span>
+                    <span class="flex size-10 items-center justify-center rounded-full bg-ink-100 text-sm font-semibold uppercase dark:bg-white/[0.07]">{{ $initials($member->name) }}</span>
                     <div class="min-w-0 flex-1">
-                        <p class="font-medium">{{ $member['name'] }}</p>
-                        <p class="truncate text-xs text-ink-500">{{ $member['email'] }}</p>
+                        <p class="font-medium">{{ $member->name }} @if ($member->is(auth()->user()))<span class="text-xs font-normal text-ink-400">(you)</span>@endif</p>
+                        <p class="truncate text-xs text-ink-500">{{ $member->email }}</p>
                     </div>
-                    <span @class(['pill', 'bg-brand-400/15 text-brand-700 dark:text-brand-300' => $member['role'] === 'Owner', 'bg-ink-100 text-ink-600 dark:bg-white/[0.07] dark:text-ink-300' => $member['role'] !== 'Owner'])>{{ $member['role'] }}</span>
-                    <p class="w-28 text-right text-xs text-ink-500">{{ $member['lastActive'] }}</p>
+                    <span @class(['pill', 'bg-brand-400/15 text-brand-700 dark:text-brand-300' => $member->isAdmin(), 'bg-ink-100 text-ink-600 dark:bg-white/[0.07] dark:text-ink-300' => ! $member->isAdmin()])>{{ $member->isAdmin() ? 'Owner' : 'Cashier' }}</span>
+                    <p class="w-28 text-right text-xs text-ink-500">{{ $lastActivity ? 'Active '.\Illuminate\Support\Carbon::createFromTimestamp($lastActivity)->diffForHumans() : 'Not logged in yet' }}</p>
+                    @if ($member->isStaff())
+                        <div class="flex items-center gap-1">
+                            <form method="POST" action="{{ route('admin.team.resend', $member) }}">
+                                @csrf
+                                <button type="submit" class="btn-quiet px-2 text-xs" data-loading-text="Sending…">Resend invite</button>
+                            </form>
+                            <form method="POST" action="{{ route('admin.team.destroy', $member) }}" onsubmit="return confirm('Remove {{ e(addslashes($member->name)) }}? They are logged out right away. Their past orders keep their name.')">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn-quiet px-2 text-xs text-loss-600 dark:text-loss-400" data-loading-text="Removing…">Remove</button>
+                            </form>
+                        </div>
+                    @endif
                 </div>
             @endforeach
         </section>
 
-        <form @submit.prevent class="surface grid gap-3 p-5 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-            <div>
-                <label class="field-label" for="invite_name">Name</label>
-                <input id="invite_name" type="text" class="field" placeholder="Cashier's name">
+        @if ($seatsLeft === 0)
+            <div class="rounded-2xl border border-brand-400/40 bg-brand-400/10 p-4 text-sm">
+                All {{ $plan['staff_limit'] }} staff seats are used. <a href="{{ route('admin.settings') }}#billing" class="font-semibold hover:underline">Switch to Negosyo</a> for unlimited staff.
             </div>
-            <div>
-                <label class="field-label" for="invite_email">Email</label>
-                <input id="invite_email" type="email" class="field" placeholder="name@email.com">
-            </div>
-            <x-busy-button type="submit" class="btn-primary" loading-text="Sending…" done-text="Invite sent">Send invite</x-busy-button>
-        </form>
+        @else
+            <form method="POST" action="{{ route('admin.team.store') }}" class="surface grid gap-3 p-5 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                @csrf
+                <p class="text-sm font-semibold sm:col-span-3">Invite a cashier <span class="font-normal text-ink-500">· they get an email to set their password</span></p>
+                <div>
+                    <label class="field-label" for="invite_name">Name</label>
+                    <input id="invite_name" name="name" type="text" value="{{ old('name') }}" required maxlength="255" class="field" placeholder="Cashier's name">
+                </div>
+                <div>
+                    <label class="field-label" for="invite_email">Email</label>
+                    <input id="invite_email" name="email" type="email" value="{{ old('email') }}" required class="field" placeholder="name@email.com">
+                </div>
+                <button type="submit" class="btn-primary" data-loading-text="Sending invite…">Send invite</button>
+            </form>
+        @endif
 
-        <section class="surface p-6">
-            <h2 class="font-semibold">What cashiers can do</h2>
+        <form method="POST" action="{{ route('admin.team.permissions') }}" class="surface p-6">
+            @csrf
+            @method('PATCH')
+            <div class="flex items-center justify-between gap-4">
+                <h2 class="font-semibold">What cashiers can do</h2>
+                <button type="submit" class="btn-primary py-2" data-loading-text="Saving…">Save</button>
+            </div>
             <ul class="mt-4 divide-y divide-ink-100 dark:divide-white/[0.06]">
-                @foreach ($cashierPermissions as $permission)
-                    <li x-data="{ on: @js($permission['enabled']) }" class="flex items-center justify-between gap-4 py-3.5">
+                @foreach ($permissions as $key => $permission)
+                    <li x-data="{ on: @js((bool) $permissionValues[$key]) }" class="flex items-center justify-between gap-4 py-3.5">
                         <div>
                             <p class="text-sm font-medium">{{ $permission['label'] }}</p>
                             <p class="text-xs text-ink-500">{{ $permission['hint'] }}</p>
                         </div>
-                        <button type="button" role="switch" :aria-checked="on" @click="on = ! on"
+                        <input type="hidden" name="permissions[{{ $key }}]" :value="on ? 1 : 0">
+                        <button type="button" role="switch" :aria-checked="on.toString()" @click="on = ! on" aria-label="{{ $permission['label'] }}"
                             :class="on ? 'bg-brand-400' : 'bg-ink-200 dark:bg-white/10'" class="relative h-6 w-11 shrink-0 rounded-full transition">
                             <span :class="on ? 'translate-x-5' : 'translate-x-0.5'" class="absolute left-0 top-0.5 size-5 rounded-full bg-white shadow transition"></span>
                         </button>
                     </li>
                 @endforeach
             </ul>
-        </section>
+        </form>
     </div>
 </x-app-layout>

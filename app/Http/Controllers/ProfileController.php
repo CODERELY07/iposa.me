@@ -48,6 +48,12 @@ class ProfileController extends Controller
 
         $user = $request->user();
 
+        if ($user->ownedBusiness()->exists()) {
+            return Redirect::route('profile.edit')->withErrors([
+                'password' => 'Owners can’t delete their account while their shop is on iPOSa. Download your data in Settings, then contact support to close the shop.',
+            ], 'userDeletion');
+        }
+
         Auth::logout();
 
         $user->delete();

@@ -9,28 +9,26 @@ use Symfony\Component\HttpFoundation\Response;
 class RoleMiddleware
 {
     /**
-     * Handle an incoming request.
+     * Only let the listed roles through (e.g. "role:staff|admin"). Everyone else goes back to their own home screen.
      *
      * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next, string $roles): Response
     {
-        if (! auth()->check()) {
-            return redirect('/login');
+        $user = $request->user();
+
+        if ($user === null) {
+            return redirect()->route('login');
         }
 
-        $allowedRoutes = explode('|', $roles);
-        $userRole = auth()->user()->role;
-
-        if (in_array($userRole, $allowedRoutes)) {
+        if (in_array($user->role, explode('|', $roles), true)) {
             return $next($request);
         }
 
-        return match ($userRole) {
-            'admin' => redirect()->route('admin.dashboard'),
-            'super_admin' => redirect()->route('super_admin.dashboard'),
-            'staff' => redirect()->route('pos'),
-            default => redirect('/'),
-        };
+        if ($request->expectsJson()) {
+            abort(403, 'Your role cannot do this.');
+        }
+
+        return redirect()->route($user->homeRoute());
     }
 }

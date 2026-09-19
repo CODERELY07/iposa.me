@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\UpdateBusinessProfileRequest;
 use App\Models\User;
 use App\Services\RegisterBusinessUserService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -36,9 +37,8 @@ class RegisteredUserController extends Controller
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'business_name' => ['required', 'string', 'max:255'],
-            'business_type' => ['required', 'string', 'max:255'],
+            'business_type' => ['required', Rule::in(UpdateBusinessProfileRequest::BUSINESS_TYPES)],
         ]);
-
 
         $user = $service->register($validated);
 

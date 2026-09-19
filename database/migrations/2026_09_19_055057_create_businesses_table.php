@@ -16,6 +16,11 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained();
             $table->string('business_name');
             $table->string('business_type');
+
+            // Subscription & Account Status Columns
+            $table->enum('status', ['trial', 'active', 'past_due', 'suspended'])->default('trial');
+            $table->timestamp('start_date')->nullable();
+            $table->timestamp('due_date')->nullable();
             $table->timestamps();
         });
     }

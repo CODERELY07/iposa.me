@@ -1,36 +1,29 @@
 @php
-    // Static demo menu. Only items marked "Sellable on POS" ever reach this screen.
+    // Category color → tile classes. Written out in full so Tailwind keeps them.
     $tones = [
-        'Burgers' => ['tile' => 'border-l-brand-400 bg-brand-400/[0.08] hover:bg-brand-400/[0.16]', 'dot' => 'bg-brand-400'],
-        'Rice meals' => ['tile' => 'border-l-rose-400 bg-rose-400/[0.08] hover:bg-rose-400/[0.16]', 'dot' => 'bg-rose-400'],
-        'Sides' => ['tile' => 'border-l-yellow-300 bg-yellow-300/[0.08] hover:bg-yellow-300/[0.16]', 'dot' => 'bg-yellow-300'],
-        'Drinks' => ['tile' => 'border-l-sky-400 bg-sky-400/[0.08] hover:bg-sky-400/[0.16]', 'dot' => 'bg-sky-400'],
-        'Add-ons' => ['tile' => 'border-l-ink-400 bg-ink-400/[0.08] hover:bg-ink-400/[0.16]', 'dot' => 'bg-ink-400'],
+        'brand' => ['tile' => 'border-l-brand-400 bg-brand-400/[0.08] hover:bg-brand-400/[0.16]', 'dot' => 'bg-brand-400'],
+        'rose' => ['tile' => 'border-l-rose-400 bg-rose-400/[0.08] hover:bg-rose-400/[0.16]', 'dot' => 'bg-rose-400'],
+        'yellow' => ['tile' => 'border-l-yellow-300 bg-yellow-300/[0.08] hover:bg-yellow-300/[0.16]', 'dot' => 'bg-yellow-300'],
+        'sky' => ['tile' => 'border-l-sky-400 bg-sky-400/[0.08] hover:bg-sky-400/[0.16]', 'dot' => 'bg-sky-400'],
+        'emerald' => ['tile' => 'border-l-emerald-400 bg-emerald-400/[0.08] hover:bg-emerald-400/[0.16]', 'dot' => 'bg-emerald-400'],
+        'violet' => ['tile' => 'border-l-violet-400 bg-violet-400/[0.08] hover:bg-violet-400/[0.16]', 'dot' => 'bg-violet-400'],
+        'ink' => ['tile' => 'border-l-ink-400 bg-ink-400/[0.08] hover:bg-ink-400/[0.16]', 'dot' => 'bg-ink-400'],
     ];
 
-    $menu = $menu ?? collect([
-        ['id' => 1, 'name' => 'Classic Burger', 'category' => 'Burgers', 'variants' => [['label' => 'Regular', 'price' => 89]], 'stockLeft' => null],
-        ['id' => 2, 'name' => 'Cheeseburger', 'category' => 'Burgers', 'variants' => [['label' => 'Regular', 'price' => 109]], 'stockLeft' => null],
-        ['id' => 3, 'name' => 'Double Cheese', 'category' => 'Burgers', 'variants' => [['label' => 'Regular', 'price' => 159]], 'stockLeft' => null],
-        ['id' => 4, 'name' => 'Bacon Burger', 'category' => 'Burgers', 'variants' => [['label' => 'Regular', 'price' => 149]], 'stockLeft' => 7],
-        ['id' => 5, 'name' => 'Burger Steak', 'category' => 'Rice meals', 'variants' => [['label' => 'w/ rice', 'price' => 119]], 'stockLeft' => null],
-        ['id' => 6, 'name' => 'Chicken & Rice', 'category' => 'Rice meals', 'variants' => [['label' => 'w/ rice', 'price' => 129]], 'stockLeft' => 4],
-        ['id' => 7, 'name' => 'Tapsilog', 'category' => 'Rice meals', 'variants' => [['label' => 'w/ egg', 'price' => 139]], 'stockLeft' => null],
-        ['id' => 8, 'name' => 'Fries', 'category' => 'Sides', 'variants' => [['label' => 'Reg', 'price' => 59], ['label' => 'Large', 'price' => 89]], 'stockLeft' => null],
-        ['id' => 9, 'name' => 'Onion Rings', 'category' => 'Sides', 'variants' => [['label' => 'Regular', 'price' => 79]], 'stockLeft' => null],
-        ['id' => 10, 'name' => 'Nuggets', 'category' => 'Sides', 'variants' => [['label' => '6 pc', 'price' => 99], ['label' => '10 pc', 'price' => 149]], 'stockLeft' => null],
-        ['id' => 11, 'name' => 'Iced Tea', 'category' => 'Drinks', 'variants' => [['label' => '16oz', 'price' => 45], ['label' => '22oz', 'price' => 60]], 'stockLeft' => null],
-        ['id' => 12, 'name' => 'Iced Coffee', 'category' => 'Drinks', 'variants' => [['label' => '16oz', 'price' => 79], ['label' => '22oz', 'price' => 99]], 'stockLeft' => null],
-        ['id' => 13, 'name' => 'Calamansi Juice', 'category' => 'Drinks', 'variants' => [['label' => '16oz', 'price' => 49], ['label' => '22oz', 'price' => 65]], 'stockLeft' => null],
-        ['id' => 14, 'name' => 'Bottled Water', 'category' => 'Drinks', 'variants' => [['label' => '500ml', 'price' => 25]], 'stockLeft' => null],
-        ['id' => 15, 'name' => 'Extra Cheese', 'category' => 'Add-ons', 'variants' => [['label' => '1 slice', 'price' => 15]], 'stockLeft' => null],
-        ['id' => 16, 'name' => 'Extra Patty', 'category' => 'Add-ons', 'variants' => [['label' => '1 pc', 'price' => 45]], 'stockLeft' => null],
-        ['id' => 17, 'name' => 'Fried Egg', 'category' => 'Add-ons', 'variants' => [['label' => '1 pc', 'price' => 20]], 'stockLeft' => null],
-    ])->map(fn (array $item) => [...$item, 'tone' => $tones[$item['category']]['dot'], 'tile' => $tones[$item['category']]['tile']])->all();
+    $terminal = [
+        'menu' => collect($menu)->map(fn (array $item) => [
+            ...$item,
+            'tone' => ($tones[$item['color']] ?? $tones['ink'])['dot'],
+            'tile' => ($tones[$item['color']] ?? $tones['ink'])['tile'],
+        ])->all(),
+        'paymentMethods' => $paymentMethods,
+        'nextOrderNumber' => $nextOrderNumber,
+        'storeUrl' => route('pos.orders.store', absolute: false),
+    ];
 @endphp
 
 <x-app-layout title="Register" focus>
-    <div x-data="posTerminal(@js($menu))"
+    <div x-data="posTerminal(@js($terminal))"
         @keydown.window.slash="if (! ['INPUT', 'TEXTAREA'].includes($event.target.tagName)) { $event.preventDefault(); $refs.search.focus() }"
         class="lg:flex lg:h-dvh">
 
@@ -40,11 +33,11 @@
                 <div class="flex items-center gap-3">
                     <div class="relative flex-1">
                         <x-icon name="search" class="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-400" />
-                        <input x-ref="search" x-model="search" type="search" placeholder="Search menu" class="field py-3 pl-10 pr-10">
+                        <input x-ref="search" x-model="search" type="search" placeholder="Search menu" class="field py-3 pl-10 pr-10" aria-label="Search menu">
                         <span class="kbd absolute right-3 top-1/2 hidden -translate-y-1/2 sm:inline-flex">/</span>
                     </div>
                     <div class="hidden text-right xl:block">
-                        <p class="text-xs text-ink-500">Jessa · Counter 1</p>
+                        <p class="text-xs text-ink-500">{{ $cashierName }}</p>
                         <p class="num text-sm font-medium">Order <span x-text="'#' + orderNumber"></span></p>
                     </div>
                 </div>
@@ -59,10 +52,23 @@
             </div>
 
             <div class="flex-1 overflow-y-auto p-4 pb-28 sm:p-6 lg:pb-6">
+                @if (empty($menu))
+                    <div class="mx-auto max-w-sm py-20 text-center">
+                        <p class="font-semibold">No menu items yet</p>
+                        <p class="mt-1 text-sm text-ink-500">
+                            @if (auth()->user()->isAdmin())
+                                Add your burgers, drinks and sides in <a href="{{ route('admin.inventory.create') }}" class="font-medium text-brand-600 hover:underline dark:text-brand-300">Inventory</a>, and they show up here as tiles.
+                            @else
+                                Ask the owner to add the menu in Inventory.
+                            @endif
+                        </p>
+                    </div>
+                @endif
+
                 <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                     <template x-for="item in visibleItems" :key="item.id">
                         <div :class="[item.tile, flashItemId === item.id ? 'ring-2 ring-brand-400 animate-[tap-pop_.25s_ease-out]' : '']" class="flex min-h-[7.5rem] flex-col rounded-2xl border-l-4 transition">
-                            {{-- Single-variant items: whole tile is the button. --}}
+                            {{-- Single-size items: whole tile is the button. --}}
                             <template x-if="item.variants.length === 1">
                                 <button type="button" @click="add(item, item.variants[0])" class="flex flex-1 flex-col justify-between p-3.5 text-left active:scale-[0.98]">
                                     <span>
@@ -71,7 +77,7 @@
                                     </span>
                                     <span class="flex items-end justify-between gap-2">
                                         <span class="num text-base font-semibold" x-text="formatPeso(item.variants[0].price)"></span>
-                                        <span x-show="item.stockLeft" class="pill bg-loss-500/15 text-loss-600 dark:text-loss-300" x-text="item.stockLeft + ' left'"></span>
+                                        <span x-show="item.stockLeft !== null" class="pill bg-loss-500/15 text-loss-600 dark:text-loss-300" x-text="item.stockLeft + ' left'"></span>
                                     </span>
                                 </button>
                             </template>
@@ -79,9 +85,12 @@
                             {{-- Sized items: one tap per size, no pop-up. --}}
                             <template x-if="item.variants.length > 1">
                                 <div class="flex flex-1 flex-col justify-between p-3.5">
-                                    <span class="block text-[15px] font-semibold leading-tight" x-text="item.name"></span>
+                                    <span class="flex items-start justify-between gap-2">
+                                        <span class="block text-[15px] font-semibold leading-tight" x-text="item.name"></span>
+                                        <span x-show="item.stockLeft !== null" class="pill shrink-0 bg-loss-500/15 text-loss-600 dark:text-loss-300" x-text="item.stockLeft + ' left'"></span>
+                                    </span>
                                     <div class="mt-3 grid grid-cols-2 gap-1.5">
-                                        <template x-for="variant in item.variants" :key="variant.label">
+                                        <template x-for="variant in item.variants" :key="variant.id">
                                             <button type="button" @click="add(item, variant)" class="rounded-xl bg-white/70 px-2 py-2 text-left ring-1 ring-ink-900/5 transition hover:bg-white active:scale-[0.97] dark:bg-ink-950/40 dark:ring-white/10 dark:hover:bg-ink-950/70">
                                                 <span class="block text-[11px] font-medium text-ink-500 dark:text-ink-400" x-text="variant.label"></span>
                                                 <span class="num block text-sm font-semibold" x-text="formatPeso(variant.price)"></span>
@@ -94,8 +103,8 @@
                     </template>
                 </div>
 
-                <p x-show="! visibleItems.length" x-cloak class="py-16 text-center text-sm text-ink-500">
-                    Nothing matches "<span x-text="search"></span>". Menu items are added by the owner in Inventory.
+                <p x-show="menu.length && ! visibleItems.length" x-cloak class="py-16 text-center text-sm text-ink-500">
+                    Nothing matches "<span x-text="search"></span>".
                 </p>
             </div>
         </section>
@@ -127,7 +136,7 @@
                     <p class="num mt-0.5 text-lg font-semibold" x-text="'#' + orderNumber"></p>
                 </div>
                 <div class="flex items-center gap-1">
-                    <button type="button" x-show="cart.length" @click="cart = []" class="btn-quiet text-xs">Clear</button>
+                    <button type="button" x-show="cart.length" @click="clearCart()" class="btn-quiet text-xs">Clear</button>
                     <button type="button" @click="cartOpen = false" class="btn-quiet size-9 !px-0 lg:hidden" aria-label="Close order"><x-icon name="x" /></button>
                 </div>
             </div>
@@ -151,7 +160,7 @@
                             <div class="flex items-center rounded-xl bg-ink-100 dark:bg-white/[0.06]">
                                 <button type="button" @click="decrement(line)" class="flex size-9 items-center justify-center" aria-label="Remove one"><x-icon name="minus" class="size-4" /></button>
                                 <span class="num w-6 text-center text-sm font-semibold" x-text="line.qty"></span>
-                                <button type="button" @click="line.qty++" class="flex size-9 items-center justify-center" aria-label="Add one"><x-icon name="plus" class="size-4" /></button>
+                                <button type="button" @click="increment(line)" class="flex size-9 items-center justify-center" aria-label="Add one"><x-icon name="plus" class="size-4" /></button>
                             </div>
                             <p class="num w-20 text-right text-sm font-semibold" x-text="formatPeso(line.qty * line.price)"></p>
                         </li>
@@ -165,9 +174,9 @@
                     <span class="num text-3xl font-semibold tracking-tight" x-text="formatPeso(subtotal)"></span>
                 </div>
 
-                <div class="grid grid-cols-3 gap-1 rounded-xl bg-ink-100 p-1 dark:bg-white/[0.05]">
-                    <template x-for="method in ['Cash', 'GCash', 'Maya']" :key="method">
-                        <button type="button" @click="payment = method" :class="payment === method ? 'tab-active' : ''" class="tab" x-text="method"></button>
+                <div class="grid gap-1 rounded-xl bg-ink-100 p-1 dark:bg-white/[0.05]" style="grid-template-columns: repeat({{ max(1, count($paymentMethods)) }}, minmax(0, 1fr))">
+                    <template x-for="method in paymentMethods" :key="method.value">
+                        <button type="button" @click="payment = method.value" :class="payment === method.value ? 'tab-active' : ''" class="tab" x-text="method.label"></button>
                     </template>
                 </div>
 
@@ -179,21 +188,21 @@
 
         {{-- Checkout --}}
         <div x-show="checkoutOpen" x-cloak class="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/70 p-0 sm:items-center sm:p-6" @keydown.escape.window="if (! processing) checkoutOpen = false">
-            <div @click.outside="if (! completed && ! processing) checkoutOpen = false" x-transition class="w-full max-w-md rounded-t-3xl border border-ink-200 bg-white p-6 sm:rounded-3xl dark:border-white/10 dark:bg-ink-900">
+            <div @click.outside="if (! completed && ! processing) checkoutOpen = false" class="w-full max-w-md rounded-t-3xl border border-ink-200 bg-white p-6 sm:rounded-3xl dark:border-white/10 dark:bg-ink-900">
                 <template x-if="! completed">
                     <div class="space-y-5">
                         <div class="flex items-start justify-between">
                             <div>
-                                <p class="eyebrow">Amount due · <span x-text="payment"></span></p>
+                                <p class="eyebrow">Amount due · <span x-text="paymentLabel"></span></p>
                                 <p class="num mt-1 text-4xl font-semibold" x-text="formatPeso(subtotal)"></p>
                             </div>
                             <button type="button" @click="checkoutOpen = false" :disabled="processing" class="btn-quiet size-9 !px-0" aria-label="Back to order"><x-icon name="x" /></button>
                         </div>
 
-                        <template x-if="payment === 'Cash'">
+                        <template x-if="isCash">
                             <div class="space-y-3">
                                 <label class="field-label" for="tendered">Cash received</label>
-                                <input id="tendered" x-model="tendered" type="number" inputmode="decimal" min="0" step="0.01" class="field num py-3 text-xl" placeholder="0.00" x-init="$nextTick(() => $el.focus())">
+                                <input id="tendered" x-model="tendered" type="number" inputmode="decimal" min="0" step="0.01" class="field num py-3 text-xl" placeholder="0.00" x-init="$nextTick(() => $el.focus())" @keydown.enter="complete()">
                                 <div class="grid grid-cols-4 gap-2">
                                     <button type="button" @click="quickCash(subtotal)" class="btn-ghost px-2">Exact</button>
                                     <template x-for="bill in [100, 500, 1000]" :key="bill">
@@ -207,20 +216,24 @@
                             </div>
                         </template>
 
-                        <template x-if="payment !== 'Cash'">
+                        <template x-if="! isCash">
                             <p class="rounded-2xl bg-sky-500/10 px-4 py-3 text-sm text-sky-800 dark:text-sky-200">
-                                Confirm the <span x-text="payment"></span> payment on the customer's phone, then complete the sale.
+                                Confirm the <span x-text="paymentLabel"></span> payment on the customer's phone, then complete the sale.
                             </p>
                         </template>
 
+                        <p x-show="error" x-cloak role="alert" class="flex gap-2 rounded-2xl bg-loss-500/10 px-4 py-3 text-sm text-loss-700 dark:text-loss-300">
+                            <x-icon name="alert" class="mt-0.5 size-4" /> <span x-text="error"></span>
+                        </p>
+
                         <button type="button" @click="complete()" :disabled="! canComplete || processing" :aria-busy="processing.toString()"
                             :class="processing ? '!opacity-100' : ''" class="btn-primary w-full rounded-2xl py-4 text-base">
-                            <template x-if="! processing"><span>Complete sale</span></template>
+                            <template x-if="! processing"><span x-text="error ? 'Try again' : 'Complete sale'"></span></template>
                             <template x-if="processing">
                                 <span class="inline-flex items-center gap-2"><x-spinner /> Processing sale, please wait…</span>
                             </template>
                         </button>
-                        <p x-show="! canComplete && payment === 'Cash'" class="-mt-2 text-center text-xs text-ink-500">Enter the cash received to complete the sale.</p>
+                        <p x-show="! canComplete && isCash" class="-mt-2 text-center text-xs text-ink-500">Enter the cash received to complete the sale.</p>
                     </div>
                 </template>
 
@@ -229,12 +242,12 @@
                         <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-gain-500/15 text-gain-600 dark:text-gain-300">
                             <x-icon name="check" class="size-7" />
                         </div>
-                        <p class="mt-4 text-lg font-semibold">Order <span class="num" x-text="'#' + orderNumber"></span> paid</p>
-                        <p class="mt-1 text-sm text-ink-500" x-show="payment === 'Cash'">Give change: <span class="num font-semibold text-ink-900 dark:text-white" x-text="formatPeso(change)"></span></p>
+                        <p class="mt-4 text-lg font-semibold">Order <span class="num" x-text="'#' + lastOrder.number"></span> paid</p>
+                        <p class="mt-1 text-sm text-ink-500" x-show="lastOrder.change !== null">Give change: <span class="num font-semibold text-ink-900 dark:text-white" x-text="formatPeso(lastOrder.change)"></span></p>
                         <p class="mt-1 text-xs text-ink-500">Stock for linked ingredients was deducted.</p>
                         <div class="mt-6 grid grid-cols-2 gap-2">
-                            <button type="button" class="btn-ghost"><x-icon name="printer" class="size-4" /> Receipt</button>
-                            <button type="button" @click="newOrder()" class="btn-primary">New order</button>
+                            <button type="button" @click="printReceipt()" class="btn-ghost"><x-icon name="printer" class="size-4" /> Receipt</button>
+                            <button type="button" @click="newOrder()" x-init="$nextTick(() => $el.focus())" class="btn-primary">New order</button>
                         </div>
                     </div>
                 </template>

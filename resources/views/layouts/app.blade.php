@@ -1,36 +1,41 @@
 @php
-    $title = $attributes->get('title');
+    // Component attributes arrive HTML-escaped; decode once so the <title> isn't escaped twice.
+    $title = htmlspecialchars_decode((string) $attributes->get('title'), ENT_QUOTES);
     $isFocusMode = (bool) $attributes->get('focus', false);
-    $role = auth()->user()?->role;
+    $currentUser = auth()->user();
+    $role = $currentUser?->role;
+    $shop = $currentUser?->business;
+    $canRunAudit = $currentUser?->can('run-audit') ?? false;
 
     $navigation = match ($role) {
         'super_admin' => [
             ['label' => 'Overview', 'route' => 'super_admin.dashboard', 'icon' => 'home'],
-            ['label' => 'Businesses', 'route' => 'super_admin.tenants', 'icon' => 'building', 'match' => 'super_admin.tenants*'],
+            ['label' => 'Businesses', 'route' => 'super_admin.businesses.index', 'icon' => 'building', 'match' => 'super_admin.businesses.*'],
             ['label' => 'Plans & billing', 'route' => 'super_admin.plans', 'icon' => 'card'],
         ],
-        'admin' => [
+        'admin' => array_values(array_filter([
             ['label' => 'Today', 'route' => 'admin.dashboard', 'icon' => 'home'],
             ['label' => 'Register', 'route' => 'pos', 'icon' => 'pos'],
             ['label' => 'Inventory', 'route' => 'admin.inventory', 'icon' => 'box', 'match' => 'admin.inventory*'],
             ['label' => 'Closing audit', 'route' => 'audit', 'icon' => 'audit'],
-            ['label' => 'Expenses', 'route' => 'admin.expenses', 'icon' => 'receipt'],
-            ['label' => 'Profit & ledger', 'route' => 'admin.reports', 'icon' => 'chart'],
+            $shop?->hasFeature('expenses') ? ['label' => 'Expenses', 'route' => 'admin.expenses', 'icon' => 'receipt'] : null,
+            $shop?->hasFeature('reports') ? ['label' => 'Profit & ledger', 'route' => 'admin.reports', 'icon' => 'chart'] : null,
             ['label' => 'Team', 'route' => 'admin.team', 'icon' => 'users'],
             ['label' => 'Settings', 'route' => 'admin.settings', 'icon' => 'cog'],
-        ],
-        default => [
+        ])),
+        default => array_values(array_filter([
             ['label' => 'Register', 'route' => 'pos', 'icon' => 'pos'],
-            ['label' => 'Closing audit', 'route' => 'audit', 'icon' => 'audit'],
+            $canRunAudit ? ['label' => 'Closing audit', 'route' => 'audit', 'icon' => 'audit'] : null,
             ['label' => 'My orders', 'route' => 'staff.orders', 'icon' => 'receipt'],
-        ],
+        ])),
     };
 
-    $workspaceName = $role === 'super_admin' ? 'Platform console' : "Kape't Burger";
+    $workspaceName = $role === 'super_admin' ? 'Platform console' : ($shop?->business_name ?? 'No shop linked');
+    $businessCount = $role === 'super_admin' ? \App\Models\Business::count() : 0;
     $workspaceMeta = match ($role) {
-        'super_admin' => 'Operator · 128 businesses',
-        'admin' => 'Owner · Marikina branch',
-        default => 'Cashier · Counter 1',
+        'super_admin' => 'Operator · '.number_format($businessCount).' '.\Illuminate\Support\Str::plural('business', $businessCount),
+        'admin' => 'Owner · '.($shop?->planDetails()['name'] ?? '').' plan',
+        default => 'Cashier',
     };
 @endphp
 <!DOCTYPE html>
@@ -94,12 +99,13 @@
                 </nav>
 
                 <div class="space-y-2 border-t border-ink-200 p-3 dark:border-white/[0.06]">
-                    <div @class(['flex items-center gap-2 px-2 text-xs text-ink-500 dark:text-ink-400', 'lg:justify-center' => $isFocusMode])>
+                    <div x-data="{ online: navigator.onLine }" @online.window="online = true" @offline.window="online = false"
+                        @class(['flex items-center gap-2 px-2 text-xs text-ink-500 dark:text-ink-400', 'lg:justify-center' => $isFocusMode])>
                         <span class="relative flex size-2">
-                            <span class="absolute inline-flex size-full animate-ping rounded-full bg-gain-400 opacity-60"></span>
-                            <span class="relative inline-flex size-2 rounded-full bg-gain-500"></span>
+                            <span x-show="online" class="absolute inline-flex size-full animate-ping rounded-full bg-gain-400 opacity-60"></span>
+                            <span :class="online ? 'bg-gain-500' : 'bg-loss-500'" class="relative inline-flex size-2 rounded-full bg-gain-500"></span>
                         </span>
-                        <span @class(['lg:hidden' => $isFocusMode])>Online · synced 12s ago</span>
+                        <span @class(['lg:hidden' => $isFocusMode]) x-text="online ? 'Online' : 'Offline · sales need internet'">Online</span>
                     </div>
 
                     <div @class(['flex items-center justify-between gap-2', 'lg:flex-col' => $isFocusMode])>
@@ -126,6 +132,8 @@
             </aside>
 
             <main class="min-w-0 flex-1">
+                <x-flash />
+
                 @isset($header)
                     <div class="border-b border-ink-200 px-4 py-6 sm:px-8 dark:border-white/[0.06]">
                         {{ $header }}
