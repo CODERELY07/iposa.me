@@ -128,8 +128,8 @@
         <div x-show="cartOpen" x-cloak x-transition.opacity class="fixed inset-0 z-30 bg-ink-950/60 lg:hidden" @click="cartOpen = false"></div>
 
         {{-- Order panel: side column on desktop, bottom sheet on phones --}}
-        <aside :class="cartOpen ? 'translate-y-0' : 'translate-y-full'"
-            class="fixed inset-x-0 bottom-0 z-40 flex max-h-[88dvh] translate-y-full flex-col rounded-t-3xl border-t border-ink-200 bg-white transition-transform duration-200 lg:static lg:z-auto lg:h-dvh lg:max-h-none lg:w-[380px] lg:translate-y-0 lg:rounded-none lg:border-l lg:border-t-0 dark:border-white/[0.07] dark:bg-ink-900">
+        <aside x-bind:data-open="cartOpen ? 'true' : 'false'" x-bind:aria-hidden="cartOpen ? 'false' : null"
+            class="fixed inset-x-0 bottom-0 z-40 flex max-h-[88dvh] translate-y-full flex-col rounded-t-3xl border-t border-ink-200 bg-white transition-transform duration-200 data-[open=true]:translate-y-0 lg:static lg:z-auto lg:h-dvh lg:max-h-none lg:w-[380px] lg:translate-y-0 lg:rounded-none lg:border-l lg:border-t-0 dark:border-white/[0.07] dark:bg-ink-900">
             {{-- Offline sales waiting to sync / refused by the server --}}
             <div x-data x-show="$store.offlineQueue.total > 0 || $store.offlineQueue.notice" x-cloak class="border-b border-brand-400/30 bg-brand-400/10 px-5 py-3 text-xs">
                 <div class="flex items-center justify-between gap-2">

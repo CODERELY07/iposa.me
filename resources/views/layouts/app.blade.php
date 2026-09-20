@@ -61,8 +61,8 @@
 
             {{-- Sidebar --}}
             <aside
-                :class="drawerOpen ? 'translate-x-0' : '-translate-x-full'"
-                class="fixed inset-y-0 left-0 z-50 flex w-72 -translate-x-full flex-col border-r border-ink-200 bg-white transition-transform duration-200 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 dark:border-white/[0.06] dark:bg-ink-950 {{ $isFocusMode ? 'lg:w-[76px]' : 'lg:w-64' }}"
+                x-bind:data-open="drawerOpen ? 'true' : 'false'"
+                class="fixed inset-y-0 left-0 z-50 flex w-72 -translate-x-full flex-col border-r border-ink-200 bg-white transition-transform duration-200 data-[open=true]:translate-x-0 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 dark:border-white/[0.06] dark:bg-ink-950 {{ $isFocusMode ? 'lg:w-[76px]' : 'lg:w-64' }}"
             >
                 <div class="flex h-16 items-center justify-between px-5 {{ $isFocusMode ? 'lg:justify-center lg:px-0' : '' }}">
                     <a href="{{ route('dashboard') }}" class="text-xl">
