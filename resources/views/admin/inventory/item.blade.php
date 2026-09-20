@@ -298,7 +298,18 @@
         </form>
 
         @if ($isEditing)
-            <div class="mt-8 flex justify-end border-t border-ink-200 pt-6 dark:border-white/[0.06]">
+            <div class="mt-8 flex flex-wrap items-center justify-end gap-2 border-t border-ink-200 pt-6 dark:border-white/[0.06]">
+                @if ($canDelete)
+                    <form method="POST" action="{{ route('admin.inventory.destroy', $item) }}" class="me-auto"
+                        onsubmit="return confirm('Delete {{ e(addslashes($item->name)) }} for good? It was never sold or counted, so nothing in your reports changes.')">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="btn-quiet text-loss-600 dark:text-loss-400" data-loading-text="Deleting…"><x-icon name="trash" class="size-4" /> Delete for good</button>
+                    </form>
+                @else
+                    <p class="me-auto max-w-sm text-xs text-ink-500">This item is part of your history (sold, counted or linked to a recipe), so it can only be archived.</p>
+                @endif
+
                 @if ($item->archived_at)
                     <form method="POST" action="{{ route('admin.inventory.restore', $item) }}">
                         @csrf

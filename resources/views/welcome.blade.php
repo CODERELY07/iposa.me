@@ -1,9 +1,4 @@
 @php
-    $plans = [
-        ['name' => 'Tindahan', 'price' => 499, 'for' => 'Small counters, 1–3 staff', 'features' => ['Register with Cash, GCash, Maya', 'Menu, pieces and bulk inventory', '60-second closing audit', 'Daily & weekly sales', 'Low-stock alerts', 'Excel export'], 'featured' => false],
-        ['name' => 'Negosyo', 'price' => 999, 'for' => 'Owners who want the full profit picture', 'features' => ['Everything in Tindahan', 'Ingredient links: sell a burger, buns go down', 'Expenses and equipment installments', 'P&L and daily ledger', 'Unlimited staff', 'Priority support on Viber'], 'featured' => true],
-    ];
-
     $faqs = [
         ['q' => 'What if the internet drops mid-rush?', 'a' => 'The register keeps taking orders offline and syncs when the connection is back. Nothing is lost.'],
         ['q' => 'Do I need a special POS machine?', 'a' => 'No. It runs in the browser on the tablet or phone you already have. Add it to your home screen and it behaves like an app.'],

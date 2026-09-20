@@ -12,28 +12,67 @@
 <x-app-layout title="Plans & billing">
     <div class="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-8">
         <x-page-header eyebrow="Billing" title="Plans & billing"
-            description="Plans live in config/plans.php (one branch each). Owners pay by GCash or bank transfer and send the reference; confirm it here to activate them for another month." />
+            description="One plan per shop. Owners pay by GCash or bank transfer and send the reference; confirm it here to activate them for another month.">
+            <x-slot:actions>
+                <a href="{{ route('super_admin.plans.create') }}" class="btn-primary">New plan</a>
+            </x-slot:actions>
+        </x-page-header>
 
         <div class="grid gap-4 md:grid-cols-2">
-            @foreach ($plans as $planKey => $plan)
-                @php($count = (int) ($subscribers[$planKey] ?? 0))
-                <section class="surface p-6">
-                    <div class="flex items-start justify-between">
+            @foreach ($plans as $plan)
+                @php($shops = (int) ($subscribers[$plan->key] ?? 0))
+                @php($paying = (int) ($payingSubscribers[$plan->key] ?? 0))
+                <section @class(['surface p-6', 'opacity-70' => $plan->isArchived()])>
+                    <div class="flex items-start justify-between gap-4">
                         <div>
-                            <p class="font-semibold">{{ $plan['name'] }}</p>
-                            <p class="mt-1"><span class="num text-3xl font-semibold">₱{{ number_format($plan['price']) }}</span><span class="text-sm text-ink-500"> / month</span></p>
+                            <div class="flex items-center gap-2">
+                                <p class="font-semibold">{{ $plan->name }}</p>
+                                @if ($plan->isArchived())<span class="pill bg-ink-500/15 text-ink-600 dark:text-ink-300">Archived</span>@endif
+                            </div>
+                            <p class="mt-1"><span class="num text-3xl font-semibold">₱{{ number_format((float) $plan->price) }}</span><span class="text-sm text-ink-500"> / month</span></p>
+                            <p class="mt-1 text-xs text-ink-500">{{ $plan->pitch }}</p>
                         </div>
                         <div class="text-right">
-                            <p class="num text-xl font-semibold">{{ $count }}</p>
+                            <p class="num text-xl font-semibold">{{ $paying }}</p>
                             <p class="text-xs text-ink-500">paying</p>
+                            @if ($shops > $paying)<p class="num mt-1 text-xs text-ink-500">{{ $shops }} total</p>@endif
                         </div>
                     </div>
-                    <p class="num mt-4 text-xs text-ink-500">₱{{ number_format($plan['price'] * $count) }} MRR · {{ $plan['staff_limit'] === null ? 'Unlimited staff' : $plan['staff_limit'].' staff' }} · {{ config('plans.trial_days') }}-day trial</p>
+
+                    <p class="num mt-4 text-xs text-ink-500">₱{{ number_format((float) $plan->price * $paying) }} MRR · {{ $plan->staff_limit === null ? 'Unlimited staff' : $plan->staff_limit.' staff' }} · {{ config('plans.trial_days') }}-day trial · <span class="font-mono">{{ $plan->key }}</span></p>
+
                     <ul class="mt-5 space-y-2 border-t border-ink-100 pt-5 text-sm dark:border-white/[0.06]">
-                        @foreach ($plan['feature_list'] as $feature)
+                        @forelse ($plan->feature_list ?? [] as $feature)
                             <li class="flex items-center gap-2"><x-icon name="check" class="size-4 text-gain-500" /> {{ $feature }}</li>
-                        @endforeach
+                        @empty
+                            <li class="text-ink-500">No feature list yet.</li>
+                        @endforelse
                     </ul>
+
+                    <div class="mt-5 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-4 dark:border-white/[0.06]">
+                        <a href="{{ route('super_admin.plans.edit', $plan) }}" class="btn-ghost px-3 py-1.5 text-xs">Edit</a>
+
+                        @if ($plan->isArchived())
+                            <form method="POST" action="{{ route('super_admin.plans.restore', $plan) }}">
+                                @csrf @method('PATCH')
+                                <button type="submit" class="btn-quiet px-3 py-1.5 text-xs" data-loading-text="…">Make available</button>
+                            </form>
+                        @else
+                            <form method="POST" action="{{ route('super_admin.plans.archive', $plan) }}"
+                                onsubmit="return confirm(@js($shops > 0 ? $shops.' shop(s) are on '.$plan->name.'. They keep it, but nobody new can choose it. Archive?' : 'Archive '.$plan->name.'?'))">
+                                @csrf @method('PATCH')
+                                <button type="submit" class="btn-quiet px-3 py-1.5 text-xs" data-loading-text="…">Archive</button>
+                            </form>
+                        @endif
+
+                        @if ($shops === 0)
+                            <form method="POST" action="{{ route('super_admin.plans.destroy', $plan) }}" class="ms-auto"
+                                onsubmit="return confirm(@js('Delete '.$plan->name.' for good?'))">
+                                @csrf @method('DELETE')
+                                <button type="submit" class="btn-quiet px-3 py-1.5 text-xs text-loss-600 dark:text-loss-400" data-loading-text="…">Delete</button>
+                            </form>
+                        @endif
+                    </div>
                 </section>
             @endforeach
         </div>
@@ -71,7 +110,7 @@
                                         <a href="{{ route('super_admin.businesses.show', $payment->business_id) }}" class="font-medium hover:underline">{{ $payment->business?->business_name }}</a>
                                         <p class="text-xs text-ink-500">by {{ $payment->submitter?->name ?? 'unknown' }}</p>
                                     </td>
-                                    <td class="px-3 py-3 text-ink-500">{{ config('plans.plans.'.$payment->plan.'.name', $payment->plan) }}</td>
+                                    <td class="px-3 py-3 text-ink-500">{{ $planNames[$payment->plan] ?? $payment->plan }}</td>
                                     <td class="px-3 py-3 text-ink-500">{{ strtoupper($payment->method) }} · <span class="num text-ink-900 dark:text-ink-100">{{ $payment->reference }}</span></td>
                                     <td class="num px-3 py-3 text-ink-500">{{ $payment->created_at->format('M j, g:i A') }}</td>
                                     <td class="px-3 py-3">

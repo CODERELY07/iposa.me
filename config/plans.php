@@ -2,9 +2,15 @@
 
 /*
 |--------------------------------------------------------------------------
-| Subscription plans
+| Subscription settings
 |--------------------------------------------------------------------------
 | One business = one branch = one plan. Prices are monthly, in pesos.
+|
+| The plans themselves live in the `plans` table and are managed by the
+| platform operator at /super-admin/plans. The `plans` array below is only
+| the starting set: the create_plans_table migration copies it into the
+| database on first install, and nothing reads it at runtime afterwards.
+|
 | `staff_limit` counts cashier accounts (null = unlimited).
 | `features` gates modules: expenses, reports (P&L + ledger), recipes.
 | Export is on every plan on purpose: it's the "never locked in" promise.
@@ -24,6 +30,7 @@ return [
         'bank' => env('BILLING_BANK', 'BPI · 0000-0000-00 · iPOSa'),
     ],
 
+    // Seed data for the first install only. Edit plans in the platform console.
     'plans' => [
 
         'tindahan' => [

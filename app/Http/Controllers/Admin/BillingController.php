@@ -14,7 +14,7 @@ class BillingController extends Controller
     public function changePlan(Request $request, SubscriptionService $subscriptions): RedirectResponse
     {
         $validated = $request->validate([
-            'plan' => ['required', Rule::in(array_keys(config('plans.plans')))],
+            'plan' => ['required', Rule::exists('plans', 'key')->whereNull('archived_at')],
         ]);
 
         $business = $subscriptions->changePlan($request->user()->business, $validated['plan']);

@@ -10,11 +10,15 @@ use App\Models\Audit;
 use App\Models\AuditLine;
 use App\Models\Category;
 use App\Models\Item;
+use App\Models\OrderLine;
+use App\Models\RecipeLine;
 use App\Models\StockMovement;
 use App\Services\Inventory\ItemService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class ItemController extends Controller
@@ -112,6 +116,67 @@ class ItemController extends Controller
     }
 
     /**
+     * Permanent delete, only for an item that was never part of the shop's history:
+     * no sales, no stock movements, no audits, and not linked into a recipe.
+     * Anything else must be archived, so past orders and reports stay explainable.
+     */
+    public function destroy(Item $item): RedirectResponse
+    {
+        $blockers = $this->deleteBlockers($item);
+
+        if ($blockers !== []) {
+            throw ValidationException::withMessages([
+                'item' => "{$item->name} can't be deleted: ".implode(' ', $blockers).' Archive it instead.',
+            ]);
+        }
+
+        $tab = $this->tabFor($item);
+        $name = $item->name;
+
+        DB::transaction(function () use ($item): void {
+            $item->recipeLines()->delete();
+            $item->variants()->delete();
+            $item->delete();
+        });
+
+        return redirect()
+            ->route('admin.inventory', ['tab' => $tab])
+            ->with('status', "{$name} deleted.");
+    }
+
+    /**
+     * Why an item can't be deleted, in the owner's words. Empty means it can.
+     *
+     * @return list<string>
+     */
+    private function deleteBlockers(Item $item): array
+    {
+        $blockers = [];
+
+        $sold = (int) OrderLine::query()->where('item_id', $item->id)->sum('qty');
+
+        if ($sold > 0) {
+            $blockers[] = "it has been sold ({$sold} so far).";
+        }
+
+        if ($item->stockMovements()->exists()) {
+            $blockers[] = 'it has stock movements on record.';
+        }
+
+        if (AuditLine::query()->where('item_id', $item->id)->exists()) {
+            $blockers[] = 'it has been counted in a closing audit.';
+        }
+
+        $usedInRecipes = RecipeLine::query()->where('piece_item_id', $item->id)->count();
+
+        if ($usedInRecipes > 0) {
+            $blockers[] = 'it is linked to '.$usedInRecipes.' '.str('recipe')->plural($usedInRecipes).'.';
+        }
+
+        return $blockers;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function formData(Request $request, Item $item): array
@@ -128,6 +193,7 @@ class ItemController extends Controller
 
         return [
             'item' => $item,
+            'canDelete' => $item->exists && $this->deleteBlockers($item) === [],
             'categories' => Category::query()->orderBy('sort')->orderBy('name')->get(),
             'pieces' => $pieces,
             'recipesEnabled' => $business->hasFeature('recipes'),

@@ -5,6 +5,7 @@ namespace App\Services\Billing;
 use App\Enums\BusinessStatus;
 use App\Enums\SubscriptionPaymentStatus;
 use App\Models\Business;
+use App\Models\Plan;
 use App\Models\SubscriptionPayment;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -20,7 +21,7 @@ class SubscriptionService
      */
     public function changePlan(Business $business, string $plan): Business
     {
-        $details = config('plans.plans.'.$plan);
+        $details = Plan::query()->available()->firstWhere('key', $plan);
 
         if ($details === null) {
             throw ValidationException::withMessages(['plan' => 'Unknown plan.']);
@@ -28,13 +29,14 @@ class SubscriptionService
 
         $staffCount = $business->members()->where('role', User::ROLE_STAFF)->count();
 
-        if ($details['staff_limit'] !== null && $staffCount > $details['staff_limit']) {
+        if ($details->staff_limit !== null && $staffCount > $details->staff_limit) {
             throw ValidationException::withMessages([
-                'plan' => "{$details['name']} allows {$details['staff_limit']} staff. Remove ".($staffCount - $details['staff_limit']).' first.',
+                'plan' => "{$details->name} allows {$details->staff_limit} staff. Remove ".($staffCount - $details->staff_limit).' first.',
             ]);
         }
 
-        $business->update(['plan' => $plan]);
+        // Switching plans agrees to that plan's price as it stands today.
+        $business->update(['plan' => $details->key, 'plan_price' => $details->price]);
 
         return $business;
     }
@@ -56,7 +58,7 @@ class SubscriptionService
 
         return $business->subscriptionPayments()->create([
             'plan' => $business->plan,
-            'amount' => $business->planDetails()['price'],
+            'amount' => $business->monthlyPrice(),
             'method' => $data['method'],
             'reference' => $data['reference'],
             'status' => SubscriptionPaymentStatus::Pending,
@@ -81,6 +83,9 @@ class SubscriptionService
             $business->update([
                 'status' => BusinessStatus::Active,
                 'plan' => $payment->plan,
+                // A renewal re-agrees to the plan's current price, so an operator's
+                // price change reaches paying shops here and not mid-period.
+                'plan_price' => Plan::findByKey($payment->plan)?->price ?? $payment->amount,
                 'start_date' => $business->start_date ?? now(),
                 'due_date' => $periodStart->copy()->addDays((int) config('plans.billing_period_days')),
                 'suspended_at' => null,

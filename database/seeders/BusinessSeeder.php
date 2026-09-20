@@ -37,7 +37,7 @@ class BusinessSeeder extends Seeder
 
             foreach (range(mt_rand(1, 5), 1) as $monthsAgo) {
                 $business->subscriptionPayments()->create([
-                    'plan' => $business->plan, 'amount' => $business->planDetails()['price'], 'method' => mt_rand(0, 1) ? 'gcash' : 'bank',
+                    'plan' => $business->plan, 'amount' => $business->monthlyPrice(), 'method' => mt_rand(0, 1) ? 'gcash' : 'bank',
                     'reference' => (string) mt_rand(100000000, 999999999), 'status' => SubscriptionPaymentStatus::Paid,
                     'submitted_by' => $business->user_id, 'reviewed_by' => $operator?->id, 'reviewed_at' => now()->subMonths($monthsAgo)->subDays(mt_rand(0, 10)),
                 ]);
@@ -46,7 +46,7 @@ class BusinessSeeder extends Seeder
 
         Business::factory()->count(2)->pastDue()->create()->each(function (Business $business): void {
             $business->subscriptionPayments()->create([
-                'plan' => $business->plan, 'amount' => $business->planDetails()['price'], 'method' => 'gcash',
+                'plan' => $business->plan, 'amount' => $business->monthlyPrice(), 'method' => 'gcash',
                 'reference' => (string) mt_rand(100000000, 999999999), 'status' => SubscriptionPaymentStatus::Pending,
                 'submitted_by' => $business->user_id,
             ]);

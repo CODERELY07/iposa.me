@@ -136,7 +136,10 @@
                 </div>
 
                 <div class="surface p-5">
-                    <h3 class="font-semibold">Pay for {{ $business->planDetails()['name'] }} · <span class="num">₱{{ number_format($business->planDetails()['price']) }}</span> / month</h3>
+                    <h3 class="font-semibold">Pay for {{ $business->planDetails()['name'] }} · <span class="num">₱{{ number_format($business->monthlyPrice()) }}</span> / month</h3>
+                    @if (($renewalPrice = $business->priceAtRenewal()) !== null)
+                        <p class="mt-1 text-sm text-ink-500">From your next renewal: <span class="num font-medium text-ink-900 dark:text-white">₱{{ number_format($renewalPrice) }}</span> / month.</p>
+                    @endif
                     <p class="mt-1 text-sm text-ink-500">
                         Send via GCash to <span class="num font-medium text-ink-900 dark:text-white">{{ $manualPayment['gcash_number'] }}</span> ({{ $manualPayment['gcash_name'] }})
                         or bank transfer to <span class="font-medium text-ink-900 dark:text-white">{{ $manualPayment['bank'] }}</span>, then enter the reference number.

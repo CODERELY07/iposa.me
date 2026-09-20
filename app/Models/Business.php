@@ -15,12 +15,19 @@ use Illuminate\Support\Arr;
 
 #[Fillable([
     'business_type', 'business_name', 'user_id', 'status', 'start_date', 'due_date',
-    'plan', 'address', 'tin', 'receipt_footer', 'settings', 'suspended_at', 'suspension_reason',
+    'plan', 'plan_price', 'address', 'tin', 'receipt_footer', 'settings', 'suspended_at', 'suspension_reason',
 ])]
 class Business extends Model
 {
     /** @use HasFactory<BusinessFactory> */
     use HasFactory;
+
+    /**
+     * Resolved per instance: the plan row behind `businesses.plan`.
+     */
+    private ?Plan $resolvedPlan = null;
+
+    private ?string $resolvedPlanKey = null;
 
     /**
      * Settings every business starts with. Stored values are merged on top.
@@ -64,6 +71,7 @@ class Business extends Model
             'due_date' => 'datetime',
             'suspended_at' => 'datetime',
             'settings' => 'array',
+            'plan_price' => 'decimal:2',
             'last_order_number' => 'integer',
         ];
     }
@@ -188,13 +196,56 @@ class Business extends Model
     }
 
     /**
-     * The plan's config block from config/plans.php.
+     * The plan record this business is on. Not a relation: `businesses.plan` stores
+     * the plan's key, and the row may have been archived since.
+     */
+    public function planRecord(): ?Plan
+    {
+        if ($this->resolvedPlan === null || $this->resolvedPlanKey !== $this->plan) {
+            $this->resolvedPlanKey = $this->plan;
+            $this->resolvedPlan = Plan::findByKey($this->plan) ?? Plan::default();
+        }
+
+        return $this->resolvedPlan;
+    }
+
+    /**
+     * The plan's details, in the shape every screen reads.
      *
-     * @return array{name: string, price: int, pitch: string, staff_limit: ?int, features: array<string, bool>, feature_list: list<string>}
+     * @return array{key: string, name: string, price: float, pitch: ?string, staff_limit: ?int, features: array<string, bool>, feature_list: list<string>, archived: bool}
      */
     public function planDetails(): array
     {
-        return config('plans.plans.'.$this->plan) ?? config('plans.plans.'.config('plans.default'));
+        return $this->planRecord()?->details() ?? [
+            'key' => (string) $this->plan,
+            'name' => (string) $this->plan,
+            'price' => 0.0,
+            'pitch' => null,
+            'staff_limit' => null,
+            'features' => [],
+            'feature_list' => [],
+            'archived' => false,
+        ];
+    }
+
+    /**
+     * What this business actually pays each month: the price locked in when they
+     * signed up, switched plans or last renewed. A later price change on the plan
+     * only reaches them at their next renewal.
+     */
+    public function monthlyPrice(): float
+    {
+        return (float) ($this->plan_price ?? $this->planDetails()['price']);
+    }
+
+    /**
+     * The price that will apply from the next renewal, when it differs from today's.
+     */
+    public function priceAtRenewal(): ?float
+    {
+        $listPrice = $this->planDetails()['price'];
+
+        return abs($listPrice - $this->monthlyPrice()) < 0.01 ? null : $listPrice;
     }
 
     public function hasFeature(string $feature): bool

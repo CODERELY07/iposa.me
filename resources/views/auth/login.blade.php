@@ -43,15 +43,4 @@
         New to iPOSa?
         <a href="{{ route('register') }}" class="font-semibold text-ink-900 hover:underline dark:text-white">Start a free 14-day trial</a>
     </p>
-
-    @env('local')
-        <div class="mt-8 rounded-xl border border-dashed border-ink-300 p-4 text-xs text-ink-500 dark:border-white/10 dark:text-ink-400">
-            <p class="eyebrow mb-2">Demo accounts · password "password"</p>
-            <ul class="num space-y-1">
-                <li>super_admin@gmail.com — platform operator</li>
-                <li>admin@gmail.com — business owner</li>
-                <li>staff@gmail.com — cashier</li>
-            </ul>
-        </div>
-    @endenv
 </x-guest-layout>

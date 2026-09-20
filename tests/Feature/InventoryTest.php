@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\Item;
 use App\Models\StockMovement;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Str;
 
 beforeEach(function () {
     $this->owner = shopOwner();
@@ -126,4 +127,84 @@ it('hides recipe links on the Tindahan plan', function () {
     ])->assertRedirect();
 
     expect(Item::withoutGlobalScopes()->where('name', 'Plain Burger')->sole()->recipeLines)->toBeEmpty();
+});
+
+it('deletes an item that was never sold or counted', function () {
+    $spare = Item::withoutGlobalScopes()->create([
+        'business_id' => $this->owner->business_id,
+        'kind' => 'piece',
+        'name' => 'Paper bag',
+        'unit' => 'pc',
+        'on_hand' => 0,
+        'unit_cost' => 1.5,
+    ]);
+
+    $this->actingAs($this->owner)
+        ->delete(route('admin.inventory.destroy', $spare))
+        ->assertRedirect(route('admin.inventory', ['tab' => 'pieces']));
+
+    expect(Item::withoutGlobalScopes()->whereKey($spare->id)->exists())->toBeFalse();
+});
+
+it('refuses to delete an item that is part of the shop history', function () {
+    $burger = $this->menu['burger'];
+    $bun = $this->menu['bun'];
+
+    // Sold once: the order line points at it.
+    $this->actingAs($this->owner)->postJson(route('pos.orders.store'), [
+        'uuid' => (string) Str::uuid(),
+        'payment_method' => 'cash',
+        'tendered' => 200,
+        'lines' => [['variant_id' => $this->menu['burgerRegular']->id, 'qty' => 1]],
+    ])->assertCreated();
+
+    $this->actingAs($this->owner)
+        ->delete(route('admin.inventory.destroy', $burger))
+        ->assertSessionHasErrors('item');
+
+    // The bun was deducted by that sale, and is linked to a recipe.
+    $this->actingAs($this->owner)
+        ->delete(route('admin.inventory.destroy', $bun))
+        ->assertSessionHasErrors('item');
+
+    expect(Item::withoutGlobalScopes()->whereKey($burger->id)->exists())->toBeTrue()
+        ->and(Item::withoutGlobalScopes()->whereKey($bun->id)->exists())->toBeTrue();
+});
+
+it('never deletes another shop\'s item', function () {
+    $otherOwner = shopOwner();
+    $otherItem = Item::withoutGlobalScopes()->create([
+        'business_id' => $otherOwner->business_id,
+        'kind' => 'piece',
+        'name' => 'Their napkins',
+        'unit' => 'pc',
+        'on_hand' => 0,
+        'unit_cost' => 1,
+    ]);
+
+    $this->actingAs($this->owner)
+        ->delete(route('admin.inventory.destroy', $otherItem))
+        ->assertNotFound();
+
+    expect(Item::withoutGlobalScopes()->whereKey($otherItem->id)->exists())->toBeTrue();
+});
+
+it('offers delete only for items with no history', function () {
+    $spare = Item::withoutGlobalScopes()->create([
+        'business_id' => $this->owner->business_id,
+        'kind' => 'piece',
+        'name' => 'Paper bag',
+        'unit' => 'pc',
+        'on_hand' => 0,
+        'unit_cost' => 1.5,
+    ]);
+
+    $this->actingAs($this->owner)->get(route('admin.inventory.edit', $spare))
+        ->assertOk()
+        ->assertSee('Delete for good');
+
+    $this->actingAs($this->owner)->get(route('admin.inventory.edit', $this->menu['bun']))
+        ->assertOk()
+        ->assertDontSee('Delete for good')
+        ->assertSee('can only be archived', false);
 });

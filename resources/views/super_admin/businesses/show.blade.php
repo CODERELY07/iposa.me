@@ -24,6 +24,9 @@
         <x-page-header :eyebrow="$business->business_type.' · '.$business->planDetails()['name'].' plan'" :title="$business->business_name">
             <x-slot:actions>
                 <span class="pill {{ $statusStyles[$business->status->value] }}">{{ $business->status->label() }}</span>
+                @unless ($business->isSuspended())
+                    <a href="{{ route('super_admin.businesses.edit', $business) }}" class="btn-ghost">Edit</a>
+                @endunless
             </x-slot:actions>
         </x-page-header>
 
@@ -103,7 +106,7 @@
                         <div class="flex justify-between"><dt class="text-ink-500">Signed up</dt><dd class="num">{{ $business->created_at?->format('M j, Y') }}</dd></div>
                         <div class="flex justify-between"><dt class="text-ink-500">Started</dt><dd class="num">{{ $business->start_date?->format('M j, Y') ?? '—' }}</dd></div>
                         <div class="flex justify-between"><dt class="text-ink-500">Due</dt><dd class="num">{{ $business->due_date?->format('M j, Y') ?? '—' }}</dd></div>
-                        <div class="flex justify-between"><dt class="text-ink-500">Price</dt><dd class="num">₱{{ number_format($business->planDetails()['price']) }} / mo</dd></div>
+                        <div class="flex justify-between"><dt class="text-ink-500">Price</dt><dd class="num">₱{{ number_format($business->monthlyPrice()) }} / mo</dd></div>
                     </dl>
                 </section>
 

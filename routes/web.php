@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\VoidRequestController;
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\BusinessController;
 use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\HomeController;
 use App\Http\Controllers\Pos\OrderController;
 use App\Http\Controllers\Pos\RegisterController;
 use App\Http\Controllers\ProfileController;
@@ -25,7 +26,7 @@ use App\Http\Controllers\SuperAdmin\SubscriptionPaymentController;
 use App\Http\Controllers\SuperAdmin\VerificationController;
 use Illuminate\Support\Facades\Route;
 
-Route::view('/', 'welcome')->name('home');
+Route::get('/', HomeController::class)->name('home');
 
 // PWA service worker (versioned with the Vite build, see ServiceWorkerController).
 Route::get('/sw.js', ServiceWorkerController::class)->name('pwa.service-worker');
@@ -67,6 +68,7 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
     Route::put('/inventory/items/{item}', [ItemController::class, 'update'])->name('inventory.update');
     Route::patch('/inventory/items/{item}/archive', [ItemController::class, 'archive'])->name('inventory.archive');
     Route::patch('/inventory/items/{item}/restore', [ItemController::class, 'restore'])->name('inventory.restore');
+    Route::delete('/inventory/items/{item}', [ItemController::class, 'destroy'])->name('inventory.destroy');
     Route::post('/inventory/import', ItemImportController::class)->name('inventory.import');
     Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
 
@@ -103,11 +105,18 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
 // Platform console (SaaS operator)
 Route::middleware(['auth', 'verified', 'role:super_admin'])->prefix('super-admin')->name('super_admin.')->group(function () {
     Route::get('/', PlatformDashboardController::class)->name('dashboard');
-    Route::resource('businesses', BusinessController::class)->only(['index', 'show']);
+    Route::resource('businesses', BusinessController::class)->only(['index', 'show', 'edit', 'update']);
     Route::post('/businesses/{business}/extend-trial', [BusinessController::class, 'extendTrial'])->name('businesses.extend-trial');
     Route::post('/businesses/{business}/suspend', [BusinessController::class, 'suspend'])->name('businesses.suspend');
     Route::post('/businesses/{business}/unsuspend', [BusinessController::class, 'unsuspend'])->name('businesses.unsuspend');
-    Route::get('/plans', PlanController::class)->name('plans');
+    Route::get('/plans', [PlanController::class, 'index'])->name('plans');
+    Route::get('/plans/new', [PlanController::class, 'create'])->name('plans.create');
+    Route::post('/plans', [PlanController::class, 'store'])->name('plans.store');
+    Route::get('/plans/{plan}/edit', [PlanController::class, 'edit'])->name('plans.edit');
+    Route::put('/plans/{plan}', [PlanController::class, 'update'])->name('plans.update');
+    Route::patch('/plans/{plan}/archive', [PlanController::class, 'archive'])->name('plans.archive');
+    Route::patch('/plans/{plan}/restore', [PlanController::class, 'restore'])->name('plans.restore');
+    Route::delete('/plans/{plan}', [PlanController::class, 'destroy'])->name('plans.destroy');
     Route::get('/verifications', [VerificationController::class, 'index'])->name('verifications');
     Route::post('/users/{user}/verify', [VerificationController::class, 'verify'])->name('users.verify');
     Route::post('/payments/{payment}/confirm', [SubscriptionPaymentController::class, 'confirm'])->name('payments.confirm');

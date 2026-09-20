@@ -24,7 +24,7 @@ class PlatformDashboardController extends Controller
             ->pluck('total', 'status');
 
         $activeBusinesses = Business::query()->where('status', BusinessStatus::Active)->get(['id', 'plan']);
-        $mrr = $activeBusinesses->sum(fn (Business $business) => $business->planDetails()['price']);
+        $mrr = $activeBusinesses->sum(fn (Business $business) => $business->monthlyPrice());
 
         return view('super_admin.dashboard', [
             'metrics' => [

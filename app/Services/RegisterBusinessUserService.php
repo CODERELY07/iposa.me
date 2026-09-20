@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\BusinessStatus;
 use App\Models\Business;
+use App\Models\Plan;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -30,11 +31,14 @@ class RegisterBusinessUserService
             ]);
             $user->forceFill(['role' => User::ROLE_ADMIN])->save();
 
+            $plan = Plan::default();
+
             $business = Business::create([
                 'user_id' => $user->id,
                 'business_name' => $data['business_name'],
                 'business_type' => $data['business_type'],
-                'plan' => config('plans.default'),
+                'plan' => $plan?->key ?? config('plans.default'),
+                'plan_price' => $plan?->price,
                 'status' => BusinessStatus::Trial,
                 'start_date' => now(),
                 'due_date' => now()->addDays(self::TRIAL_DAYS),

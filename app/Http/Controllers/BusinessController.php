@@ -4,14 +4,19 @@ namespace App\Http\Controllers;
 
 use App\Enums\BusinessStatus;
 use App\Enums\OrderStatus;
+use App\Http\Requests\Admin\UpdateBusinessProfileRequest;
 use App\Http\Requests\SuperAdmin\SuspendBusinessRequest;
+use App\Http\Requests\SuperAdmin\UpdateBusinessRequest;
 use App\Models\Business;
+use App\Models\Plan;
 use App\Models\User;
 use App\Services\Billing\SubscriptionService;
 use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class BusinessController extends Controller
@@ -72,6 +77,70 @@ class BusinessController extends Controller
             ],
             'timeline' => $this->timeline($business),
         ]);
+    }
+
+    public function edit(Business $business): View
+    {
+        return view('super_admin.businesses.edit', [
+            'business' => $business->load('owner'),
+            'businessTypes' => UpdateBusinessProfileRequest::BUSINESS_TYPES,
+            'plans' => Plan::query()->orderBy('sort')->orderBy('price')->get(),
+            'editableStatuses' => UpdateBusinessRequest::EDITABLE_STATUSES,
+        ]);
+    }
+
+    /**
+     * Fix a shop's details, its subscription, or the owner's name and email.
+     * Changing the email un-verifies it: the new address has not been proven,
+     * and the operator can verify it with one button if they know it is right.
+     */
+    public function update(UpdateBusinessRequest $request, Business $business): RedirectResponse
+    {
+        if ($business->isSuspended()) {
+            throw ValidationException::withMessages([
+                'status' => "{$business->business_name} is suspended. Unsuspend it before editing.",
+            ]);
+        }
+
+        $data = $request->validated();
+        $notes = [];
+
+        DB::transaction(function () use ($business, $data, &$notes): void {
+            $business->update([
+                'business_name' => $data['business_name'],
+                'business_type' => $data['business_type'],
+                'address' => $data['address'],
+                'tin' => $data['tin'],
+                'receipt_footer' => $data['receipt_footer'],
+                'plan' => $data['plan'],
+                'plan_price' => $data['plan_price'],
+                'status' => BusinessStatus::from($data['status']),
+                'start_date' => $data['start_date'],
+                'due_date' => $data['due_date'],
+            ]);
+
+            $owner = $business->owner;
+
+            if ($owner === null) {
+                return;
+            }
+
+            $emailChanged = isset($data['owner_email']) && $data['owner_email'] !== $owner->email;
+
+            $owner->forceFill(array_filter([
+                'name' => $data['owner_name'] ?? null,
+                'email' => $data['owner_email'] ?? null,
+            ]))->save();
+
+            if ($emailChanged) {
+                $owner->forceFill(['email_verified_at' => null])->save();
+                $notes[] = "{$owner->email} still needs to be verified — verify it for them under Verifications.";
+            }
+        });
+
+        return redirect()
+            ->route('super_admin.businesses.show', $business)
+            ->with('status', trim('Saved. '.implode(' ', $notes)));
     }
 
     public function extendTrial(Request $request, Business $business, SubscriptionService $subscriptions): RedirectResponse
