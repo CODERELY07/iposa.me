@@ -1,129 +1,89 @@
 # Module 03 · Business & tenancy
 
-One platform, many businesses. **One business = one branch = one subscription.** Every piece of shop data belongs to exactly one business.
+One platform, many shops. **One business = one branch = one subscription.** Every row of shop data belongs to exactly one business.
 
 | Feature | Status |
 |---|---|
-| [Business record](#feature-business-record) | 🟡 Partial |
-| [Staff membership](#feature-staff-membership) | ⬜ Not started |
-| [Data scoping](#feature-data-scoping) | ⬜ Not started |
-| [Trial & plan status](#feature-trial--plan-status) | 🟡 Partial (status + dates stored; no plan, no expiry job) |
-| [Suspension](#feature-suspension) | ⬜ Not started |
+| [Business record](#business-record) | ✅ Built |
+| [Staff membership](#staff-membership) | ✅ Built |
+| [Data scoping](#data-scoping) | ✅ Built |
+| [Access rules](#access-rules-suspended-unpaid-no-shop) | ✅ Built |
+| [Trial & plans](#trial--plans) | ✅ Built |
+| [Suspension](#suspension) | ✅ Built |
 
 ---
 
-## Feature: Business record
+## Business record
 
-**Status:** 🟡 Partial
+`businesses` table:
 
-### Files
-
-- `app/Models/Business.php`: fillable name, type, owner, status, dates; `owner()` relation; `search()` scope; `isOverdue()`
-- `app/Enums/BusinessStatus.php`
-- `database/factories/BusinessFactory.php`, `database/seeders/BusinessSeeder.php`
-- `database/migrations/2026_09_19_055057_create_businesses_table.php`
-- `app/Models/User.php`: `business(): HasOne`
-- `app/Http/Controllers/BusinessController.php`: super admin list and detail ([Platform](10-platform.md#feature-businesses-list))
-- Created during sign-up by `RegisterBusinessUserService` ([Authentication › Sign-up](01-authentication.md#feature-sign-up))
-
-### Table today
-
-| Column | Type |
+| Column | Meaning |
 |---|---|
-| `id` | bigint |
-| `user_id` | FK → users (the owner), **no cascade** |
-| `business_name` | string |
-| `business_type` | string |
-| `status` | enum `trial`, `active`, `past_due`, `suspended` (default `trial`), cast to `App\Enums\BusinessStatus` |
-| `start_date` | timestamp, nullable: trial or subscription start |
-| `due_date` | timestamp, nullable: trial end or next payment due |
-| timestamps | |
+| `user_id` | The owner who signed up |
+| `business_name`, `business_type` | Shown on receipts, exports, the platform console |
+| `plan` | `tindahan` or `negosyo` (see [Trial & plans](#trial--plans)) |
+| `status` | `trial`, `active`, `past_due`, `suspended` (`App\Enums\BusinessStatus`) |
+| `start_date`, `due_date` | Subscription period; `due_date` drives "days left" and overdue checks |
+| `address`, `tin`, `receipt_footer` | Receipt details |
+| `settings` (JSON) | Payment methods, audit reminder time, default low-stock level, cashier permissions |
+| `last_order_number` | Per-shop order counter |
+| `suspended_at`, `suspension_reason` | Set by the operator |
 
-### Backend to build
+`App\Models\Business` provides `owner()`, `members()`, `items()`, `orders()`, `audits()`, `expenses()`, `subscriptionPayments()`, `search()`, `isOverdue()`, `requiresPayment()`, `daysUntilDue()`, `planDetails()`, `hasFeature()`, `staffSeatsLeft()`, `setting()`, `cashierCan()`, `enabledPaymentMethods()`, `lowStockThreshold()`.
 
-- [ ] Add columns: `address`, `tin` (nullable), `receipt_footer`, `settings` (JSON: payment methods, audit reminder time, cashier permissions, default low-stock threshold).
-- [x] `Business::owner(): BelongsTo` (`user_id`).
-- [ ] `Business::members(): HasMany` (users), after [Staff membership](#feature-staff-membership).
-- [ ] `settings` cast to `array` (or `AsArrayObject`), with defaults filled in on create.
-- [x] `BusinessFactory` for tests.
-- [ ] Decide what happens to `user_id` when the owner is deleted: restrict, or transfer ownership.
-- [ ] Owner-side editing (Settings screen) needs its own controller: [Team & settings › Business profile](09-team-settings.md#feature-business-profile).
+Settings merge over `Business::DEFAULT_SETTINGS`: permissions merge key by key, lists (payment methods) replace the default outright.
 
----
+## Staff membership
 
-## Feature: Staff membership
+`users.business_id` links owner **and** cashiers to the shop; it's null only for the platform operator. `businesses.user_id` still records who owns it.
 
-**Status:** ⬜ Not started
+- Sign-up sets `business_id` on the owner.
+- Invites set it on the cashier ([Team](09-team-settings.md#staff-invites)).
+- `BusinessFactory` links the owner automatically, so tests match reality.
 
-Right now only the owner is linked, through `businesses.user_id`. **Cashiers have no link to a shop.**
+## Data scoping
 
-### Backend to build
+`App\Models\Concerns\BelongsToBusiness` is used by `Item`, `Category`, `Order`, `Audit`, `Expense`, `Asset` and `StockMovement`. It:
 
-- [ ] Migration: `users.business_id` → nullable FK to `businesses` (null only for `super_admin`).
-- [ ] Sign-up sets `business_id` on the owner right after the business is created, in the same transaction.
-- [ ] `User::business(): BelongsTo` (replaces the current `HasOne`), and `Business::members(): HasMany`.
-- [ ] Keep `businesses.user_id`, renamed to `owner_id` if you like, to know who owns the business.
-- [ ] Seeder: create "Kape't Burger" and attach `admin@gmail.com` and `staff@gmail.com` to it.
+- adds a global scope limiting every query to the logged-in user's `business_id`;
+- fills `business_id` automatically on create;
+- gives each model a `business()` relation.
 
-### Done when
+The scope is skipped when nobody is logged in (console, queue, seeders) and for `super_admin`, who works across shops on purpose. Route model binding therefore **404s** for another shop's record.
 
-`$staff->business` and `$owner->business` return the same business.
+This is the most important security rule in the app; `TenancyTest` guards it.
 
----
+## Access rules (suspended, unpaid, no shop)
 
-## Feature: Data scoping
+`App\Http\Middleware\EnsureBusinessAccess` (alias `business`) runs on every shop route:
 
-**Status:** ⬜ Not started · **The most important security rule in the app**
+| Situation | What happens |
+|---|---|
+| User has no business | 403 with "Your account is not linked to a business" |
+| Business suspended | Logged out with a message on the login page |
+| Payment required (past due, or trial/active with `due_date` passed) | Owner → redirected to Settings → billing. Cashier → 402 page "The register is paused". **Settings, billing and exports stay open** |
 
-Every tenant table (items, orders, audits, expenses, …) has `business_id`, and a user can only ever read or write their own.
+Exports are never blocked: "your data is yours" is a promise on the landing page.
 
-### Backend to build
+## Trial & plans
 
-- [ ] Trait `App\Models\Concerns\BelongsToBusiness`:
-  - global scope `where business_id = auth()->user()->business_id` (skipped for `super_admin` and in console commands)
-  - `creating` hook that fills `business_id` automatically
-  - `business(): BelongsTo`
-- [ ] Use it on every tenant model.
-- [ ] Route model binding then 404s automatically for another business's records.
-- [ ] Middleware `EnsureUserHasBusiness` on the admin/staff groups: a user without a business gets an error page instead of broken queries.
+- Sign-up: `status = trial`, `plan = negosyo`, `due_date = +14 days` (`RegisterBusinessUserService::TRIAL_DAYS`).
+- Plans are rows in the `plans` table, managed by the operator ([Platform › Plans](10-platform.md#plans)): price, staff limit, and feature switches (`expenses`, `reports`, `recipes`). `businesses.plan` stores the plan's key and `businesses.plan_price` the price that shop agreed to.
+- `App\Http\Middleware\EnsurePlanFeature` (alias `plan`) gates routes: `plan:expenses`, `plan:reports`. Owners are redirected to Settings with an upgrade note.
+- `php artisan businesses:mark-overdue` (daily at 00:05) moves trials and subscriptions past their due date to `past_due`.
+- Payment flow: [Team & settings › Plan & billing](09-team-settings.md#plan--billing) and [Platform › Payments](10-platform.md#payments).
 
-### Tests (must have)
+## Suspension
 
-- Two businesses side by side: business A's admin gets a 404 for B's item, and never sees B's orders in lists or reports.
-- Creating a model without setting `business_id` stores the current user's business.
+The operator suspends a shop with a reason, confirming with their own password ([Platform › Tenant actions](10-platform.md#tenant-actions)). Everyone in that shop is logged out on their next click. Unsuspending returns the shop to `past_due` (if overdue), `active` (if they ever paid) or `trial`.
 
 ---
 
-## Feature: Trial & plan status
+## Tests
 
-**Status:** 🟡 Partial
+`TenancyTest` (items, orders, expenses never cross shops; new rows get the right `business_id`; the operator sees everything), `SubscriptionAccessTest` (trial end, past due, suspended, overdue command, sign-up trial), `SettingsAndBillingTest`.
 
-### Built
+## What's left
 
-- `businesses.status` (enum `BusinessStatus`), `start_date`, `due_date`.
-- Sign-up (`RegisterBusinessUserService`) sets `status = Trial`, `start_date = now()`, `due_date = now() + 14 days` (`TRIAL_DAYS`).
-- The platform console lists and filters by status ([Platform › Businesses list](10-platform.md#feature-businesses-list)).
-- `BusinessFactory` states: default (trial), `active()`, `pastDue()`, `suspended()`. `BusinessSeeder` gives `admin@gmail.com` "Kape't Burger" and adds 17 demo businesses.
-
-### Backend to build
-
-- [ ] A `plan` column (`tindahan` | `negosyo`); sign-up sets `plan = negosyo`.
-- [ ] Plan limits in `config/plans.php` (price, staff limit, features), read in one place.
-- [ ] A scheduled daily command moves expired trials to `past_due`.
-- [ ] Middleware for past-due businesses: allow Settings (billing) and the data export; show a "trial ended" screen everywhere else. **Never block the export** (it's a promise on the landing page).
-
-### Done when
-
-The Today screen shows the real "Trial · N days left" pill, and an expired trial can still export.
-
----
-
-## Feature: Suspension
-
-**Status:** ⬜ Not started (the "Suspend" button on the platform screen is UI only)
-
-### Backend to build
-
-- [ ] `status = suspended` set by `super_admin` only (see [Platform › Tenant actions](10-platform.md#feature-tenant-actions)).
-- [ ] Middleware: users of a suspended business are logged out, with a clear message and a contact link.
-- [ ] Record who suspended the business, when and why (`suspended_at`, `suspension_reason`).
+- Multiple branches per business (deliberately out of scope for now).
+- Transferring ownership to another user.

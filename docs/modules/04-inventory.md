@@ -1,149 +1,116 @@
 # Module 04 · Inventory
 
-Everything a shop buys, stores and sells. There are three kinds of stock, each counted differently:
+Everything a shop buys, stores and sells. Three kinds of stock, each counted the way a real kitchen counts it:
 
-| Kind | Examples | Shown on the register | How the count goes down |
+| Kind (`items.kind`) | Examples | On the register | How the count goes down |
 |---|---|---|---|
-| **Menu item** | Cheeseburger, Iced Tea 16oz/22oz | Yes | Its linked pieces are deducted when it sells; with no links, the item itself is deducted |
-| **Piece** | Burger bun, patty, cheese slice, cups | No | Automatically, through recipe links |
-| **Bulk & liquid** | Cooking oil, mayo tub, ketchup, LPG | No | By hand, in the [closing audit](06-closing-audit.md) (decimals such as 4.5) |
+| **Menu** | Cheeseburger, Iced Tea 16oz/22oz | Yes | Linked pieces are deducted per sale; with no links, the item itself is |
+| **Piece** | Buns, patties, cheese, cups | No | Automatically, through recipe links |
+| **Bulk** | Oil, mayo, ketchup, LPG | No | By eye at the [closing audit](06-closing-audit.md), in decimals (4.5) |
+
+**Who:** owners only. Cashiers only ever see menu items, on the register.
 
 | Feature | Status |
 |---|---|
-| [Menu items & sizes (pricing matrix)](#feature-menu-items--sizes) | 🎨 UI only |
-| [Pieces](#feature-pieces) | 🎨 UI only |
-| [Bulk & liquids](#feature-bulk--liquids) | 🎨 UI only |
-| [Recipe links](#feature-recipe-links) | 🎨 UI only |
-| [Low-stock alerts](#feature-low-stock-alerts) | 🎨 UI only |
-| [Import & export](#feature-import--export) | 🎨 UI only |
-| [Archive](#feature-archive) | 🎨 UI only |
+| [Menu items & sizes](#menu-items--sizes) | ✅ Built |
+| [Pieces](#pieces) | ✅ Built |
+| [Bulk & liquids](#bulk--liquids) | ✅ Built |
+| [Recipe links](#recipe-links) | ✅ Built (Negosyo plan) |
+| [Categories](#categories) | ✅ Built |
+| [Low-stock alerts](#low-stock-alerts) | ✅ Built |
+| [Stock movements](#stock-movements) | ✅ Built |
+| [CSV import](#csv-import) | ✅ Built |
+| [Archive & delete](#archive--delete) | ✅ Built |
 
-**Who:** `admin` (all features). Staff never open inventory; they only see menu items on the register.
+## Routes
 
-### Routes (existing, `role:admin`)
-
-| URI | Name | View | Demo variables |
+| Method | URI | Name | Handler |
 |---|---|---|---|
-| `/admin/inventory` | `admin.inventory` | `admin/inventory/index` | `$menuItems`, `$pieceItems`, `$bulkItems` |
-| `/admin/inventory/items/new` | `admin.inventory.create` | `admin/inventory/item` | `$product` |
-| `/admin/inventory/items/{item}/edit` | `admin.inventory.edit` | `admin/inventory/item` | `$product` |
+| GET | `/admin/inventory` | `admin.inventory` | `Admin\ItemController@index` |
+| GET | `/admin/inventory/items/new` | `admin.inventory.create` | `@create` |
+| POST | `/admin/inventory/items` | `admin.inventory.store` | `@store` |
+| GET | `/admin/inventory/items/{item}/edit` | `admin.inventory.edit` | `@edit` |
+| PUT | `/admin/inventory/items/{item}` | `admin.inventory.update` | `@update` |
+| PATCH | `/admin/inventory/items/{item}/archive` · `/restore` | `admin.inventory.archive` · `.restore` | `@archive` · `@restore` |
+| DELETE | `/admin/inventory/items/{item}` | `admin.inventory.destroy` | `@destroy` |
+| POST | `/admin/inventory/import` | `admin.inventory.import` | `Admin\ItemImportController` |
+| POST | `/admin/categories` | `admin.categories.store` | `Admin\CategoryController@store` (JSON) |
 
-### Shared data model (to build)
+## Data model
 
 | Table | Columns |
 |---|---|
-| `categories` | `id`, `business_id`, `name`, `sort` |
-| `items` | `id`, `business_id`, `kind` (enum: `Menu`, `Piece`, `Bulk`), `name`, `category_id` (nullable), `unit` (e.g. "1L bottle"), `on_hand` decimal(12,3), `low_threshold` decimal(12,3) nullable, `unit_cost` decimal(12,2) nullable, `archived_at` nullable, timestamps |
-| `item_variants` | `id`, `item_id`, `label` (16oz, Large), `cost` decimal(12,2), `price` decimal(12,2), `sort` |
-| `recipe_lines` | `id`, `item_id` (menu), `piece_item_id` (piece), `qty` decimal(12,3) |
-| `stock_movements` | `id`, `business_id`, `item_id`, `qty_change` decimal(12,3), `reason` (enum: `Sale`, `Audit`, `Restock`, `Void`, `Adjustment`), `order_id` / `audit_id` nullable, `user_id`, `created_at` |
+| `categories` | `business_id`, `name` (unique per shop), `color`, `sort` |
+| `items` | `business_id`, `category_id`, `kind`, `name`, `unit`, `on_hand` (12,3), `low_threshold`, `unit_cost` (12,2), `archived_at` |
+| `item_variants` | `item_id`, `label`, `cost`, `price`, `sort` |
+| `recipe_lines` | `item_id`, `item_variant_id` (null = all sizes), `piece_item_id`, `qty` |
+| `stock_movements` | `business_id`, `item_id`, `qty_change`, `reason`, `order_id`, `audit_id`, `user_id`, `created_at` |
 
-Models: `Category`, `Item`, `ItemVariant`, `RecipeLine`, `StockMovement`, each using `BelongsToBusiness` ([tenancy](03-business-tenancy.md#feature-data-scoping)).
-
----
-
-## Feature: Menu items & sizes
-
-**Status:** 🎨 UI only · **Screens:** the Menu items tab, and the item editor with "Sell this on the register? Yes"
-
-The pricing matrix from the client's Excel file: one row per size, each with its own **cost (COGS)** and **selling price**. Profit and margin are computed.
-
-### How it works (UI)
-
-- The item editor adds or removes size rows; margin updates live, colored ≥50% green, ≥25% amber, below that rose.
-- The register shows single-size items as one tile, and multi-size items as one button per size.
-
-### Backend to build
-
-- [ ] `ItemController` (`index`, `create`, `store`, `edit`, `update`) replacing the `Route::view` lines; keep the route names.
-- [ ] `StoreItemRequest` / `UpdateItemRequest`:
-  - `kind` required, in the enum
-  - `variants` required when `kind = Menu`, `min:1`; `variants.*.label` required, distinct; `variants.*.price` required, numeric, ≥ 0; `variants.*.cost` numeric, ≥ 0
-- [ ] Save the item, variants and recipe lines in one `DB::transaction`; sync the variants (update existing ones, delete removed ones).
-- [ ] Computed attributes on `ItemVariant`: `profit` (`price - cost`) and `margin_percent`. **Don't store them.**
-- [ ] Category management (inline "add category" in the select is enough for MVP).
-
-### Done when
-
-The owner creates "Iced Tea" with 16oz ₱45 / cost ₱9.50 and 22oz ₱60 / cost ₱13; the Menu tab shows margins of 78.9% and 78.3%, and the register shows two taps.
+Quantities are `decimal(12,3)` so half a bottle is exact; money is `decimal(12,2)`.
 
 ---
 
-## Feature: Pieces
+## Menu items & sizes
 
-**Status:** 🎨 UI only · **Screen:** Pieces tab
+The Excel pricing matrix: one row per size, each with its own **cost** and **selling price**. Margin is computed, never stored (`ItemVariant::profit()`, `marginPercent()`).
 
-Countable ingredients and packaging that only go down through recipe links.
+The editor shows the margin live, colored green ≥50%, amber ≥25%, red below. `SaveItemRequest` requires at least one size with a price for menu items, and rejects duplicate size names.
 
-### Backend to build
+## Pieces
 
-- [ ] The same `items` table with `kind = Piece`; `unit_cost` and `on_hand` are required.
-- [ ] The "Used today" column = `-SUM(stock_movements.qty_change)` where `reason = Sale` and the date is today.
-- [ ] Stock value = `on_hand × unit_cost`.
-- [ ] Restocking: an "Add stock" action that writes a `Restock` movement (or comes from a stock-purchase expense, see [Expenses](07-expenses.md#feature-expense-log)).
+Countable ingredients and packaging. `unit_cost` is required, because it prices what a sale consumed. The Pieces tab shows on-hand with a bar against its alert level, used today, unit cost and stock value.
 
----
+## Bulk & liquids
 
-## Feature: Bulk & liquids
+Containers counted by eye. The tab shows on-hand, average use per day (mean of the last 7 audits), days left (red under 4), unit cost and daily cost, plus when the last audit ran and who did it.
 
-**Status:** 🎨 UI only · **Screen:** Bulk & liquids tab
+## Recipe links
 
-Containers counted by eye once a day. No weighing, no grams.
+"1 Cheeseburger uses 1 bun + 1 patty + 1 cheese." Optional per item, and a line can apply to **one size only** (16oz cup vs 22oz cup) or to every size.
 
-### Backend to build
+The editor totals the piece cost per size and offers **Use as cost** to copy it into each size's cost. A piece must belong to the same shop and be a piece (`Rule::exists` scoped by `business_id` and `kind`).
 
-- [ ] `items.kind = Bulk`; `on_hand` accepts decimals (step 0.25 in the UI).
-- [ ] "Avg use / day" = average of the last 7 `audit_lines.used`.
-- [ ] "Days left" = `on_hand / avg use`; red when under 4.
-- [ ] "Last closing audit" header = the latest `audits` row (who, when, duration).
+On the Tindahan plan the section is hidden and any submitted recipe lines are dropped.
 
----
+## Categories
 
-## Feature: Recipe links
+Each category has a color that becomes the register tile's color. New ones can be added inline from the item editor (JSON, no page reload); names are unique per shop.
 
-**Status:** 🎨 UI only · **Screen:** item editor → "What one sale uses"
+## Low-stock alerts
 
-"1 Cheeseburger uses 1 bun + 1 patty + 1 cheese slice." Optional per menu item.
+An item is low when `on_hand <= low_threshold`, falling back to `businesses.settings.default_low_threshold`. Low items show a red dot in Inventory, a "N left" pill on register tiles, and a "runs out in about N days" line on Today, based on the last 7 days of use.
 
-### Backend to build
+## Stock movements
 
-- [ ] `recipe_lines` saved together with the item; `piece_item_id` must be a `Piece` of the **same business** (use a `Rule::exists` scoped to `business_id` and `kind`).
-- [ ] "Pieces cost ₱X per sale" = `Σ(qty × piece.unit_cost)`; the **Use as cost** button copies it into the first size's cost (already works in the UI).
-- [ ] Decide: are recipes per **item** (all sizes) or per **variant**? Drinks (16oz vs 22oz cup) need per-variant. Recommended: add a nullable `item_variant_id` to `recipe_lines`.
-- [ ] Deduction happens at checkout ([POS › Stock deduction](05-pos.md#feature-stock-deduction)).
+Every change writes a row with its reason: `Sale`, `Void`, `Audit`, `Restock`, `Adjustment`. Nothing changes `on_hand` outside `App\Services\Inventory\StockService`, so any number can be explained. Editing on-hand in the item editor logs an `Adjustment` with the difference.
 
----
+## CSV import
 
-## Feature: Low-stock alerts
+`MenuImportService` reads a CSV saved from Excel: header row `name, category, size, cost, price`. Rows with the same name become one item with several sizes, existing items are updated, categories are created as needed, and `₱1,234.50` parses as `1234.50`. Bad rows are reported per line instead of failing the import.
 
-**Status:** 🎨 UI only · **Shown on:** the Pieces tab (red dot), Today → "Needs you tonight", and the "N left" pill on register tiles
+## Archive & delete
 
-### Backend to build
+**Archive** is the normal way to remove an item: it leaves the register and the tabs, past orders keep their reference, and "Show archived" lists it for restoring.
 
-- [ ] `Item::scopeLowStock()`: `on_hand <= low_threshold`.
-- [ ] Default threshold from `businesses.settings.default_low_threshold`.
-- [ ] "Runs out tomorrow lunch" = `on_hand / average daily use` (pieces: last 7 days of sales).
-- [ ] Optional later: a daily summary email to the owner.
+**Delete for good** is offered only when the item carries no history at all — never sold, no stock movements, never counted in an audit, and not linked into any recipe. Then it's a typo being cleaned up, and removing it changes no report. Otherwise the editor says so and only archive is available:
+
+| Blocker | Message |
+|---|---|
+| Sold at least once | "it has been sold (N so far)." |
+| Has stock movements | "it has stock movements on record." |
+| Counted in an audit | "it has been counted in a closing audit." |
+| Linked as a recipe piece | "it is linked to N recipes." |
+
+Deleting removes the item with its sizes and its own recipe lines, in one transaction. Another shop's item 404s before any of this.
 
 ---
 
-## Feature: Import & export
+## Tests
 
-**Status:** 🎨 UI only · **Buttons:** "Import Excel" (file picker) and "Export CSV"
+`InventoryTest`: delete an item with no history · refuse to delete one that was sold, counted or linked · no cross-shop delete · the editor offers delete only when it's allowed · create with sizes and size-specific recipe links · update syncs sizes · menu items need a priced size · pieces and bulk need a unit cost · cross-shop piece refused · on-hand edit logs an adjustment · archive/restore · CSV import (including a broken row) · inline category · recipes hidden on Tindahan.
 
-### Backend to build
+## What's left
 
-- [ ] **Export CSV** (MVP): a streamed download (`response()->streamDownload`) of the menu pricing matrix: item, category, size, cost, price, profit, margin.
-- [ ] **Import** (after MVP): upload CSV → a preview table with errors per row → confirm → create items and variants in one transaction. Expected columns: `name, category, size, cost, price`.
-- [ ] Real `.xlsx` needs a new package (e.g. `maatwebsite/excel` or `openspout`). **Ask before adding dependencies.**
-
----
-
-## Feature: Archive
-
-**Status:** 🎨 UI only · **Button:** item editor → "Archive"
-
-### Backend to build
-
-- [ ] Set `archived_at` instead of deleting: past orders still reference the item.
-- [ ] Archived items are hidden from the register, the tabs and recipe pickers; a "Show archived" filter restores them.
+- Stock take for pieces (count many at once) — today it's per item.
+- Supplier records and purchase orders.
+- `.xlsx` import; CSV only.

@@ -1,126 +1,149 @@
 # Module 10 · Platform console (super admin)
 
-For the SaaS operator: see every business, spot the ones about to churn, and manage plans and payments.
+Your own screens as the operator of iPOSa: how the business is doing, which shops need a call, and the few actions only you can take. No `business` middleware here — the operator belongs to no shop and sees across all of them ([03 › Data scoping](03-business-tenancy.md#data-scoping)).
+
+**Who:** `role:super_admin` only.
 
 | Feature | Status |
 |---|---|
-| [Overview metrics](#feature-overview-metrics) | 🎨 UI only |
-| [Businesses list](#feature-businesses-list) | ✅ Built (real data) |
-| [Business detail](#feature-business-detail) | 🟡 Partial (real business + owner; no activity yet) |
-| [Tenant actions](#feature-tenant-actions) | ⬜ Not started |
-| [Plans](#feature-plans) | 🎨 UI only |
-| [Payments](#feature-payments) | 🎨 UI only |
+| [Overview](#overview) | ✅ Built |
+| [Businesses list](#businesses-list) | ✅ Built |
+| [One business](#one-business) | ✅ Built |
+| [Editing a business](#editing-a-business) | ✅ Built |
+| [Tenant actions](#tenant-actions) | ✅ Built |
+| [Plans](#plans) | ✅ Built (full CRUD) |
+| [Payments](#payments) | ✅ Built |
+| [Email verifications](#email-verifications) | ✅ Built |
 
-**Who:** `super_admin` only (`role:super_admin`). Queries here **skip the tenant scope** on purpose.
+## Routes
 
-### Routes (existing)
+| Method | URI | Name |
+|---|---|---|
+| GET | `/super-admin` | `super_admin.dashboard` |
+| GET | `/super-admin/businesses` | `super_admin.businesses.index` |
+| GET | `/super-admin/businesses/{business}` | `super_admin.businesses.show` |
+| GET/PUT | `/super-admin/businesses/{business}/edit` · `/{business}` | `super_admin.businesses.edit` · `.update` |
+| POST | `/super-admin/businesses/{business}/extend-trial` | `…extend-trial` |
+| POST | `/super-admin/businesses/{business}/suspend` · `/unsuspend` | `…suspend` · `…unsuspend` |
+| GET | `/super-admin/plans` | `super_admin.plans` |
+| GET/POST | `/super-admin/plans/new` · `/plans` | `super_admin.plans.create` · `.store` |
+| GET/PUT | `/super-admin/plans/{plan}/edit` · `/plans/{plan}` | `super_admin.plans.edit` · `.update` |
+| PATCH | `/super-admin/plans/{plan}/archive` · `/restore` | `super_admin.plans.archive` · `.restore` |
+| DELETE | `/super-admin/plans/{plan}` | `super_admin.plans.destroy` |
+| POST | `/super-admin/payments/{payment}/confirm` · `/reject` | `super_admin.payments.confirm` · `.reject` |
+| GET | `/super-admin/verifications` | `super_admin.verifications` |
+| POST | `/super-admin/users/{user}/verify` | `super_admin.users.verify` |
 
-| URI | Name | View | Demo variables |
-|---|---|---|---|
-| `/super-admin` | `super_admin.dashboard` | `super_admin/dashboard` | `$metrics`, `$mrrHistory`, `$funnel`, `$goneQuiet`, `$trialsEnding`, `$byType` |
-| `/super-admin/businesses` | `super_admin.businesses.index` | `super_admin/businesses/index` | real: `BusinessController@index` |
-| `/super-admin/businesses/{business}` | `super_admin.businesses.show` | `super_admin/businesses/show` | real: `BusinessController@show` |
-| `/super-admin/plans` | `super_admin.plans` | `super_admin/plans` | `$plans`, `$payments` |
-
-> Businesses use `Route::resource('businesses', BusinessController::class)->only(['index', 'show'])` with route model binding (`{business}`).
-
----
-
-## Feature: Overview metrics
-
-**Status:** 🎨 UI only
-
-MRR (+ vs last month, 12-month line), paying / in trial / past due counts, the trial funnel, "Gone quiet", "Trials ending soon", businesses by type.
-
-### Backend to build
-
-- [ ] **MRR** = Σ plan price of businesses with `status = active`. **History:** a monthly snapshot table (`platform_snapshots`: month, mrr, paying, trials) filled by a scheduled command.
-- [ ] **Trial funnel** (last 30 days' sign-ups): signed up → has a menu item → has an order → has an audit → paid. **"First closing audit" is the activation step.**
-- [ ] **Gone quiet**: paying businesses with no order in 3+ days, with a reason (audit streak broken, card declined, few staff logins).
-- [ ] **Trials ending**: `status = Trial` and `due_date` within 7 days, flagged as activated (has an audit) or not.
-- [ ] **By type**: `COUNT GROUP BY business_type`.
-- [ ] Remove or replace the demo line "72% of shops that finish a closing audit go on to pay" until it's a real number.
+The operator account is created by `php artisan app:ensure-super-admin`, which runs on every deploy ([13 › Boot](13-deployment.md#what-happens-on-boot)).
 
 ---
 
-## Feature: Businesses list
+## Overview
 
-**Status:** ✅ Built
+**Metrics:** MRR (the sum of what active shops actually pay, `monthlyPrice()`), paying, trials, past due, suspended, total, payments waiting for review, and verification requests waiting.
 
-### Files
+**Collected by month** — confirmed payments over the last 12 months.
 
-- `app/Http/Controllers/BusinessController.php` → `index()`
-- `app/Models/Business.php`: `owner()` relation, `search()` scope, `isOverdue()`, casts (`status` → `BusinessStatus`, dates)
-- `app/Enums/BusinessStatus.php`: `Trial`, `Active`, `PastDue`, `Suspended` + `label()`
-- `resources/views/super_admin/businesses/index.blade.php`
+**Trial funnel** — sign-ups in the last 30 days and how far each got: signed up → added menu → first sale → **first closing audit (activation)** → paid. The audit is the activation step because a shop that closes its day is a shop that has adopted the product.
 
-### How it works
+**Activation → paid rate** counts only shops that actually activated, so the percentage can't exceed 100.
 
-- Columns: business (name · type), owner (name · email, "unverified" flag), status pill, started (`start_date`), due (`due_date`, red when past), signed up (`created_at`).
-- **Status tabs** are links (`?status=trial|active|past_due|suspended`) with counts from one grouped query; an unknown status is ignored.
-- **Search** `?q=` matches the business name, type, or the owner's name or email. Tab counts respect the search.
-- Newest first, `paginate(25)->withQueryString()`, owner eager-loaded (no N+1 queries).
-- Empty states: "No businesses yet" / "No businesses match these filters" + clear link.
+**Who needs a call:**
+- *Gone quiet* — paying shops with no sale for 3+ days.
+- *Trials ending* within 7 days, flagged by whether they activated. An activated trial is worth a call; an idle one is worth an email.
 
-### Backend to build
+Plus a breakdown by business type (carinderia, milk tea, bakery, …).
 
-- [ ] Plan, orders in the last 7 days, last sale and MRR columns once [plans](#feature-plans) and [POS orders](05-pos.md#data-model-to-build) exist (`withCount` / `withMax`).
-- [ ] `city` on businesses.
+## Businesses list
 
-### Tests
+Every shop with its owner, plan, status and due date. Status tabs carry counts, an unknown status filter is ignored rather than erroring, and search matches the business name **or the owner's email** (`whereLike`, so it is case-insensitive on Postgres too). Empty states are written for a real empty console, not a blank table.
 
-`tests/Feature/SuperAdminBusinessesTest.php`: list, status filter, unknown status, search by owner email, empty state, access blocked for admin/staff.
+## One business
+
+Health for the last 7 days (orders, sales, closing audits, cashiers used of the limit), the owner's details, the last five payments, and a **timeline built from real records**: signed up, first menu item, first sale, first closing audit (activated), cashiers added, payments submitted, latest sale, latest audit, suspension. Nothing here is a separate event log to keep in sync — it is derived, so it cannot drift.
+
+## Editing a business
+
+**Edit** on the shop's page opens one form with three sections.
+
+| Section | Fields |
+|---|---|
+| The shop | Business name, type, address, TIN, receipt footer |
+| Subscription | Plan, **the price this shop pays**, status, start date, due date |
+| Owner | The owner's name and email |
+
+Rules that keep the history honest:
+
+- **Orders · 7d, Last sale and Signed up are never editable** — they're derived from real records, so a box for them would be a box for faking history.
+- **Status can be set to trial, active or past due only.** Suspending keeps its own button, because it needs a reason and the operator's password, and a suspended shop can't be edited until it's unsuspended.
+- **Changing the owner's email clears their verification** — the new address hasn't been proven. The operator can verify it in one click under [Verifications](#email-verifications). Renaming alone leaves verification intact.
+- The price field is the shop's own `plan_price`, so lowering it is how a discount is given; moving a shop to another plan takes its feature gates with it immediately.
+
+## Tenant actions
+
+| Action | Rule |
+|---|---|
+| **Extend trial** | 1–60 days; reopens an expired trial |
+| **Suspend** | Requires a reason **and the operator's own password**; everyone in that shop is logged out on their next click |
+| **Unsuspend** | Back to `past_due` if the bill is still open, `active` if they ever paid, otherwise `trial` |
+
+## Plans
+
+Plans are rows in the `plans` table, created and edited here — price, staff limit, the modules they unlock and the bullet list owners see. `config/plans.php` only seeds the first two on install; nothing reads it at runtime.
+
+| Column | Meaning |
+|---|---|
+| `key` | What `businesses.plan` stores. Made from the name, lowercase and dashed, and **never changes** |
+| `name`, `price`, `pitch` | What owners and the landing page show |
+| `staff_limit` | Cashier accounts allowed (null = unlimited) |
+| `features` | `expenses`, `reports`, `recipes` — the switches `plan:` middleware and `hasFeature()` read |
+| `feature_list` | The bullets on the pricing card, one per line |
+| `sort`, `archived_at` | Order on the cards · hidden from new sign-ups |
+
+**The price rule.** Each business stores the price it agreed to in `businesses.plan_price`, set at sign-up, when they switch plans, and again each time a payment is confirmed. So raising a price **never changes what a shop owes mid-period**: the operator is told how many shops keep the old price, and the owner's billing card says "From your next renewal: ₱X". `monthlyPrice()` is what they pay today; `priceAtRenewal()` is what changes.
+
+| Action | Rule |
+|---|---|
+| Create | Key must be unique; it's generated from the name when left blank |
+| Edit | Everything except the key |
+| Archive | Hidden from sign-ups and plan switching; **shops already on it keep working**. Refused when it's the last available plan |
+| Restore | Available again |
+| Delete | Only when no shop is on it **and** no payment ever referenced it — otherwise archive |
+
+MRR on the overview sums what shops actually pay, not the list price.
+
+## Payments
+
+Listed with **pending first**, filterable by status.
+
+- **Confirm** extends the subscription by one period, sets the shop active, and re-locks their price to the plan's current one ([09 › Plan & billing](09-team-settings.md#plan--billing)).
+- **Reject** records a note the owner sees on their billing card.
+
+## Email verifications
+
+The fallback for when SMTP is unavailable — which, on a free host, is often ([01 › When email fails](01-authentication.md#when-email-fails)).
+
+Unverified accounts are listed with **people who asked an agent first**, newest request first, searchable by name or email, 25 per page. **Verify** marks the email as verified exactly as if the person had clicked the link (it fires Laravel's `Verified` event), and clears `verification_requested_at` so the queue empties.
+
+The count of waiting requests also appears on the overview, so it isn't missed.
 
 ---
 
-## Feature: Business detail
+## Tests
 
-**Status:** 🟡 Partial
+`PlanManagementTest`: create a plan owners can switch to · unlimited staff · the key is generated and unique · the key never changes · a price rise leaves paying shops alone until renewal · the renewal applies the new price · archiving hides a plan but keeps its shops working · the last plan can't be archived · delete only when unused · the public pricing section follows the plans · validation · owners kept out.
 
-`BusinessController@show(Business $business)` → `super_admin/businesses/show.blade.php`: status pill, a warning banner (due date passed, or owner email not verified), stat strip (status, started, due, days left/overdue), owner card (name, email, verification), record info (signed up, updated, ID). A missing ID returns a 404.
+`BusinessEditTest`: the edit screen · saving shop details and the subscription by hand · moving a shop between plans moves its gates · fixing an email un-verifies it and can be re-verified · a rename keeps verification · a taken email and a backwards due date are refused · suspended can't be set here and a suspended shop can't be edited · owners kept out · an archived plan stays selectable for the shop on it.
 
-### Backend to build
+`SuperAdminBusinessesTest`: the list with owner and status · status filters · an unknown filter ignored · search by name and owner email · the empty state · one business with its dates · 404 for a missing business · non-operators kept out.
 
-- [ ] Health stats (orders, sales volume, closing audits, staff seats) once those modules save data.
-- [ ] Timeline: an `activity_log` table (business_id, user_id, event, meta, created_at), written on key events: signed up, imported menu, first sale, first audit, invited staff, plan change, payment.
+`ManualVerificationTest`: requests listed first and verified with one button · the verified user can open the app · shop owners kept out of the verification tools.
 
-### Tests
+`UiScreensTest`, `SettingsAndBillingTest`, `SubscriptionAccessTest` cover the console screens, payment confirmation and suspension.
 
-`SuperAdminBusinessesTest`: detail page shows owner, status and overdue banner; 404 for unknown ID.
+`EnsureSuperAdminCommandTest`: creates a verified operator · keeps the existing password on later deploys · refuses a short password · skips quietly when nothing is configured.
 
----
+## What's left
 
-## Feature: Tenant actions
-
-**Status:** ⬜ Not started (the fake buttons were removed from the real detail page)
-
-### Backend to build
-
-- [ ] **Extend trial**: `due_date += 7 days` while `status = Trial`; log it.
-- [ ] **Suspend / unsuspend**: [Business › Suspension](03-business-tenancy.md#feature-suspension); requires `password.confirm` and a reason.
-- [ ] **View as owner** (impersonation): after MVP. It must be logged, read-only if possible, and clearly marked in the UI.
-
----
-
-## Feature: Plans
-
-**Status:** 🎨 UI only (Tindahan ₱499 · Negosyo ₱999)
-
-### Backend to build
-
-- [ ] MVP: plans in `config/plans.php` (key, name, price, staff limit, features). Editing prices means a deploy, which is fine for now.
-- [ ] Later: a `plans` table + the "New plan / Edit plan" UI.
-- [ ] Subscriber count and MRR per plan from `businesses`.
-
----
-
-## Feature: Payments
-
-**Status:** 🎨 UI only (recent payments table)
-
-### Backend to build
-
-- [ ] MVP manual billing: a `payments` table (business_id, plan, amount, method GCash/Maya/Bank/Card, reference, proof image, status `Pending`/`Paid`/`Failed`, paid_at, confirmed_by).
-- [ ] The super admin confirms a pending payment → business `status = active`, `paid_until = +1 month`.
-- [ ] A scheduled command: `paid_until` passed → `past_due` → email the owner.
-- [ ] Gateway integration (PayMongo webhooks) replaces the manual confirmation later.
+- Messaging shops from the console (announcements, "your trial ends tomorrow").
+- Impersonating an owner for support, with an audit trail.

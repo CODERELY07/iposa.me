@@ -1,111 +1,109 @@
-# Module 09 · Team & settings
+# Module 09 · Team, settings & billing
 
-The owner's controls: who can use the register, what cashiers may do, the shop's details, and the subscription.
+The owner's three admin screens: who works here, how the shop behaves, and what they pay for.
+
+**Who:** owners only (`role:admin`).
 
 | Feature | Status |
 |---|---|
-| [Staff invites](#feature-staff-invites) | 🎨 UI only |
-| [Team list & removal](#feature-team-list--removal) | 🎨 UI only |
-| [Cashier permission toggles](#feature-cashier-permission-toggles) | 🎨 UI only |
-| [Business profile](#feature-business-profile) | 🎨 UI only |
-| [Register & closing settings](#feature-register--closing-settings) | 🎨 UI only |
-| [Plan & billing (tenant side)](#feature-plan--billing) | 🎨 UI only |
-| [Download all data](#feature-download-all-data) | 🎨 UI only |
+| [Staff invites](#staff-invites) | ✅ Built |
+| [Staff limit by plan](#staff-limit-by-plan) | ✅ Built |
+| [Removing a cashier](#removing-a-cashier) | ✅ Built |
+| [Cashier permissions](#cashier-permissions) | ✅ Built |
+| [Business profile](#business-profile) | ✅ Built |
+| [Register settings](#register-settings) | ✅ Built |
+| [Plan & billing](#plan--billing) | ✅ Built |
 
-**Who:** `admin` only.
+## Routes
 
-### Routes (existing)
-
-| URI | Name | View | Demo variables |
-|---|---|---|---|
-| `/admin/team` | `admin.team` | `admin/team` | `$members` |
-| `/admin/settings` | `admin.settings` | `admin/settings` | `$plans` |
-
----
-
-## Feature: Staff invites
-
-**Status:** 🎨 UI only (Name + Email + **Send invite**)
-
-### Backend to build
-
-- [ ] `POST /admin/team` (`admin.team.store`), `InviteStaffRequest`: name required; email required, unique users.
-- [ ] Create the user with `role = staff`, `business_id` = the owner's, a random password, and `email_verified_at = now()` (the invite link proves the email).
-- [ ] Send a "Set your password" email using the password-reset broker (`Password::sendResetLink`), with custom invite wording.
-- [ ] Enforce the plan's staff limit (Tindahan = 3) from `config/plans.php`; show "Upgrade to add more".
-- [ ] Depends on: [Business › Staff membership](03-business-tenancy.md#feature-staff-membership).
-
-### Done when
-
-An invited cashier gets an email, sets a password, logs in and lands on `/pos` for the right shop.
+| Method | URI | Name |
+|---|---|---|
+| GET | `/admin/team` | `admin.team` |
+| POST | `/admin/team` | `admin.team.store` |
+| POST | `/admin/team/{user}/resend` | `admin.team.resend` |
+| PATCH | `/admin/team/{user}/password` | `admin.team.password` |
+| PATCH | `/admin/team/permissions` | `admin.team.permissions` |
+| DELETE | `/admin/team/{user}` | `admin.team.destroy` |
+| GET | `/admin/settings` | `admin.settings` |
+| PATCH | `/admin/settings/business` · `/register` | `admin.settings.business` · `.register` |
+| PATCH | `/admin/billing/plan` | `admin.billing.plan` |
+| POST | `/admin/billing/payments` | `admin.billing.payments.store` |
 
 ---
 
-## Feature: Team list & removal
+## Staff invites
 
-**Status:** 🎨 UI only
+`App\Services\Team\TeamService::invite()` creates the cashier with `role = staff` and the owner's `business_id`, then emails a **set your password** link (`StaffInvitation`).
 
-### Backend to build
+Because only the real mailbox can open that link, **an invited cashier starts verified** — no second verification step.
 
-- [ ] List the business's users (owner first), with their last activity (`sessions.last_activity` or a `last_seen_at` column).
-- [ ] Remove a cashier: soft-delete or deactivate (keep their name on past orders); force a logout by deleting their sessions.
-- [ ] The owner can't remove themselves here.
+Two things make this work when email doesn't:
+
+- The owner may type a password themselves; then no email is sent at all and the cashier can sign in immediately.
+- If the invite email fails, the cashier is still created and the owner is told to hand over a password instead ([Authentication › When email fails](01-authentication.md#when-email-fails)). **Resend invite** tries again later.
+
+Setting a password from the Team screen only ever works on a cashier of the owner's own shop.
+
+## Staff limit by plan
+
+Each plan row carries a `staff_limit` ([Platform › Plans](10-platform.md#plans)). `Business::staffSeatsLeft()` drives the counter on the Team screen, and the limit is enforced in the service, not just in the view.
+
+## Removing a cashier
+
+Deletes the user and ends their sessions immediately, but **past orders keep their name** (`orders.cashier_name`) and logged expenses keep `logged_by`. A cashier from another shop can never be removed — the tenant scope 404s first.
+
+## Cashier permissions
+
+Four switches, stored in `businesses.settings.cashier_permissions` and enforced by Gates:
+
+| Switch | Default | Hint shown to the owner |
+|---|---|---|
+| Run the closing audit | on | Whoever closes, counts |
+| See cost prices and margins | off | Off keeps your margins private |
+| Void a paid order | off | Off sends a void request to you instead |
+| Log a small expense | on | For ice, LPG, anything bought from the drawer |
+
+Details in [Access control › Cashier permissions](02-access-control.md#cashier-permissions).
+
+## Business profile
+
+Shop name, business type, address, TIN (digits and dashes only) and a receipt footer of up to 120 characters. These are exactly the fields printed on a [receipt](05-pos.md#receipts).
+
+## Register settings
+
+| Setting | Default | Effect |
+|---|---|---|
+| `payment_methods` | cash, gcash, maya | Which buttons the cashier sees; at least one is required |
+| `audit_reminder_time` | 21:30 | Saved; the reminder itself isn't sent yet ([06](06-closing-audit.md#whats-left)) |
+| `default_low_threshold` | 10 | Used by items with no threshold of their own |
+
+Settings merge over `Business::DEFAULT_SETTINGS`, so a new switch added later has a sensible value for existing shops without a migration.
+
+## Plan & billing
+
+Manual, Philippine-style billing — no card processor.
+
+1. The owner picks a plan (only plans the operator has published). Downgrading is refused while more cashiers are employed than the smaller plan allows. Switching locks in that plan's price as it stands that day.
+2. The owner pays by GCash or bank transfer and submits the **reference number**; a `subscription_payments` row is created as `pending`.
+3. The operator confirms it in the console, which extends the subscription by one period — **from the current due date if they paid early, from today if they paid late** — and sets the business to `active`.
+4. Or the operator rejects it with a note, which the owner sees on the billing card.
+
+The card shows the price **this shop** agreed to, and, when the operator has since changed the plan's price, a line reading "From your next renewal: ₱X" ([Platform › Plans](10-platform.md#plans)).
+
+The billing card always shows the plan, the status, the due date and days left; it stays reachable even when the shop is past due, so an owner can always pay their way back in ([03 › Access rules](03-business-tenancy.md#access-rules-suspended-unpaid-no-shop)).
 
 ---
 
-## Feature: Cashier permission toggles
+## Tests
 
-**Status:** 🎨 UI only (4 switches)
+`TeamTest`: invite with a set-password email · the invited cashier sets a password and lands on the register · the staff limit on Tindahan · removing a cashier keeps their name on past orders · no cross-shop removal · saving permissions.
 
-Run the closing audit · See cost prices and margins · Void a paid order · Log expenses.
+`SettingsAndBillingTest`: receipt details saved · payment methods on and off · at least one method required · plan switches only when the staff fit · a payment reference confirmed by the operator · a rejected payment with a note · owners can't delete their account while they own a shop.
 
-### Backend to build
+`ManualVerificationTest`: a cashier is added even when the invite email fails · added with a password and no email · another shop's cashier can't be given a password.
 
-- [ ] Save to `businesses.settings.cashier_permissions`, and enforce them through Gates. Full spec: [RBAC › Cashier permissions](02-access-control.md#feature-cashier-permissions).
+## What's left
 
----
-
-## Feature: Business profile
-
-**Status:** 🎨 UI only (name, type, address, TIN, receipt footer)
-
-### Backend to build
-
-- [ ] `PATCH /admin/settings/business` → `UpdateBusinessRequest` → update the `businesses` columns ([Business record](03-business-tenancy.md#feature-business-record)).
-- [ ] These values are used by receipts ([POS › Receipts](05-pos.md#feature-receipts)) and exports.
-
----
-
-## Feature: Register & closing settings
-
-**Status:** 🎨 UI only (payment methods, audit reminder time, default low-stock alert)
-
-### Backend to build
-
-- [ ] Save to `businesses.settings`: `payment_methods` (array), `audit_reminder_time` (HH:MM), `default_low_threshold`.
-- [ ] The register only shows enabled payment methods.
-- [ ] The audit reminder runs from the scheduler ([Closing audit](06-closing-audit.md#feature-daily-count)).
-
----
-
-## Feature: Plan & billing
-
-**Status:** 🎨 UI only (two plan cards, "Trial ends Sep 27")
-
-### Backend to build
-
-- [ ] Show the real `plan`, `status` and `trial_ends_at` ([Business › Trial](03-business-tenancy.md#feature-trial--plan-status)).
-- [ ] **MVP billing is manual:** a "Pay with GCash / bank transfer" panel with instructions + reference upload; the super admin confirms it ([Platform › Payments](10-platform.md#feature-payments)).
-- [ ] Switching plan: allowed if the staff count fits the new limit.
-- [ ] A payment gateway (e.g. PayMongo: GCash, Maya, card) comes after the first paying customers.
-
----
-
-## Feature: Download all data
-
-**Status:** 🎨 UI only ("Download .xlsx")
-
-### Backend to build
-
-- [ ] Menu & prices, stock, audits, expenses and the daily ledger in one download. MVP: a zip of CSVs. Details in [Reports › Export](08-reports.md#feature-export).
-- [ ] Protect it with `password.confirm`, and allow it for every business status, including expired trials.
+- Online payment (GCash API / card) instead of reference numbers.
+- Invoices or official receipts for the subscription itself.
+- A per-cashier PIN for faster shift switching on one device.

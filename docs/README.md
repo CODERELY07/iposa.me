@@ -1,76 +1,92 @@
-# iPOSa Documentation
+# iPOSa documentation
 
-Organized **by module**. Each module file lists its features, and each feature has the same sections:
-**Status · Who · Routes · Files · How it works · Backend to build · Done when · Tests**.
+iPOSa is a POS, inventory and daily-profit app for small food businesses in the Philippines: a register a cashier can learn in five minutes, stock that counts itself, a 60-second closing audit, and one honest number at the end of the day.
 
-> **Update, 19 Sep 2026: the backend is built.** Modules 02–10 now run on real data. The per-module files still carry their original "Backend to build" checklists; use the table below and the **What's built** section for the current state. The remaining gaps are listed at the end.
+```
+Net = Sales − Ingredients (COGS) − Bulk used − Expenses
+```
+
+**The backend is built.** Every module below runs on real data and is covered by tests. Each module file has the same shape: *status table → routes → data model → how it works → tests → what's left*.
 
 ## Status legend
 
 | Mark | Meaning |
 |---|---|
-| ✅ Built | Real backend code, working and tested |
-| 🟡 Partial | Built, with the gaps listed below |
-| ⬜ Not started | Not built |
+| ✅ Built | Real code, working and tested |
+| 🟡 Partial | Built, with the gap named in the module's "What's left" |
+| ⬜ Not built | Listed in [ROADMAP.md](ROADMAP.md) |
 
 ## Modules
 
-| # | Module | Status | Tests |
+| # | Module | State | Tests |
 |---|---|---|---|
-| 01 | [Authentication](modules/01-authentication.md) | ✅ | `Auth/*`, `ProfileTest`, `SubscriptionAccessTest` (sign-up) |
-| 02 | [Access control (RBAC)](modules/02-access-control.md) | ✅ roles, middleware, cashier permission gates | `UiScreensTest`, `ClosingAuditTest`, `VoidOrderTest`, `ExpenseTest` |
-| 03 | [Business & tenancy](modules/03-business-tenancy.md) | ✅ staff membership, data scoping, trial, plans, suspension | `TenancyTest`, `SubscriptionAccessTest` |
-| 04 | [Inventory](modules/04-inventory.md) | ✅ | `InventoryTest` |
-| 05 | [Register (POS)](modules/05-pos.md) | ✅ including offline selling | `PosCheckoutTest`, `VoidOrderTest`, `PwaTest` |
-| 06 | [Closing audit](modules/06-closing-audit.md) | ✅ (🟡 no reminder notification) | `ClosingAuditTest` |
-| 07 | [Expenses](modules/07-expenses.md) | ✅ | `ExpenseTest` |
-| 08 | [Reports & analytics](modules/08-reports.md) | ✅ | `ReportsTest` |
-| 09 | [Team & settings](modules/09-team-settings.md) | ✅ (manual billing) | `TeamTest`, `SettingsAndBillingTest` |
-| 10 | [Platform console](modules/10-platform.md) | ✅ (🟡 no impersonation) | `SuperAdminBusinessesTest`, `SettingsAndBillingTest`, `SubscriptionAccessTest` |
-| 11 | [UI foundation](modules/11-ui-foundation.md) | ✅ | `UiScreensTest` |
+| 01 | [Authentication](modules/01-authentication.md) | ✅ sign-up creates a shop, verification, resets, email-failure fallback | `Auth/*`, `ProfileTest`, `ManualVerificationTest` |
+| 02 | [Access control (RBAC)](modules/02-access-control.md) | ✅ roles, middleware, cashier permission gates | `UiScreensTest`, `ClosingAuditTest`, `VoidOrderTest` |
+| 03 | [Business & tenancy](modules/03-business-tenancy.md) | ✅ scoping, trial, plans, suspension | `TenancyTest`, `SubscriptionAccessTest` |
+| 04 | [Inventory](modules/04-inventory.md) | ✅ menu/pieces/bulk, recipes, CSV import, archive & delete | `InventoryTest` |
+| 05 | [Register (POS)](modules/05-pos.md) | ✅ idempotent checkout, receipts, voids | `PosCheckoutTest`, `VoidOrderTest` |
+| 06 | [Closing audit](modules/06-closing-audit.md) | 🟡 built; the reminder isn't sent yet | `ClosingAuditTest` |
+| 07 | [Expenses & equipment](modules/07-expenses.md) | ✅ month view, installments | `ExpenseTest` |
+| 08 | [Today & reports](modules/08-reports.md) | ✅ one ledger feeds every number | `ReportsTest` |
+| 09 | [Team, settings & billing](modules/09-team-settings.md) | ✅ manual billing (no gateway) | `TeamTest`, `SettingsAndBillingTest` |
+| 10 | [Platform console](modules/10-platform.md) | ✅ metrics, business editing, tenant actions, plan CRUD, verifications | `SuperAdminBusinessesTest`, `BusinessEditTest`, `PlanManagementTest`, `ManualVerificationTest` |
+| 11 | [UI foundation](modules/11-ui-foundation.md) | ✅ shell, theme, feedback, components | `UiScreensTest` |
+| 12 | [Installable app & offline selling](modules/12-pwa-offline.md) | ✅ register sells offline and syncs | `PwaTest` |
+| 13 | [Deployment & operations](modules/13-deployment.md) | ✅ Docker + Render + Postgres | — |
 
-## What's built
+Step-by-step hosting guide: **[DEPLOY-RENDER.md](DEPLOY-RENDER.md)**. What's still to build: **[ROADMAP.md](ROADMAP.md)**.
 
-| Area | Key files |
+## The decisions that shaped everything
+
+| Decision | Why it matters |
 |---|---|
-| Tenancy | `app/Models/Concerns/BelongsToBusiness.php` (global scope + auto `business_id`), `users.business_id`, `EnsureBusinessAccess` middleware (no business → 403, suspended → logout, unpaid → only settings/billing/exports) |
-| Plans | `config/plans.php` (Tindahan ₱499: 3 staff, no expenses/P&L/recipes · Negosyo ₱999), `EnsurePlanFeature` middleware (`plan:expenses`, `plan:reports`) |
-| Cashier permissions | Gates in `AppServiceProvider`: `run-audit`, `view-costs`, `void-orders`, `log-expenses`, `correct-audit`; stored in `businesses.settings` |
-| Inventory | `Item` (kind menu/piece/bulk), `ItemVariant`, `RecipeLine` (per item or per size), `Category`, `StockMovement`; `ItemService`, `StockService`, `MenuImportService` (CSV) |
-| Register | `CheckoutService`: prices from the DB, idempotent by uuid, per-shop order numbers, recipe deduction in one transaction; `VoidOrderService`; 58mm receipt view |
-| Closing audit | `ClosingAuditService`: one audit per day, owner corrections move stock by the difference, restocks detected |
-| Expenses | `Expense`, `Asset` (installments → Payables expense once), month view, CSV |
-| Reports | `App\Reports\DailyLedger`: one query class for Today, P&L, ledger, best sellers, exports |
-| PWA & offline | `public/manifest.webmanifest`, icons in `public/icons`, service worker `resources/pwa/sw.js` (served by `ServiceWorkerController`, versioned per build), `resources/js/offline-queue.js`: the register opens offline, sales queue in IndexedDB and sync with their uuid and original time (`offline_created_at`). Other pages show `public/offline.html` |
-| Exports | `App\Exports\BusinessExports` + `ExportController`: ledger, expenses, menu, stock, orders, audits, or everything as a zip. Always allowed, even unpaid |
-| Team | `TeamService`: invite (email with set-password link), resend, remove (orders keep the name), permissions |
-| Billing | `SubscriptionService`: change plan (checks staff limit), submit GCash/bank reference, operator confirms (+30 days) or rejects, extend trial, suspend (password required), unsuspend; daily `businesses:mark-overdue` |
-| Platform | `PlatformDashboardController` (MRR, collected per month, funnel, gone quiet, trials ending), `BusinessController` (list, detail, actions), `PlanController`, `SubscriptionPaymentController` |
-
-## Remaining gaps (not built)
-
-- **Payment gateway** (PayMongo). Billing is manual: the owner sends a reference, the operator confirms it.
-- **Closing-audit reminder** at the configured time (the setting is saved; nothing sends a notification yet).
-- **`.xlsx` exports.** CSV/zip only; `.xlsx` needs a new package.
-- **Impersonation** ("view as owner") on the platform console.
-- **Bluetooth / ESC-POS printers.** Receipts print through the browser.
-- **Cron:** production must run `php artisan schedule:run` every minute for the daily overdue check.
+| **One business = one branch = one subscription** | No `branch_id` anywhere; a second branch is a second shop |
+| `users.business_id` + a global scope (`BelongsToBusiness`) | Cross-shop data leaks are impossible by default, not by discipline |
+| **Order lines copy name, price and cost at sale time** | Editing a price today never rewrites last month's profit |
+| Money `decimal(12,2)`, stock `decimal(12,3)` | Half a bottle of oil is a real quantity |
+| **Checkout is idempotent by client `uuid`** | A retry — or a sale synced twice from offline — can't double-charge |
+| Nothing changes `on_hand` outside `StockService` | Every number has a `stock_movements` row explaining it |
+| One `DailyLedger` class behind every report | Today, the P&L and the CSV can't disagree |
+| Email is assumed to fail | Sign-ups, invites and resets survive a dead SMTP server |
+| **A shop's price is locked on the business, not read from the plan** | The operator can raise a price without changing anyone's bill mid-period |
 
 ## Where things live
 
 ```
-routes/web.php                app routes, grouped by role (+ business, plan, can: middleware)
+routes/web.php                every app route, grouped by role (+ business, plan, can: middleware)
 routes/console.php            daily businesses:mark-overdue
-config/plans.php              plans, prices, limits, manual payment details
+config/plans.php              trial length, billing period, manual payment details (plans live in the DB)
+config/iposa.php              platform operator + support contact settings
 app/Models/                   Business, User, Item, ItemVariant, RecipeLine, Category, StockMovement,
                               Order, OrderLine, Audit, AuditLine, Expense, Asset, SubscriptionPayment
+app/Models/Concerns/          BelongsToBusiness (the tenancy scope)
+app/Http/Middleware/          RoleMiddleware, EnsureBusinessAccess, EnsurePlanFeature
 app/Services/                 Pos/, Inventory/, Audit/, Billing/, Team/, RegisterBusinessUserService
 app/Reports/DailyLedger.php   every profit number
-app/Http/Controllers/         Pos/, Staff/, Admin/, SuperAdmin/, Audit, Expense, Business
-database/seeders/             UserSeeder, DemoShopSeeder (14 days of real activity), BusinessSeeder
-tests/Feature/                one file per module (123 tests)
+app/Exports/                  BusinessExports (ledger, expenses, menu, stock, orders, audits)
+app/Support/SafeMail.php      send mail without letting a failure break the request
+resources/pwa/sw.js           service worker source (served by ServiceWorkerController)
+resources/js/offline-queue.js IndexedDB queue for offline sales
+docker/                       start.sh, boot.sh, supervisord, nginx, php-fpm
+database/seeders/             UserSeeder, DemoShopSeeder (14 days of activity), BusinessSeeder
+tests/Feature/                one file per module
 ```
 
-## Test status (last run)
+## Running it locally
 
-**123 of 123 pass** (405 assertions): `php artisan test --compact`.
+```bash
+composer install && npm install
+cp .env.example .env && php artisan key:generate
+php artisan migrate --seed
+composer run dev
+```
+
+Demo logins after seeding (password `password`): `admin@gmail.com` (owner), `staff@gmail.com` (cashier). They are no longer printed on the login page — the seeder is the only place they're listed.
+
+## Tests
+
+```bash
+php artisan test --compact
+```
+
+**170 of 170 pass** (626 assertions). Run one file or one test with a path or `--filter=`. PHP style: `vendor/bin/pint --dirty`.

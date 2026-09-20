@@ -1,83 +1,80 @@
-# Module 07 · Expenses
+# Module 07 · Expenses & equipment
 
-Excel-style expense tracking: date, category, amount. Plus equipment bought in installments. Everything here goes into the P&L.
+Sales minus ingredients is not profit. Rent, wages, electricity and the freezer being paid off in six months all have to land in the same place, or the P&L lies.
+
+**Who:** owners (Negosyo plan). Cashiers can log a small expense from My orders when the owner allows `log_expenses`.
 
 | Feature | Status |
 |---|---|
-| [Expense log](#feature-expense-log) | 🎨 UI only |
-| [Categories & fixed/variable](#feature-categories--fixedvariable) | 🎨 UI only |
-| [Equipment & payables](#feature-equipment--payables) | 🎨 UI only |
-| [Export](#feature-export) | 🎨 UI only (button) |
+| [Month view](#month-view) | ✅ Built |
+| [Quick add](#quick-add) | ✅ Built |
+| [Categories & kind](#categories--kind) | ✅ Built |
+| [Cashier expenses](#cashier-expenses) | ✅ Built |
+| [Equipment & installments](#equipment--installments) | ✅ Built |
+| [Plan gate](#plan-gate) | ✅ Built |
 
-**Who:** `admin`; later `staff` with the `expenses.create` permission (quick entries like ice or LPG).
+## Routes
 
-### Routes (existing)
-
-| URI | Name | View | Demo variables |
+| Method | URI | Name | Middleware |
 |---|---|---|---|
-| `/admin/expenses` | `admin.expenses` | `admin/expenses` | `$expenses`, `$assets` |
+| GET | `/admin/expenses` | `admin.expenses` | `role:admin`, `business`, `plan:expenses` |
+| POST | `/expenses` | `expenses.store` | `role:staff\|admin`, `business` |
+| DELETE | `/admin/expenses/{expense}` | `admin.expenses.destroy` | `role:admin`, `business` |
+| POST | `/admin/assets` | `admin.assets.store` | owner |
+| POST | `/admin/assets/{asset}/pay` | `admin.assets.pay` | owner |
+| DELETE | `/admin/assets/{asset}` | `admin.assets.destroy` | owner |
 
-### Data model (to build)
+## Data model
 
 | Table | Columns |
 |---|---|
-| `expenses` | `id`, `business_id`, `date`, `category` (enum: `Utilities`, `Rent`, `Wages`, `Supplies`, `StockPurchase`, `Payables`, `Misc`), `description`, `kind` (enum: `Fixed`, `Variable`), `amount` decimal(12,2), `asset_id` nullable, `user_id`, timestamps |
-| `assets` | `id`, `business_id`, `name`, `vendor`, `price` decimal(12,2), `installment_amount` decimal(12,2) nullable, `terms` (months), `paid_count`, `first_due_on`, timestamps |
+| `expenses` | `business_id`, `date`, `category`, `description`, `kind`, `amount` (12,2), `asset_id`, `user_id`, `logged_by` |
+| `assets` | `business_id`, `name`, `vendor`, `price`, `installment_amount`, `terms`, `paid_count`, `first_due_on` |
 
-> Ingredient costs are **not** logged here. They come from sales (recipe costs) and the closing audit. The screen says so, to prevent double counting.
-
----
-
-## Feature: Expense log
-
-**Status:** 🎨 UI only
-
-A quick-add row at the top (Date · Category · What for · Amount · **Add**), the table below, and a month total in the footer.
-
-### Backend to build
-
-- [ ] `ExpenseController@index` (with the month filter from the select, default this month) and `@store`.
-- [ ] `StoreExpenseRequest`: `date` required date ≤ today; `category` in the enum; `description` required, max 255; `amount` required numeric > 0; `kind` in the enum (default: `Fixed` for Rent/Utilities/Wages, otherwise `Variable`).
-- [ ] Edit / delete an entry (inline or modal), admin only.
-- [ ] `StockPurchase` entries can optionally add stock to an item (`stock_movements.reason = Restock`), so buying 200 buns updates inventory.
-
-### Done when
-
-Adding "Ice, 3 sacks · ₱300" today shows up in the table, the category breakdown and today's P&L.
+`logged_by` copies the name, so removing a cashier never blanks the history.
 
 ---
 
-## Feature: Categories & fixed/variable
+## Month view
 
-**Status:** 🎨 UI only (the "Where it went" side panel: stacked bar + list)
+A month picker (from the first expense up to now), the running total, entries newest first, and a breakdown by category sorted by size. Equipment and payables sit on their own tab, with what's due this month and the next due payment.
 
-### Backend to build
+## Quick add
 
-- [ ] A month total per category: `SUM(amount) GROUP BY category`, sorted descending.
-- [ ] Category colors stay in the view (presentation only).
+One spreadsheet-like row: date, category, description, amount. `StoreExpenseRequest` refuses future dates and refuses `payables` — those rows may only be created by paying an installment, so the P&L can't be inflated by hand.
+
+## Categories & kind
+
+| Category | Default kind |
+|---|---|
+| Utilities, Rent, Wages | Fixed |
+| Supplies, Stock purchase, Misc | Variable |
+| Payables (equipment) | Fixed — system only |
+
+`ExpenseKind` (fixed/variable) is what later makes a break-even chart possible; it's recorded from day one even though nothing reads it yet.
+
+## Cashier expenses
+
+From My orders, a cashier with `log_expenses` can record ice or LPG bought out of the drawer. It posts to the same `POST /expenses`, dated today, and shows up in the owner's month with the cashier's name on it.
+
+## Equipment & installments
+
+Add a freezer at ₱24,000 over 12 terms; the card shows paid/remaining and the next due date. **Mark as paid** writes one expense of `installment_amount` in the `payables` category, tied to the asset, and bumps `paid_count` — so an installment lands in the P&L exactly once, on the day it was paid.
+
+A cash purchase (`terms = 1`) is logged as paid immediately. Deleting that expense decrements `paid_count` again, so the two never drift. Deleting the asset keeps its past payments in the expense history.
+
+## Plan gate
+
+`plan:expenses` — Negosyo only. Tindahan owners see an upgrade note on Settings and the sidebar link is hidden.
 
 ---
 
-## Feature: Equipment & payables
+## Tests
 
-**Status:** 🎨 UI only (Equipment & payables tab: price, monthly amount, paid 6/12 bars, next due)
+`ExpenseTest`: spreadsheet-row logging · future dates and hand-written payables refused · cashier logging when allowed · the month view with category totals · an installment recorded exactly once · a cash purchase logged right away · deleting an installment expense rolls the count back · Tindahan is blocked.
 
-Mirrors the client's asset sheet: espresso machine, freezer, blenders bought in installments.
+## What's left
 
-### Backend to build
-
-- [ ] `AssetController` (index / store / update).
-- [ ] Computed: `next_due_on` = `first_due_on + paid_count months` (null when fully paid); "Payables this month"; "Next due".
-- [ ] **Mark installment paid** → `paid_count++` **and** create an `expenses` row (`category = Payables`, `asset_id`) so it lands in the P&L exactly once.
-- [ ] A cash purchase (`terms = 1`) creates one expense on the purchase date.
-- [ ] Due-soon items show on Today → "Needs you tonight".
-
----
-
-## Feature: Export
-
-**Status:** 🎨 UI only ("Export CSV" busy button)
-
-### Backend to build
-
-- [ ] A streamed CSV for the selected month: date, category, description, type, amount, logged by.
+- Recurring expenses (rent on the 1st, entered for you).
+- Attaching a photo of the receipt.
+- A break-even view using `kind` (fixed vs variable).

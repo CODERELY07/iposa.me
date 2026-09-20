@@ -1,85 +1,69 @@
 # Module 06 · Closing audit
 
-At closing, staff look at the bottles and tubs and type what's left. The drop becomes the day's **bulk cost**, which completes the true daily profit. Target: under 60 seconds.
+At closing, staff look at the bottles and tubs and type what's left. The drop becomes the day's **bulk cost**, which completes true daily profit. Target: under 60 seconds.
+
+**Who:** owners, and cashiers with the `run_audit` permission (on by default).
 
 | Feature | Status |
 |---|---|
-| [Daily count](#feature-daily-count) | 🎨 UI only (client-side complete) |
-| [Usage cost](#feature-usage-cost) | 🎨 UI only |
-| [Restock detection](#feature-restock-detection) | 🎨 UI only (pill) |
-| [Audit history](#feature-audit-history) | ⬜ Not started |
+| [Daily count](#daily-count) | ✅ Built |
+| [Usage cost](#usage-cost) | ✅ Built |
+| [Restock detection](#restock-detection) | ✅ Built |
+| [Owner corrections](#owner-corrections) | ✅ Built |
+| [Audit history](#audit-history) | ✅ Built |
+| [Reminder notification](#whats-left) | ⬜ Not built |
 
-**Who:** `staff` and `admin` (`role:staff|admin`); later also the `audit.run` permission.
+## Routes
 
-### Routes (existing)
-
-| URI | Name | View | Demo variables |
+| Method | URI | Name | Middleware |
 |---|---|---|---|
-| `/audit` | `audit` | `audit/index` | `$bulkItems` (`id, name, unit, expected, unitCost`) |
+| GET | `/audit` | `audit` | `role:staff\|admin`, `business`, `can:run-audit` |
+| POST | `/audit` | `audit.store` | same (JSON) |
 
-Client state: `Alpine.data('closingAudit')` in `resources/js/app.js`.
-
-### Data model (to build)
+## Data model
 
 | Table | Columns |
 |---|---|
-| `audits` | `id`, `business_id`, `date` (**unique per business**), `user_id`, `started_at`, `submitted_at`, `duration_seconds` |
-| `audit_lines` | `id`, `audit_id`, `item_id`, `expected` decimal(12,3), `counted` decimal(12,3), `unit_cost` decimal(12,2) (copied), `used` decimal(12,3) (= max(0, expected − counted)), `restocked` decimal(12,3) (= max(0, counted − expected)) |
+| `audits` | `business_id`, `date` (unique per shop), `user_id`, `counted_by`, `started_at`, `submitted_at`, `duration_seconds` |
+| `audit_lines` | `audit_id`, `item_id`, `expected`, `counted`, `used`, `restocked`, `unit_cost` (copied at count time) |
 
 ---
 
-## Feature: Daily count
+## Daily count
 
-**Status:** 🎨 UI only
+One card per bulk item: "system says 5". Large −/+ buttons (quarter steps), a number field with the decimal keyboard on phones, and a "Still 5, nothing used" shortcut. A progress bar tracks how many are done, and **Close the day** only enables once every item is counted.
 
-One card per bulk item: "system says 5". Large −/+ buttons (step 0.25), a number field (with the decimal keyboard on phones), a "Still 5, nothing used" shortcut, a progress bar, and **Close the day** (enabled once every item is checked; shows "Saving counts…").
+Submitting posts the counts as JSON with `started_at`, so the saved `duration_seconds` shows how long the audit really took.
 
-### Backend to build
+`ClosingAuditService::submit()` runs one transaction: lock the bulk items, create the audit and its lines, set `on_hand` to what was counted, and write `Audit` stock movements. Every bulk item must be included, or it's rejected.
 
-- [ ] A controller for `audit`: pass `$bulkItems` = `kind = Bulk`, not archived, with `expected = on_hand`.
-- [ ] If today's audit already exists: show "Already closed by Jessa at 9:51 PM" with an option to **edit** (admin only).
-- [ ] `POST /audit` (`audit.store`), `StoreAuditRequest`: one entry per bulk item; `counted` numeric ≥ 0; `item_id` exists in this business.
-- [ ] One transaction: create the `audits` + `audit_lines` rows → set `items.on_hand = counted` → write `stock_movements` (`reason = Audit`, qty_change = counted − expected).
-- [ ] `duration_seconds` from the page-open timestamp the form sends.
-- [ ] Replace the `setTimeout` in `closingAudit.submit()` with the real POST.
-- [ ] Scheduled reminder at `settings.audit_reminder_time` (notification to staff/owner if no audit yet).
+## Usage cost
 
-### Done when
+`used = max(0, expected − counted)`, priced with the unit cost copied into the line, so later price changes never rewrite history. Example: oil 5 → 4.5 at ₱145 = **₱72.50** for the day.
 
-Oil 5 → 4.5 saves, `on_hand` becomes 4.5, and a second audit for the same day is blocked (or becomes an edit).
+Peso totals are hidden from cashiers unless the owner allows `view_costs`; they see "N items left to check" instead.
 
----
+## Restock detection
 
-## Feature: Usage cost
+Counting more than expected is recorded as `restocked`, never as negative usage, and the card shows a "restocked?" pill.
 
-**Status:** 🎨 UI only (the sticky footer shows "Bulk used today ₱…" for admins)
+## Owner corrections
 
-`bulk cost of the day = Σ(used × unit_cost)`. For example, 0.5 × ₱145 oil = ₱72.50.
+A second submit on the same day is a **correction**, owners only (`can:correct-audit`). The original `expected` is kept, and stock moves only by the difference between the old and new count. Cashiers get 403, and the page tells them the day is already closed, with who counted and when.
 
-### Backend to build
+## Audit history
 
-- [ ] Compute it from `audit_lines` (with the copied `unit_cost`) for [Reports › Daily ledger](08-reports.md#feature-daily-ledger).
-- [ ] Only show peso values to users allowed `costs.view` ([RBAC](02-access-control.md#feature-cashier-permissions)). Today the view checks `role === 'admin'`.
+- Inventory → Bulk tab: last audit (date, time, who, seconds) and average use per day from the last 7 audits.
+- Today: "Closing audit not done" until it's finished; bulk shows as "pending" in the profit equation.
+- Platform console: audits are the activation signal for a new shop.
 
 ---
 
-## Feature: Restock detection
+## Tests
 
-**Status:** 🎨 UI only (a "restocked?" pill when counted > expected)
+`ClosingAuditTest`: saves counts and prices usage (₱72.50) · owner sees the usage cost · counting above expected is a restock · every bulk item required · cashiers can't redo today · owner corrections move stock by the difference only · the audit permission can be switched off.
 
-### Backend to build
+## What's left
 
-- [ ] Store the extra as `audit_lines.restocked`, **not** as negative usage.
-- [ ] Suggest logging a stock-purchase expense for it ([Expenses](07-expenses.md#feature-expense-log)).
-
----
-
-## Feature: Audit history
-
-**Status:** ⬜ Not started
-
-### Backend to build
-
-- [ ] The Bulk & liquids tab header: "Last closing audit: Thu 9:51 PM by Jessa · took 52 seconds".
-- [ ] A per-item "Avg use / day" (last 7 audits) for the inventory table.
-- [ ] Platform metric: businesses with **no audit in N days** (the activation signal on [Platform › Overview](10-platform.md#feature-overview-metrics)).
+- The reminder at `settings.audit_reminder_time` (saved, but nothing sends it yet). Needs a scheduled command plus a notification channel (email or push).
+- Offline audits: the register works offline, the audit still needs internet.

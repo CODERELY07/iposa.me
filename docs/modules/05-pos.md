@@ -1,160 +1,113 @@
 # Module 05 · Register (POS)
 
-The cashier's screen. It must be fast, readable at arm's length, and impossible to double-charge.
+The cashier's screen: fast to tap, readable at arm's length, and impossible to double-charge.
+
+**Who:** cashiers and owners (`role:staff|admin`).
 
 | Feature | Status |
 |---|---|
-| [Menu grid](#feature-menu-grid) | 🎨 UI only |
-| [Cart](#feature-cart) | 🎨 UI only (client-side, complete) |
-| [Checkout & payment](#feature-checkout--payment) | 🎨 UI only |
-| [Stock deduction](#feature-stock-deduction) | ⬜ Not started |
-| [Receipts](#feature-receipts) | 🎨 UI only (button) |
-| [My orders (shift summary)](#feature-my-orders) | 🎨 UI only |
-| [Void requests](#feature-void-requests) | 🎨 UI only (status pill) |
-| [Offline selling](#feature-offline-selling) | ⬜ Not started |
+| [Menu grid](#menu-grid) | ✅ Built |
+| [Cart](#cart) | ✅ Built |
+| [Checkout](#checkout) | ✅ Built |
+| [Stock deduction](#stock-deduction) | ✅ Built |
+| [Receipts](#receipts) | ✅ Built |
+| [My orders](#my-orders) | ✅ Built |
+| [Voids](#voids) | ✅ Built |
+| [Offline selling](#offline-selling) | ✅ Built |
 
-**Who:** `staff` and `admin` (`role:staff|admin`).
+## Routes
 
-### Routes (existing)
-
-| URI | Name | View | Demo variables |
+| Method | URI | Name | Handler |
 |---|---|---|---|
-| `/pos` | `pos` | `pos/index` | `$menu` |
-| `/staff/orders` | `staff.orders` | `staff/orders` | `$shift`, `$orders` |
+| GET | `/pos` | `pos` | `Pos\RegisterController@index` |
+| POST | `/pos/orders` | `pos.orders.store` | `Pos\RegisterController@store` (JSON) |
+| GET | `/pos/orders/{order}/receipt` | `pos.orders.receipt` | `Pos\OrderController@receipt` |
+| POST | `/pos/orders/{order}/void` | `pos.orders.void` | `Pos\OrderController@void` |
+| GET | `/staff/orders` | `staff.orders` | `Staff\MyOrdersController` |
+| POST | `/admin/orders/{order}/void/approve` · `/reject` | `admin.orders.void.approve` · `.reject` | `Admin\VoidRequestController` |
 
-Client state: `Alpine.data('posTerminal')` in `resources/js/app.js`.
-
-### Data model (to build)
+## Data model
 
 | Table | Columns |
 |---|---|
-| `orders` | `id`, `business_id`, `number` (per business, sequential), `uuid` (client-generated, unique, for idempotency), `user_id` (cashier), `payment_method` (enum: `Cash`, `GCash`, `Maya`), `subtotal`, `tendered` nullable, `change` nullable, `status` (enum: `Paid`, `VoidRequested`, `Voided`), `paid_at`, `voided_by` nullable, `voided_at` nullable, timestamps |
-| `order_lines` | `id`, `order_id`, `item_id`, `item_variant_id`, copies of `name` and `variant_label`, `price`, `unit_cost`, `qty` |
+| `orders` | `business_id`, `number` (per shop), `uuid` (unique per shop), `user_id`, `cashier_name`, `payment_method`, `subtotal`, `tendered`, `change`, `status`, `paid_at`, `void_requested_by`, `voided_by`, `voided_at` |
+| `order_lines` | `order_id`, `item_id`, `item_variant_id`, `name`, `variant_label`, `price`, `unit_cost`, `qty` |
 
-**Copy the name, price and cost onto each line at sale time.** Reports must never change when a menu price is edited later.
-
----
-
-## Feature: Menu grid
-
-**Status:** 🎨 UI only
-
-Colored text tiles grouped by category (no photos, for speed). Search with the `/` key; category chips; sized items show one button per size; an "N left" pill appears when stock is low.
-
-### Backend to build
-
-- [ ] A controller for `pos` passing `$menu` in the shape the view expects:
-  `[id, name, category, variants: [[label, price]], stockLeft]`.
-- [ ] Only `kind = Menu`, not archived; eager-load `variants` and `category` (no N+1 queries).
-- [ ] Tile color comes from the category (currently a map in the view; move it to `categories.color`).
-- [ ] **Never send cost prices to the register.** The payload must not contain `cost`.
+**Lines copy the name, size, price and cost at sale time**, so reports never change when the menu is edited later.
 
 ---
 
-## Feature: Cart
+## Menu grid
 
-**Status:** 🎨 UI only (works fully in the browser)
+Colored text tiles (no photos, for speed), grouped by category, searchable with the `/` key. Sizes are separate taps, never a pop-up. A "N left" pill appears when stock runs low, worked out from the linked pieces (`min(piece on hand ÷ recipe qty)`).
 
-Add / + / − / clear; running total; payment method tabs. Every tap gives feedback: a tile ring, a highlighted cart line, an "Added …" toast, and a short vibration on phones.
+**The payload never contains cost prices**, so margins stay private even from cashiers.
 
-### Backend to build
+## Cart
 
-Nothing server-side until checkout. The cart lives in the browser and prices are re-checked on the server when the order is saved.
+Client-side (Alpine). Every tap answers back: the tile rings and pops, the cart line highlights, an "Added …" toast appears, and the phone vibrates briefly. Quantity steppers, clear, and a payment method picker limited to what the owner enabled.
 
----
+## Checkout
 
-## Feature: Checkout & payment
+Cash asks for the amount received (Exact / ₱100 / ₱500 / ₱1000) and shows the change; GCash and Maya ask the cashier to confirm on the customer's phone.
 
-**Status:** 🎨 UI only (`complete()` fakes a 900 ms request)
+`CheckoutService` runs one transaction:
 
-The cash flow asks for the cash received (Exact / ₱100 / ₱500 / ₱1000 buttons) and shows the change. GCash/Maya ask the cashier to confirm on the customer's phone. The button locks and shows "Processing sale, please wait…" until the server answers.
+1. Lock the business row, and return the existing order if this `uuid` was already used (safe retries).
+2. Load the variants **from the database**, refusing anything archived or from another shop.
+3. Recompute the total from database prices; cash must cover it.
+4. Increment the shop's order number.
+5. Create the order and its lines.
+6. Deduct stock ([below](#stock-deduction)).
 
-### Backend to build
+The button locks and shows "Processing sale, please wait…". Server errors appear in the modal with **Try again**.
 
-- [ ] `POST /pos/orders` (name `pos.orders.store`, `role:staff|admin`), JSON:
-  ```json
-  { "uuid": "…", "payment_method": "Cash", "tendered": 500, "lines": [{ "variant_id": 12, "qty": 2 }] }
-  ```
-- [ ] `StoreOrderRequest`: `lines` min 1; `variant_id` exists **in this business**; `qty` integer ≥ 1; `tendered` required for Cash and ≥ the total.
-- [ ] **Recompute every price from the DB.** Never trust prices sent by the browser.
-- [ ] One `DB::transaction`: create the order + lines → [stock deduction](#feature-stock-deduction) → return `{ number, total, change }`.
-- [ ] Idempotency: if `uuid` already exists, return that order instead of creating a second one (protects against double taps and retries).
-- [ ] Order number: lock the business row (`lockForUpdate`) and increment `last_order_number`.
-- [ ] Replace the `setTimeout` in `posTerminal.complete()` with `fetch()`; show server errors in the modal.
+## Stock deduction
 
-### Done when
-
-Double-tapping "Complete sale" or retrying after a network drop still creates exactly one order.
-
----
-
-## Feature: Stock deduction
-
-**Status:** ⬜ Not started
-
-For each order line:
-
-| Menu item has recipe lines? | Deduct |
+| Menu item | Deducts |
 |---|---|
-| Yes | Each linked piece: `recipe.qty × line.qty` |
-| No | The menu item itself: `line.qty` |
+| Has recipe lines for that size | Each linked piece × quantity sold |
+| No recipe lines, but tracks its own stock | Itself |
+| No recipe, no stock tracking | Nothing |
 
-### Backend to build
+Items are locked (`lockForUpdate`) while updating, and every change writes a `Sale` stock movement tied to the order. Stock may go negative: a real kitchen sometimes sells before it counts, and the dashboard flags it rather than blocking the sale.
 
-- [ ] Inside the checkout transaction: `lockForUpdate` the affected `items`, decrement `on_hand`, and write one `stock_movements` row per item (`reason = Sale`, `order_id`).
-- [ ] Stock may go **negative** (a real kitchen sells before it counts). Allow it, and flag it on the dashboard.
-- [ ] Store `order_lines.unit_cost` = the variant cost at the time of sale (used for COGS in [Reports](08-reports.md)).
+## Receipts
 
-### Tests
+`/pos/orders/{order}/receipt` prints through the browser, styled for 58mm paper: shop name, address, TIN, order number, lines, total, payment, change and the receipt footer from Settings. Voided orders are stamped VOIDED. Reprint any order from My orders.
 
-Selling 2 Cheeseburgers (bun, patty, cheese) lowers each piece by 2 and writes 3 movements; selling 1 Bottled Water (no recipe) lowers water by 1.
+## My orders
 
----
+Today's orders for the logged-in cashier, with drawer totals per payment method so they can count cash before handover. Reprint, and void or request a void per order. When allowed, a quick expense form for ice or LPG bought from the drawer.
 
-## Feature: Receipts
+## Voids
 
-**Status:** 🎨 UI only (Receipt / Reprint buttons)
+| Who | What happens |
+|---|---|
+| Cashier without `void_orders` | Order becomes **Void requested**; the owner sees it on Today |
+| Cashier with `void_orders`, or the owner | Voided immediately |
 
-### Backend to build
+Voiding reverses exactly the movements the sale made (`Void` reason) and excludes the order from every report. The owner can also reject a request, returning the order to Paid.
 
-- [ ] `GET /pos/orders/{order}/receipt`: a print view sized for 58mm paper using `@media print`, opened with `window.print()`.
-- [ ] It shows the business name, address, TIN (if set), order number, lines, total, payment, change and receipt footer (from settings).
-- [ ] Bluetooth / ESC-POS printers come after the MVP.
+## Offline selling
 
----
+The register works without internet: the page is cached, sales queue on the device and sync by themselves. Full details in [PWA & offline](12-pwa-offline.md).
 
-## Feature: My orders
-
-**Status:** 🎨 UI only · **Who:** `staff`
-
-Today's orders for the logged-in cashier, with shift totals per payment method, so they can count the drawer before handover.
-
-### Backend to build
-
-- [ ] A controller for `staff.orders`: orders where `user_id = me` and `paid_at` is today, newest first.
-- [ ] `$shift`: `started` (first order time), `orders` count, `cash`, `gcash`, `maya` sums (paid only).
-- [ ] Reprint → the receipt route above.
+Server side, a synced sale carries `offline_created_at` (accepted within the last 7 days, never in the future) so `paid_at` is when the sale actually happened.
 
 ---
 
-## Feature: Void requests
+## Tests
 
-**Status:** 🎨 UI only ("Void requested" pill on My orders)
+`PosCheckoutTest`: recipe deduction · size-specific recipes · items that count themselves · the same uuid never charges twice · prices come from the menu, not the browser · cash must cover the total · per-shop order numbering · cross-shop and archived items refused · disabled payment method refused · no costs in the payload · receipt output.
 
-### Backend to build
+`VoidOrderTest`: request, approve (stock back), reject, direct void with permission, voided orders leave sales, no double void, cross-shop 404.
 
-- [ ] A cashier with `orders.void` permission voids directly; one without it creates a request (`status = VoidRequested`). See [RBAC › Cashier permissions](02-access-control.md#feature-cashier-permissions).
-- [ ] The owner approves on Today → "Needs you tonight": `status = Voided`, then reverse the stock movements (`reason = Void`).
-- [ ] Voided orders are excluded from sales and COGS in every report.
+`PwaTest`: offline sale time, and no double charge on re-sync.
 
----
+## What's left
 
-## Feature: Offline selling
-
-**Status:** ⬜ Not started · **The landing page promises this; either build it or change the copy before launch.**
-
-### Backend to build
-
-- [ ] PWA: `manifest.webmanifest`, icons, and a service worker caching the app shell.
-- [ ] While offline, queue orders in IndexedDB with their `uuid`; sync when back online (the idempotent endpoint above makes retries safe).
-- [ ] Show an "Offline · N orders waiting to sync" status in the sidebar, where "Online · synced" is shown today.
+- Discounts, promos and senior/PWD discounts.
+- Split payments and partial refunds.
+- Customer records or loyalty.
+- Bluetooth/ESC-POS printing (browser printing works today).

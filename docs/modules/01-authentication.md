@@ -1,243 +1,132 @@
 # Module 01 · Authentication
 
-Laravel Breeze 2 (Blade), extended with business sign-up and required email verification.
+Laravel Breeze (Blade), extended with business sign-up, required email verification, and a fallback for when email doesn't work.
 
 | Feature | Status |
 |---|---|
-| [Sign-up](#feature-sign-up) | 🟡 Partial |
-| [Login](#feature-login) | ✅ Built |
-| [Email verification](#feature-email-verification) | ✅ Built (page not restyled) |
-| [Password reset](#feature-password-reset) | ✅ Built (pages not restyled) |
-| [Password confirmation](#feature-password-confirmation) | ✅ Built |
-| [Profile & account deletion](#feature-profile--account-deletion) | 🟡 Partial |
-| [Logout](#feature-logout) | ✅ Built |
+| [Sign-up](#sign-up) | ✅ Built |
+| [Login](#login) | ✅ Built |
+| [Email verification](#email-verification) | ✅ Built |
+| [When email fails](#when-email-fails) | ✅ Built |
+| [Password reset](#password-reset) | ✅ Built |
+| [Password confirmation](#password-confirmation) | ✅ Built |
+| [Profile & account deletion](#profile--account-deletion) | ✅ Built |
+| [Logout](#logout) | ✅ Built |
 
----
-
-## Feature: Sign-up
-
-**Status:** 🟡 Partial · **Who:** guests (new business owners)
-
-A business owner creates their account and their business in one step, then must verify their email.
-
-### Routes
+## Routes
 
 | Method | URI | Name | Middleware | Handler |
 |---|---|---|---|---|
-| GET | `/register` | `register` | guest | `RegisteredUserController@create` |
-| POST | `/register` | | guest | `RegisteredUserController@store` |
-
-### Files
-
-- `app/Http/Controllers/Auth/RegisteredUserController.php`
-- `app/Services/RegisterBusinessUserService.php`
-- `app/Models/User.php`, `app/Models/Business.php`
-- `resources/views/auth/register.blade.php`
-
-### How it works
-
-1. Validate:
-
-   | Field | Rules |
-   |---|---|
-   | `name` | required, string, max:255 |
-   | `email` | required, string, lowercase, email, max:255, unique users |
-   | `password` | required, confirmed, `Password::defaults()` |
-   | `business_name` | required, string, max:255 |
-   | `business_type` | required, string, max:255 |
-
-2. `RegisterBusinessUserService::register()` runs in a **DB transaction**:
-   create the `User` (role = DB default `admin`), then `$user->business()->create([...])`.
-3. `event(new Registered($user))` → the verification email is sent.
-4. `Auth::login($user)` → redirect to `/dashboard` → the `verified` middleware sends them to `/verify-email`.
-
-### Backend to build
-
-- [ ] Restrict `business_type` to the known list: `Rule::in([...])` or an enum (`Café / coffee shop`, `Burger & fast food`, `Milk tea & drinks`, `Carinderia / eatery`, `Bakery`, `Other food business`).
-- [ ] Move validation to a `RegisterBusinessRequest` Form Request.
-- [ ] Set `role => 'admin'` explicitly in the service. Don't rely on the DB default, because the in-memory model returns `null` until it's refreshed.
-- [ ] Start the trial here: `trial_ends_at = now()->addDays(14)` (see [Business › Trial](03-business-tenancy.md#feature-trial--plan-status)).
-- [ ] Add return and parameter types to `register(array $data): User`, with an array-shape PHPDoc.
-- [ ] Rate-limit `POST /register` (e.g. `throttle:5,1`).
-
-### Done when
-
-- Sign-up creates exactly one user (role admin) and one business, or neither.
-- The user lands on the verify-email page and receives an email.
-
-### Tests
-
-- `tests/Feature/Auth/RegistrationTest.php`: ❌ **fails**. Its POST data is missing `business_name` and `business_type`. Add them, and assert that a `businesses` row exists for the user.
-- Add: an invalid `business_type` is rejected; the transaction rolls back if creating the business fails.
+| GET/POST | `/register` | `register` | guest | `Auth\RegisteredUserController` |
+| GET/POST | `/login` | `login` | guest | `Auth\AuthenticatedSessionController` |
+| GET/POST | `/forgot-password` | `password.request`, `password.email` | guest | `Auth\PasswordResetLinkController` |
+| GET/POST | `/reset-password` | `password.reset`, `password.store` | guest | `Auth\NewPasswordController` |
+| GET | `/verify-email` | `verification.notice` | auth | `Auth\EmailVerificationPromptController` |
+| GET | `/verify-email/{id}/{hash}` | `verification.verify` | auth, signed, throttle:6,1 | `Auth\VerifyEmailController` |
+| POST | `/email/verification-notification` | `verification.send` | auth, throttle:6,1 | `Auth\EmailVerificationNotificationController` |
+| POST | `/verify-email/request-agent` | `verification.request-agent` | auth, throttle:3,10 | `Auth\ManualVerificationRequestController` |
+| GET/POST | `/confirm-password` | `password.confirm` | auth | `Auth\ConfirmablePasswordController` |
+| PUT | `/password` | `password.update` | auth | `Auth\PasswordController` |
+| GET/PATCH/DELETE | `/profile` | `profile.*` | auth, verified | `ProfileController` |
+| POST | `/logout` | `logout` | auth | `Auth\AuthenticatedSessionController@destroy` |
 
 ---
 
-## Feature: Login
+## Sign-up
 
-**Status:** ✅ Built · **Who:** all roles
+One form creates the owner account **and** their shop.
 
-### Routes
-
-| Method | URI | Name | Middleware | Handler |
-|---|---|---|---|---|
-| GET | `/login` | `login` | guest | `AuthenticatedSessionController@create` |
-| POST | `/login` | | guest | `AuthenticatedSessionController@store` |
-
-### Files
-
-- `app/Http/Controllers/Auth/AuthenticatedSessionController.php`
-- `app/Http/Requests/Auth/LoginRequest.php`
-- `resources/views/auth/login.blade.php`
-
-### How it works
-
-1. `LoginRequest` validates the email and password, and is **rate-limited to 5 attempts per email + IP**. Then it throws a lockout with the wait time.
-2. The session is regenerated to prevent session fixation.
-3. Redirect to the intended URL, or to `/dashboard` → role home screen ([RBAC › Home redirect](02-access-control.md#feature-role-home-redirect)).
-
-The login page lists the demo accounts only when `APP_ENV=local` (`@env('local')`).
-
-### Backend to build
-
-- [ ] Block login for suspended businesses (see [Business › Suspension](03-business-tenancy.md#feature-suspension)).
-
-### Tests
-
-`tests/Feature/Auth/AuthenticationTest.php`: ✅ passing.
-
----
-
-## Feature: Email verification
-
-**Status:** ✅ Built · **Who:** every logged-in user
-
-### Routes
-
-| Method | URI | Name | Middleware | Handler |
-|---|---|---|---|---|
-| GET | `/verify-email` | `verification.notice` | auth | `EmailVerificationPromptController` |
-| GET | `/verify-email/{id}/{hash}` | `verification.verify` | auth, signed, throttle:6,1 | `VerifyEmailController` |
-| POST | `/email/verification-notification` | `verification.send` | auth, throttle:6,1 | `EmailVerificationNotificationController@store` |
-
-### Files
-
-- `app/Models/User.php`: `implements MustVerifyEmail`
-- `app/Http/Controllers/Auth/{EmailVerificationPromptController, VerifyEmailController, EmailVerificationNotificationController}.php`
-- `resources/views/auth/verify-email.blade.php`
-- `routes/web.php`: every app route group has the `verified` middleware
-
-### How it works
-
-```
-Registered event ──► verification email (signed URL, expires in 60 min)
-User clicks link ──► VerifyEmailController
-                     ├─ already verified → /dashboard?verified=1
-                     └─ markEmailAsVerified() + Verified event → /dashboard?verified=1
-Unverified user opens any app page ──► `verified` middleware ──► /verify-email
-```
-
-- `{hash}` is `sha1(email)`, and the URL is signed, so it can't be forged or reused for another account.
-- Resending is limited to 6 per minute.
-
-### Configuration
-
-| Env | Value |
+| Field | Rules |
 |---|---|
-| Local, no inbox | `MAIL_MAILER=log`: the link appears in `storage/logs/laravel.log` |
-| Local inbox | `MAIL_MAILER=smtp` + Mailpit/Mailtrap host, port and credentials |
-| Production | A real provider + `MAIL_FROM_ADDRESS`, `APP_NAME=iPOSa` |
+| `name` | required, max 255 |
+| `email` | required, lowercase, email, unique |
+| `password` | required, confirmed, `Password::defaults()` |
+| `business_name` | required, max 255 |
+| `business_type` | required, one of `UpdateBusinessProfileRequest::BUSINESS_TYPES` (6 types) |
 
-Verify a user by hand (local only):
+`RegisterBusinessUserService` runs in one transaction: create the user (role `admin`), create the business (plan `negosyo`, status `trial`, `start_date` now, `due_date` +14 days), then link `users.business_id`. If anything fails, nothing is saved.
+
+Then the verification email is sent through `SafeMail` (see [When email fails](#when-email-fails)), the owner is logged in, and lands on `/dashboard` → verify-email.
+
+**Files:** `Auth\RegisteredUserController`, `App\Services\RegisterBusinessUserService`, `resources/views/auth/register.blade.php`
+
+## Login
+
+`LoginRequest` rate-limits to **5 attempts per email + IP**, then locks out with a wait time. The session is regenerated on success. Users land on their own home screen ([RBAC](02-access-control.md#role-home-redirect)).
+
+The login page lists the demo accounts only when `APP_ENV=local`.
+
+## Email verification
+
+`User` implements `MustVerifyEmail`, and every app route group uses the `verified` middleware.
+
+```
+sign-up ──► verification email (signed link, expires in 60 min)
+click link ──► markEmailAsVerified() + Verified event ──► /dashboard?verified=1
+unverified user opens any app page ──► /verify-email
+```
+
+The link is signed and contains `sha1(email)`, so it can't be forged or reused for another account. Resending is throttled to 6 per minute.
+
+**Verify a user by hand (local):**
 
 ```bash
 php artisan tinker --execute 'App\Models\User::where("email", "admin@gmail.com")->first()->markEmailAsVerified();'
 ```
 
-### Backend to build
+## When email fails
 
-- [ ] Queue the verification email (`ShouldQueue` notification) so sign-up doesn't wait on SMTP.
-- [ ] Customize the email (iPOSa branding, Filipino-friendly copy) with `VerifyEmail::toMailUsing()` in `AppServiceProvider`.
-- [ ] Restyle `verify-email.blade.php` to match `login.blade.php`; it still uses Breeze's default gray and indigo.
-- [ ] Staff invited by an owner should arrive already verified, because the invite link proves the email (see [Team › Invites](09-team-settings.md#feature-staff-invites)).
+Some hosts block SMTP, so **no email must ever break the app**.
 
-### Tests
+- `App\Support\SafeMail::attempt()` wraps every send: the error is logged (`report()`) and the caller gets `false`.
+- `MAIL_TIMEOUT` (default 10 s) stops a blocked SMTP port from hanging a page for a minute.
 
-`tests/Feature/Auth/EmailVerificationTest.php`: ✅ passing.
+| Where | What happens when the send fails |
+|---|---|
+| Sign-up | Account and shop are saved anyway; owner goes to verify-email with "We couldn't send the email right now" |
+| Resend verification | Same message instead of a crash |
+| Password reset | "We couldn't send the reset email right now. Please contact an iPOSa agent at …" |
+| Staff invite | The cashier is still added; the owner is told to use **Set password** ([Team](09-team-settings.md#staff-invites)) |
 
----
+**The fallback:** the verify-email page offers **Ask an agent to verify me**, which stamps `users.verification_requested_at`, plus your contact details from `config/iposa.php` (`SUPPORT_EMAIL`, `SUPPORT_PHONE`, `SUPPORT_MESSENGER_URL`). The platform operator then verifies them with one button ([Platform › Verifications](10-platform.md#email-verifications)). After that, the owner taps **I've been verified, continue**.
 
-## Feature: Password reset
+**Files:** `App\Support\SafeMail`, `Auth\ManualVerificationRequestController`, `resources/views/auth/verify-email.blade.php`, `config/iposa.php`
 
-**Status:** ✅ Built · **Who:** guests
+## Password reset
 
-### Routes
+Standard Breeze flow; tokens live in `password_reset_tokens` and expire after 60 minutes. Staff invites reuse this broker: the invite email carries a reset token so the cashier sets their own password ([Team](09-team-settings.md#staff-invites)).
 
-| Method | URI | Name | Handler |
-|---|---|---|---|
-| GET | `/forgot-password` | `password.request` | `PasswordResetLinkController@create` |
-| POST | `/forgot-password` | `password.email` | `PasswordResetLinkController@store` |
-| GET | `/reset-password/{token}` | `password.reset` | `NewPasswordController@create` |
-| POST | `/reset-password` | `password.store` | `NewPasswordController@store` |
+## Password confirmation
 
-Tokens are stored in `password_reset_tokens` and expire after 60 minutes (`config/auth.php`).
+`GET/POST /confirm-password` re-asks for the password. Protect any route with the `password.confirm` middleware.
 
-### Backend to build
+Not used on a route today. Suspending a business asks for the operator's password inside the form instead, because `password.confirm` can't redirect back to a POST.
 
-- [ ] Restyle `forgot-password` and `reset-password` views to match login.
-- [ ] Reuse this flow for staff invites: the owner creates a cashier, and the cashier gets a "set your password" link.
+## Profile & account deletion
 
-### Tests
+`/profile` edits name and email (changing the email clears `email_verified_at`), changes the password, or deletes the account.
 
-`tests/Feature/Auth/PasswordResetTest.php`: ✅ passing.
+**Owners cannot delete their account while they own a shop**: they're told to export their data in Settings and contact support. Otherwise the whole shop's data would go with them.
 
----
+## Logout
 
-## Feature: Password confirmation
-
-**Status:** ✅ Built · **Who:** logged-in users
-
-`GET/POST /confirm-password` (`password.confirm`) asks for the password again before a sensitive action. Protect a route with the `password.confirm` middleware.
-
-### Backend to build
-
-- [ ] Put `password.confirm` on: deleting the account, changing the plan, super admin suspend/impersonate, and exporting everything.
-
-### Tests
-
-`tests/Feature/Auth/PasswordConfirmationTest.php`: ✅ passing.
+Invalidates the session and regenerates the CSRF token. The button warns about unsynced offline sales and clears the cached register page ([PWA](12-pwa-offline.md#logout-on-a-shared-device)).
 
 ---
 
-## Feature: Profile & account deletion
+## Tests
 
-**Status:** 🟡 Partial · **Who:** logged-in, verified users
+`tests/Feature/Auth/*` (Breeze), `ProfileTest`, `ManualVerificationTest`, `SubscriptionAccessTest`:
 
-### Routes
+- sign-up creates a linked 14-day trial shop
+- sign-up still works when the verification email fails, and offers the agent fallback
+- resend failure is reported, not fatal
+- an unverified user can ask an agent once
+- password-reset failure shows the contact message
+- owners can't delete an account that owns a shop
 
-| Method | URI | Name | Handler |
-|---|---|---|---|
-| GET | `/profile` | `profile.edit` | `ProfileController@edit` |
-| PATCH | `/profile` | `profile.update` | `ProfileController@update` (`ProfileUpdateRequest`) |
-| DELETE | `/profile` | `profile.destroy` | `ProfileController@destroy` |
-| PUT | `/password` | `password.update` | `PasswordController@update` |
+## What's left
 
-Changing the email clears `email_verified_at`, so the user must verify again.
-
-### Known issue
-
-`businesses.user_id` has no `cascadeOnDelete()`, so **deleting an owner who has a business fails** with a foreign-key error.
-
-### Backend to build
-
-- [ ] Decide what deleting an owner account means: block it and point to "close business", or soft-delete the business + staff and keep sales records for tax purposes.
-- [ ] Staff shouldn't be able to delete their own account; only the owner removes staff.
-
-### Tests
-
-`tests/Feature/ProfileTest.php` and `Auth/PasswordUpdateTest.php`: ✅ passing (they use factory users without a business).
-
----
-
-## Feature: Logout
-
-**Status:** ✅ Built · `POST /logout` (`logout`): invalidates the session and regenerates the CSRF token. The sidebar logout button shows a spinner while it submits.
+- Throttles cover login (5 attempts per email + IP), verification links and resends (6/min) and agent requests (3 per 10 min). **Sign-up and "forgot password" have none yet** — worth adding before launch.
+- Two-factor authentication for the platform operator.
+- Social or phone-number sign-in (owners ask for "login with Google" more than for email).

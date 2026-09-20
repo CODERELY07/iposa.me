@@ -1,119 +1,86 @@
-# Module 08 · Reports & analytics
+# Module 08 · Today & reports
 
-Turns sales, recipe costs, audits and expenses into the one number owners care about: **true profit**.
+The answer the owner actually wants: **did I make money today, and where did it go?**
+
+Every screen below reads the same class, `App\Reports\DailyLedger`, so Today, the P&L, best sellers and the CSV exports can never disagree.
 
 ```
-Net profit = Sales − Ingredients (COGS) − Bulk used − Expenses
+Net = Sales − Ingredients (COGS) − Bulk used − Expenses
 ```
 
 | Feature | Status |
 |---|---|
-| [Daily ledger (the core query)](#feature-daily-ledger) | 🎨 UI only |
-| [Today dashboard](#feature-today-dashboard) | 🎨 UI only |
-| [P&L summary](#feature-pl-summary) | 🎨 UI only |
-| [Best sellers](#feature-best-sellers) | 🎨 UI only |
-| [Period filter](#feature-period-filter) | 🎨 UI only (tabs switch, data doesn't) |
-| [Export](#feature-export) | 🎨 UI only (buttons) |
+| [Today (dashboard)](#today-dashboard) | ✅ Built |
+| [Daily ledger](#daily-ledger) | ✅ Built |
+| [Profit & ledger page](#profit--ledger-page) | ✅ Built |
+| [Best sellers](#best-sellers) | ✅ Built |
+| [CSV & zip exports](#csv--zip-exports) | ✅ Built |
 
-**Who:** `admin` only. Cashiers never see profit.
+## Routes
 
-### Routes (existing)
-
-| URI | Name | View | Demo variables |
+| Method | URI | Name | Middleware |
 |---|---|---|---|
-| `/admin` | `admin.dashboard` | `admin/dashboard` | `$today`, `$week`, `$bestSellers`, `$lowStock` |
-| `/admin/reports` | `admin.reports` | `admin/reports` | `$ledger` (collection of rows with `date` as Carbon) |
+| GET | `/admin` | `admin.dashboard` | `role:admin`, `business` |
+| GET | `/admin/reports` | `admin.reports` | + `plan:reports` |
+| GET | `/admin/exports/{dataset}` | `admin.exports.download` | `role:admin`, `business` (never plan- or billing-gated) |
 
 ---
 
-## Feature: Daily ledger
+## Today (dashboard)
 
-**Status:** 🎨 UI only · **Build this first; every other report reads from it.**
+- **Profit so far**, with the change against *yesterday at this same hour* — a fair comparison at 10am, not against a whole day.
+- The equation spelled out: sales − ingredients − bulk − expenses. Bulk shows "pending" until the [closing audit](06-closing-audit.md) is done.
+- Orders today, the last 7 days as a small bar chart, today's best sellers.
+- **Running low**, with "runs out in about N days" from the last 7 days of use.
+- **Void requests** waiting for approval ([Register › Voids](05-pos.md#voids)).
+- A **setup checklist** for a new shop: add your menu, add bulk & liquids, link ingredients, invite a cashier, ring up a sale, finish a closing audit. It disappears once everything is done.
 
-One row per day, the same columns as the client's spreadsheet:
+## Daily ledger
 
-| Column | Source |
+`DailyLedger::forRange()` returns one row per day — `orders, sales, cogs, bulk, audited, expenses, payables, net` — by running four grouped queries (sales, COGS, bulk usage, expenses) and merging them over a full list of dates, **so days with no activity appear as zeros** instead of vanishing.
+
+Details that matter:
+
+- Voided orders are excluded everywhere.
+- COGS uses `order_lines.unit_cost`, the cost copied at sale time.
+- Bulk uses `audit_lines.used × unit_cost`, the cost copied at count time.
+- `payables` is the equipment slice of expenses, shown separately so the owner can see why a profitable day still felt tight.
+- Grouping is `date(paid_at)`, which behaves the same on SQLite, MySQL and Postgres.
+
+`totals()` sums a set of rows; `salesAndCogsBetween()` powers the hour-for-hour comparison on Today.
+
+## Profit & ledger page
+
+Week, this month, or a custom range (capped at one year, no future dates — `before_or_equal:today`). Shows the totals band, the day-by-day table newest first, and best sellers for the range. Negosyo only (`plan:reports`).
+
+## Best sellers
+
+Grouped by the *sold* name and size from `order_lines`, ranked by quantity, with revenue and margin %. Because it reads the snapshot, renaming an item later doesn't rewrite last month's chart.
+
+## CSV & zip exports
+
+`GET /admin/exports/{dataset}` with optional `from`/`to` (default: this month, limited to the last 2 years).
+
+| Dataset | Contents |
 |---|---|
-| Orders | `COUNT(orders)` status `Paid` |
-| Sales | `SUM(orders.subtotal)` status `Paid` |
-| Ingredients (COGS) | `SUM(order_lines.qty × order_lines.unit_cost)` of paid orders |
-| Bulk | `SUM(audit_lines.used × audit_lines.unit_cost)` for that day's audit |
-| Expenses | `SUM(expenses.amount)` by `date` |
-| Net | Sales − COGS − Bulk − Expenses |
-| Margin | Net / Sales |
+| `ledger` | The daily table above |
+| `expenses` | Every expense with category, kind and who logged it |
+| `menu` | **The same columns the importer reads** (`name, category, size, cost, price`) — export, edit in Excel, re-import |
+| `stock` | Items, on-hand, alert level, unit cost, stock value |
+| `orders` | Order lines with prices and costs |
+| `audits` | Audit lines with expected, counted, used and cost |
+| `all` | One zip containing all six |
 
-### Backend to build
-
-- [ ] `App\Reports\DailyLedger` with `forRange(Business, CarbonImmutable $from, CarbonImmutable $to): Collection`. It returns rows keyed by date, **including days with zero sales**.
-- [ ] 4 grouped queries (orders, order lines, audit lines, expenses), merged in PHP. No per-day loops of queries.
-- [ ] Dates use the business timezone (`Asia/Manila`); set `app.timezone` or convert explicitly.
-- [ ] A controller passes `$ledger` in the shape the view uses (`date`, `orders`, `sales`, `cogs`, `bulk`, `expenses`, `net`).
-
-### Tests (must have)
-
-A fixture day with known orders, an audit and expenses → assert every column to the centavo, and that voided orders are excluded.
+Files are streamed (no memory spike), start with a UTF-8 BOM so Excel shows ₱ correctly, and are named after the shop and range. **Exports stay open when the trial has ended or the bill is unpaid** — "your data is yours" is a promise on the landing page, so it is enforced in the middleware, not just written there.
 
 ---
 
-## Feature: Today dashboard
+## Tests
 
-**Status:** 🎨 UI only
+`ReportsTest`: the ledger adds up to the centavo · days without activity are zeros · best sellers with margin · a custom range · a future range is rejected · Today shows the equation · the ledger CSV · the menu CSV matches the importer's columns · the zip of everything · Tindahan can't open the P&L.
 
-The owner's home: **true profit so far** (big number) with the equation strip (Sales / Ingredients / Bulk used / Expenses, each linking to its source), "vs yesterday at this hour", *Needs you tonight* (audit not done, low stock, void requests), the last 7 days' sales vs profit, best sellers, and a setup checklist.
+## What's left
 
-### Backend to build
-
-- [ ] `$today` from `DailyLedger` for today (+ order count, time now).
-- [ ] "Bulk used" shows **pending** until today's audit exists.
-- [ ] "vs yesterday at this hour" = yesterday's ledger limited to `paid_at <=` the same time.
-- [ ] `$week` = the last 7 ledger rows; today marked `isToday`.
-- [ ] `$lowStock` from `Item::lowStock()` ([Inventory](04-inventory.md#feature-low-stock-alerts)).
-- [ ] Setup checklist from real state: has menu items / has bulk items / has recipe links / has staff / has an audit. Hide it once complete.
-- [ ] Cache for ~60 s per business if needed; stale data is fine here.
-
----
-
-## Feature: P&L summary
-
-**Status:** 🎨 UI only (waterfall bars on Profit & ledger)
-
-Gross revenue → minus COGS → minus bulk → minus operating expenses → minus equipment payables → **net profit**, plus avg per day, best day and food cost %.
-
-### Backend to build
-
-- [ ] Totals from `DailyLedger` for the period.
-- [ ] Equipment payables: `Payables` expenses in the period (after [Expenses › Equipment](07-expenses.md#feature-equipment--payables) is built they're already inside Expenses, so **don't subtract them twice**; show them as a separate bar but exclude them from "Operating expenses").
-- [ ] Food cost % = (COGS + Bulk) / Sales.
-
----
-
-## Feature: Best sellers
-
-**Status:** 🎨 UI only
-
-### Backend to build
-
-- [ ] `order_lines` for the period grouped by `name + variant_label`: qty sold, revenue, margin % = (revenue − cost) / revenue. Top 5 by qty.
-
----
-
-## Feature: Period filter
-
-**Status:** 🎨 UI only (Week / Month / Custom tabs show "Updating numbers…" but the data doesn't change)
-
-### Backend to build
-
-- [ ] Query string `?period=week|month|custom&from=&to=`, validated; default = this month.
-- [ ] The tabs become links (or fetch), so the page loader shows while the report reloads.
-
----
-
-## Feature: Export
-
-**Status:** 🎨 UI only ("Export to Excel", "CSV")
-
-### Backend to build
-
-- [ ] A streamed CSV of the ledger for the selected period (same columns as the table).
-- [ ] "Download everything" (Settings) = one CSV per module zipped, or `.xlsx` with one sheet each (needs a package; **ask first**).
-- [ ] **Export always works, even for expired trials** ([Business › Trial](03-business-tenancy.md#feature-trial--plan-status)).
+- Hour-of-day and day-of-week patterns ("Fridays are your best day").
+- Comparing this month against last month on one screen.
+- Scheduled email of the weekly summary.
