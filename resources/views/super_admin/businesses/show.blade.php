@@ -154,6 +154,19 @@
                             </div>
                         </form>
                     @endif
+
+                    <form method="POST" action="{{ route('super_admin.businesses.destroy', $business) }}" class="border-t border-ink-100 pt-4 dark:border-white/[0.06]"
+                        data-confirm-title="Move {{ $business->business_name }} to the trash?"
+                        data-confirm="Everyone there is logged out and the shop leaves every list and metric. Its data stays, and you can restore it from the trash."
+                        data-confirm-prompt-label="Why (optional)"
+                        data-confirm-prompt-placeholder="e.g. closed down, duplicate sign-up"
+                        data-confirm-prompt-name="reason"
+                        data-confirm-action="Move to trash" data-confirm-danger>
+                        @csrf
+                        @method('DELETE')
+                        <input type="hidden" name="reason">
+                        <button type="submit" class="btn-quiet w-full text-loss-600 dark:text-loss-400" data-loading-text="Removing…">Remove this business…</button>
+                    </form>
                 </section>
 
                 @if ($business->subscriptionPayments->isNotEmpty())

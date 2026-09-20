@@ -18,7 +18,13 @@
 
 <x-app-layout title="Businesses">
     <div class="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-8">
-        <x-page-header eyebrow="Tenants" title="Businesses" description="One business, one branch, one subscription each." />
+        <x-page-header eyebrow="Tenants" title="Businesses" description="One business, one branch, one subscription each.">
+            @if ($trashedCount > 0)
+                <x-slot:actions>
+                    <a href="{{ route('super_admin.businesses.trash') }}" class="btn-ghost">Trash · <span class="num">{{ $trashedCount }}</span></a>
+                </x-slot:actions>
+            @endif
+        </x-page-header>
 
         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <nav class="inline-flex gap-1 overflow-x-auto rounded-xl bg-ink-100 p-1 dark:bg-white/[0.05]" aria-label="Filter by status">

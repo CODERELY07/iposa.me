@@ -61,6 +61,7 @@ This is the most important security rule in the app; `TenancyTest` guards it.
 |---|---|
 | User has no business | 403 with "Your account is not linked to a business" |
 | Business suspended | Logged out with a message on the login page |
+| Business moved to the trash by the operator | Logged out with "… has been removed from iPOSa" ([Platform › Trash](10-platform.md#trash)) |
 | Payment required (past due, or trial/active with `due_date` passed) | Owner → redirected to Settings → billing. Cashier → 402 page "The register is paused". **Settings, billing and exports stay open** |
 
 Exports are never blocked: "your data is yours" is a promise on the landing page.

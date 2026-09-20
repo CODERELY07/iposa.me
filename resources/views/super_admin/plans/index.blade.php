@@ -59,7 +59,9 @@
                             </form>
                         @else
                             <form method="POST" action="{{ route('super_admin.plans.archive', $plan) }}"
-                                onsubmit="return confirm(@js($shops > 0 ? $shops.' shop(s) are on '.$plan->name.'. They keep it, but nobody new can choose it. Archive?' : 'Archive '.$plan->name.'?'))">
+                                data-confirm-title="Archive {{ $plan->name }}?"
+                                data-confirm="{{ $shops > 0 ? $shops.' shop(s) on it keep working, but nobody new can choose it.' : 'It disappears from sign-up and from plan switching.' }}"
+                                data-confirm-action="Archive">
                                 @csrf @method('PATCH')
                                 <button type="submit" class="btn-quiet px-3 py-1.5 text-xs" data-loading-text="…">Archive</button>
                             </form>
@@ -67,7 +69,9 @@
 
                         @if ($shops === 0)
                             <form method="POST" action="{{ route('super_admin.plans.destroy', $plan) }}" class="ms-auto"
-                                onsubmit="return confirm(@js('Delete '.$plan->name.' for good?'))">
+                                data-confirm-title="Delete {{ $plan->name }} for good?"
+                                data-confirm="No shop is on it and no payment refers to it, so nothing else changes. This can't be undone."
+                                data-confirm-action="Delete" data-confirm-danger>
                                 @csrf @method('DELETE')
                                 <button type="submit" class="btn-quiet px-3 py-1.5 text-xs text-loss-600 dark:text-loss-400" data-loading-text="…">Delete</button>
                             </form>
@@ -121,11 +125,18 @@
                                     <td class="px-5 py-3">
                                         @if ($payment->status === SubscriptionPaymentStatus::Pending)
                                             <div class="flex justify-end gap-1">
-                                                <form method="POST" action="{{ route('super_admin.payments.confirm', $payment) }}" onsubmit="return confirm('Confirm you received ₱{{ number_format((float) $payment->amount, 2) }} with reference {{ e(addslashes($payment->reference)) }}?')">
+                                                <form method="POST" action="{{ route('super_admin.payments.confirm', $payment) }}" data-confirm-title="Confirm ₱{{ number_format((float) $payment->amount, 2) }} received?"
+                                                    data-confirm="Reference {{ $payment->reference }} · {{ strtoupper($payment->method) }}. {{ $payment->business?->business_name }} becomes active for another billing period."
+                                                    data-confirm-action="Confirm payment">
                                                     @csrf
                                                     <button type="submit" class="btn-primary px-3 py-1.5 text-xs" data-loading-text="Confirming…">Confirm</button>
                                                 </form>
-                                                <form method="POST" action="{{ route('super_admin.payments.reject', $payment) }}" onsubmit="const note = prompt('Why is it rejected? (the owner sees this)'); if (note === null) return false; this.note.value = note; return true;">
+                                                <form method="POST" action="{{ route('super_admin.payments.reject', $payment) }}" data-confirm-title="Reject this payment?"
+                                                    data-confirm="Reference {{ $payment->reference }} · ₱{{ number_format((float) $payment->amount, 2) }}. Your note is shown to the owner on their billing card."
+                                                    data-confirm-prompt-label="Why is it rejected?"
+                                                    data-confirm-prompt-placeholder="e.g. we could not find this reference"
+                                                    data-confirm-prompt-name="note"
+                                                    data-confirm-action="Reject payment" data-confirm-danger>
                                                     @csrf
                                                     <input type="hidden" name="note">
                                                     <button type="submit" class="btn-quiet px-3 py-1.5 text-xs text-loss-600 dark:text-loss-400" data-loading-text="…">Reject</button>

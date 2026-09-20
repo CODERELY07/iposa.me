@@ -105,7 +105,10 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
 // Platform console (SaaS operator)
 Route::middleware(['auth', 'verified', 'role:super_admin'])->prefix('super-admin')->name('super_admin.')->group(function () {
     Route::get('/', PlatformDashboardController::class)->name('dashboard');
-    Route::resource('businesses', BusinessController::class)->only(['index', 'show', 'edit', 'update']);
+    Route::get('/businesses/trash', [BusinessController::class, 'trash'])->name('businesses.trash');
+    Route::resource('businesses', BusinessController::class)->only(['index', 'show', 'edit', 'update', 'destroy']);
+    Route::patch('/businesses/{business}/restore', [BusinessController::class, 'restore'])->withTrashed()->name('businesses.restore');
+    Route::delete('/businesses/{business}/erase', [BusinessController::class, 'forceDestroy'])->withTrashed()->name('businesses.erase');
     Route::post('/businesses/{business}/extend-trial', [BusinessController::class, 'extendTrial'])->name('businesses.extend-trial');
     Route::post('/businesses/{business}/suspend', [BusinessController::class, 'suspend'])->name('businesses.suspend');
     Route::post('/businesses/{business}/unsuspend', [BusinessController::class, 'unsuspend'])->name('businesses.unsuspend');

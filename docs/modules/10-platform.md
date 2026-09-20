@@ -10,6 +10,7 @@ Your own screens as the operator of iPOSa: how the business is doing, which shop
 | [Businesses list](#businesses-list) | ✅ Built |
 | [One business](#one-business) | ✅ Built |
 | [Editing a business](#editing-a-business) | ✅ Built |
+| [Trash](#trash) | ✅ Built |
 | [Tenant actions](#tenant-actions) | ✅ Built |
 | [Plans](#plans) | ✅ Built (full CRUD) |
 | [Payments](#payments) | ✅ Built |
@@ -23,6 +24,10 @@ Your own screens as the operator of iPOSa: how the business is doing, which shop
 | GET | `/super-admin/businesses` | `super_admin.businesses.index` |
 | GET | `/super-admin/businesses/{business}` | `super_admin.businesses.show` |
 | GET/PUT | `/super-admin/businesses/{business}/edit` · `/{business}` | `super_admin.businesses.edit` · `.update` |
+| DELETE | `/super-admin/businesses/{business}` | `super_admin.businesses.destroy` (to the trash) |
+| GET | `/super-admin/businesses/trash` | `super_admin.businesses.trash` |
+| PATCH | `/super-admin/businesses/{business}/restore` | `super_admin.businesses.restore` |
+| DELETE | `/super-admin/businesses/{business}/erase` | `super_admin.businesses.erase` |
 | POST | `/super-admin/businesses/{business}/extend-trial` | `…extend-trial` |
 | POST | `/super-admin/businesses/{business}/suspend` · `/unsuspend` | `…suspend` · `…unsuspend` |
 | GET | `/super-admin/plans` | `super_admin.plans` |
@@ -79,6 +84,25 @@ Rules that keep the history honest:
 - **Changing the owner's email clears their verification** — the new address hasn't been proven. The operator can verify it in one click under [Verifications](#email-verifications). Renaming alone leaves verification intact.
 - The price field is the shop's own `plan_price`, so lowering it is how a discount is given; moving a shop to another plan takes its feature gates with it immediately.
 
+## Trash
+
+Removing a shop takes two deliberate steps, so a wrong click is never final.
+
+**Remove this business…** on the shop's page moves it to the trash, with an optional reason. It's a soft delete (`businesses.deleted_at`):
+
+- the shop disappears from the console list, the metrics, MRR and plan subscriber counts — every `Business` query excludes it by default;
+- everyone who worked there is logged out on their next click and told the shop was removed (`EnsureBusinessAccess` looks for a trashed shop before giving its "not linked to a business" answer);
+- **nothing is deleted**: orders, items, audits and accounts are all still there.
+
+**Trash** (linked from the businesses page whenever it isn't empty) lists what was removed, when, why, and how much is inside each shop.
+
+| Action | What happens |
+|---|---|
+| **Restore** | The shop comes back exactly as it was, and its people can sign in again |
+| **Erase for good** | The shop, its data and **its accounts** are deleted. The operator types the shop's name to confirm, and the server checks that name again — a request without it is refused |
+
+Erasing is refused for a shop that isn't in the trash. The shop row goes first and the accounts after it, because `businesses.user_id` points at the owner; everything else (items, orders, audits, expenses, payments, movements) goes through the database's own cascades. `App\Services\Platform\BusinessTrashService` holds all three steps.
+
 ## Tenant actions
 
 | Action | Rule |
@@ -132,6 +156,8 @@ The count of waiting requests also appears on the overview, so it isn't missed.
 ## Tests
 
 `PlanManagementTest`: create a plan owners can switch to · unlimited staff · the key is generated and unique · the key never changes · a price rise leaves paying shops alone until renewal · the renewal applies the new price · archiving hides a plan but keeps its shops working · the last plan can't be archived · delete only when unused · the public pricing section follows the plans · validation · owners kept out.
+
+`BusinessTrashTest`: move to trash with a reason · its people are locked out · restore · what erasing would take with it · erasing removes the shop, its data and its accounts · only when the name is typed exactly · never outside the trash · a trashed shop leaves lists, metrics and search · owners kept out.
 
 `BusinessEditTest`: the edit screen · saving shop details and the subscription by hand · moving a shop between plans moves its gates · fixing an email un-verifies it and can be re-verified · a rename keeps verification · a taken email and a backwards due date are refused · suspended can't be set here and a suspended shop can't be edited · owners kept out · an archived plan stays selectable for the shop on it.
 

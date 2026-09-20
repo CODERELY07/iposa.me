@@ -7,6 +7,7 @@ The shell, theme, feedback and components every other module is built from. Blad
 | [App shell & navigation](#app-shell--navigation) | ✅ Built |
 | [Dark / light theme](#dark--light-theme) | ✅ Built |
 | [Loading feedback](#loading-feedback) | ✅ Built (real requests) |
+| [Confirmation dialog](#confirmation-dialog) | ✅ Built |
 | [Components](#components) | ✅ Built |
 | [Money & number rules](#money--number-rules) | ✅ Built |
 | [Public landing page](#public-landing-page) | ✅ Built |
@@ -47,6 +48,23 @@ Every click answers back. Nothing in here is simulated any more; the timings are
 
 Opt out on any link or form with `data-no-loader`.
 
+## Confirmation dialog
+
+**Nothing uses `window.confirm`, `alert` or `prompt`.** They look like the browser, not like iPOSa, they can't be styled, and on a counter tablet they're easy to dismiss by accident. `<x-confirm-modal />` sits once in the app layout and every destructive action goes through it.
+
+A form asks by carrying attributes — no JavaScript per screen:
+
+| Attribute | Effect |
+|---|---|
+| `data-confirm` | The message. Its presence is what triggers the dialog |
+| `data-confirm-title` | The heading |
+| `data-confirm-action` | The confirm button's label (default "Confirm") |
+| `data-confirm-danger` | Makes that button red |
+| `data-confirm-prompt-label` · `-placeholder` · `-name` | Adds a textarea and writes the answer into that form field (the void note, the removal reason) |
+| `data-confirm-phrase` | The confirm button stays disabled until this exact text is typed — used for erasing a shop |
+
+A document-level submit listener in the **capture** phase intercepts the form, opens the dialog, and re-submits with `data-confirmed` set once the answer comes back — so the loading-state listener never spins a button for a submission the person can still cancel. Code can ask directly too: `$store.confirm.ask({…})` returns a promise (`false` when cancelled), which is how the register's "discard this offline sale" and the logout warning about unsynced sales work.
+
 ## Components
 
 | Component | Use |
@@ -56,6 +74,7 @@ Opt out on any link or form with `data-no-loader`.
 | `<x-spinner>` · `<x-page-loader>` | Spinner · navigation progress |
 | `<x-page-header title eyebrow description>` + an `actions` slot | The page title row |
 | `<x-flash>` | Session status and error messages |
+| `<x-confirm-modal>` | The one confirmation dialog, in the app layout |
 | `<x-theme-toggle>` | Sun/moon button |
 | `<x-logo-mark>` · `<x-brand-mark>` | The app mark · the "iposa.me" wordmark |
 | `<x-closing-receipt>` | The receipt illustration on the landing and auth pages |

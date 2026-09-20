@@ -50,7 +50,7 @@
                             </a>
                             @if ($order->status === OrderStatus::Paid)
                                 <form method="POST" action="{{ route('pos.orders.void', $order) }}"
-                                    onsubmit="return confirm('{{ $canVoid ? 'Void' : 'Ask the owner to void' }} order #{{ $order->number }}?')">
+                                    data-confirm-title="{{ $canVoid ? 'Void' : 'Ask the owner to void' }} order #{{ $order->number }}?" data-confirm="{{ $canVoid ? 'The sale leaves your reports and the stock goes back.' : 'The owner sees the request on their Today screen.' }}" data-confirm-action="{{ $canVoid ? 'Void order' : 'Send request' }}" data-confirm-danger>
                                     @csrf
                                     <button type="submit" class="btn-quiet px-2 text-xs text-loss-600 dark:text-loss-400" data-loading-text="…">
                                         {{ $canVoid ? 'Void' : 'Request void' }}

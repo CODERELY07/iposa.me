@@ -11,6 +11,7 @@ use App\Models\Business;
 use App\Models\Plan;
 use App\Models\User;
 use App\Services\Billing\SubscriptionService;
+use App\Services\Platform\BusinessTrashService;
 use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -50,6 +51,7 @@ class BusinessController extends Controller
         return view('super_admin.businesses.index', [
             'businesses' => $businesses,
             'statusCounts' => $statusCounts,
+            'trashedCount' => Business::onlyTrashed()->count(),
             'activeStatus' => $status,
             'search' => $search,
         ]);
@@ -141,6 +143,72 @@ class BusinessController extends Controller
         return redirect()
             ->route('super_admin.businesses.show', $business)
             ->with('status', trim('Saved. '.implode(' ', $notes)));
+    }
+
+    /**
+     * The trash: shops the operator removed. Nothing here can trade or sign in.
+     */
+    public function trash(BusinessTrashService $trash): View
+    {
+        $businesses = Business::onlyTrashed()
+            ->with('owner')
+            ->orderByDesc('deleted_at')
+            ->paginate(25);
+
+        return view('super_admin.businesses.trash', [
+            'businesses' => $businesses,
+            'contents' => $businesses->mapWithKeys(fn (Business $business) => [$business->id => $trash->contents($business)]),
+        ]);
+    }
+
+    /**
+     * Move a shop to the trash. Reversible: its data stays, but everyone there
+     * is locked out on their next click.
+     */
+    public function destroy(Request $request, Business $business, BusinessTrashService $trash): RedirectResponse
+    {
+        $validated = $request->validate(['reason' => ['nullable', 'string', 'max:255']]);
+
+        $trash->moveToTrash($business, $validated['reason'] ?? null);
+
+        return redirect()
+            ->route('super_admin.businesses.index')
+            ->with('status', "{$business->business_name} is in the trash. Restore it any time, or erase it from there.");
+    }
+
+    public function restore(Business $business, BusinessTrashService $trash): RedirectResponse
+    {
+        $trash->restore($business);
+
+        return redirect()
+            ->route('super_admin.businesses.show', $business)
+            ->with('status', "{$business->business_name} is back, as {$business->status->label()}.");
+    }
+
+    /**
+     * Erase a trashed shop for good. The operator types the shop's name to confirm,
+     * so this cannot happen from a stray click.
+     */
+    public function forceDestroy(Request $request, Business $business, BusinessTrashService $trash): RedirectResponse
+    {
+        $request->validate(
+            ['confirmation' => ['required', 'string']],
+            [],
+            ['confirmation' => 'confirmation']
+        );
+
+        if (trim((string) $request->input('confirmation')) !== $business->business_name) {
+            throw ValidationException::withMessages([
+                'confirmation' => "Type the shop's name exactly to erase it.",
+            ]);
+        }
+
+        $name = $business->business_name;
+        $erased = $trash->eraseForever($business);
+
+        return redirect()
+            ->route('super_admin.businesses.trash')
+            ->with('status', "{$name} is erased: {$erased['orders']} orders, {$erased['items']} items and {$erased['users']} accounts are gone.");
     }
 
     public function extendTrial(Request $request, Business $business, SubscriptionService $subscriptions): RedirectResponse

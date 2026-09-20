@@ -102,7 +102,7 @@
                                             <td class="px-3 py-3 text-xs text-ink-500">{{ $expense->kind->label() }}</td>
                                             <td class="num px-3 py-3 text-right font-medium">₱{{ number_format((float) $expense->amount, 2) }}</td>
                                             <td class="px-3 py-3 text-right">
-                                                <form method="POST" action="{{ route('admin.expenses.destroy', $expense) }}" onsubmit="return confirm('Delete this expense?')">
+                                                <form method="POST" action="{{ route('admin.expenses.destroy', $expense) }}" data-confirm-title="Delete this expense?" data-confirm="It disappears from this month's total and your P&amp;L." data-confirm-action="Delete" data-confirm-danger>
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="submit" class="btn-quiet size-8 !px-0 opacity-0 transition group-hover:opacity-100 focus:opacity-100" aria-label="Delete expense" data-loading-text="">
@@ -219,7 +219,7 @@
                                                         <button type="submit" class="btn-ghost px-3 py-1.5 text-xs" data-loading-text="Saving…">Mark ₱{{ number_format($asset->paymentAmount(), 2) }} paid</button>
                                                     </form>
                                                 @endif
-                                                <form method="POST" action="{{ route('admin.assets.destroy', $asset) }}" onsubmit="return confirm('Remove {{ e(addslashes($asset->name)) }}? Payments already logged stay in your expenses.')">
+                                                <form method="POST" action="{{ route('admin.assets.destroy', $asset) }}" data-confirm-title="Remove {{ $asset->name }}?" data-confirm="Payments already logged stay in your expenses." data-confirm-action="Remove" data-confirm-danger>
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="submit" class="btn-quiet size-8 !px-0" aria-label="Remove {{ $asset->name }}" data-loading-text=""><x-icon name="trash" class="size-4" /></button>

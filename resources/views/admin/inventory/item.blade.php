@@ -301,7 +301,7 @@
             <div class="mt-8 flex flex-wrap items-center justify-end gap-2 border-t border-ink-200 pt-6 dark:border-white/[0.06]">
                 @if ($canDelete)
                     <form method="POST" action="{{ route('admin.inventory.destroy', $item) }}" class="me-auto"
-                        onsubmit="return confirm('Delete {{ e(addslashes($item->name)) }} for good? It was never sold or counted, so nothing in your reports changes.')">
+                        data-confirm-title="Delete {{ $item->name }} for good?" data-confirm="It was never sold or counted, so nothing in your reports changes. This can't be undone." data-confirm-action="Delete for good" data-confirm-danger>
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="btn-quiet text-loss-600 dark:text-loss-400" data-loading-text="Deleting…"><x-icon name="trash" class="size-4" /> Delete for good</button>
@@ -317,7 +317,7 @@
                         <button type="submit" class="btn-ghost" data-loading-text="Restoring…">Restore item</button>
                     </form>
                 @else
-                    <form method="POST" action="{{ route('admin.inventory.archive', $item) }}" onsubmit="return confirm('Archive {{ e(addslashes($item->name)) }}? It disappears from the register and lists. Past sales keep it.')">
+                    <form method="POST" action="{{ route('admin.inventory.archive', $item) }}" data-confirm-title="Archive {{ $item->name }}?" data-confirm="It disappears from the register and your lists. Past sales keep it, and you can restore it any time." data-confirm-action="Archive">
                         @csrf
                         @method('PATCH')
                         <button type="submit" class="btn-quiet text-loss-600 dark:text-loss-400" data-loading-text="Archiving…"><x-icon name="trash" class="size-4" /> Archive item</button>

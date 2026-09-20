@@ -57,7 +57,7 @@
                                     </td>
                                     <td class="px-5 py-3 text-right">
                                         <form method="POST" action="{{ route('super_admin.users.verify', $person) }}"
-                                            onsubmit="return confirm('Verify {{ e(addslashes($person->email)) }}? Only do this if you are sure the email belongs to them.')">
+                                            data-confirm-title="Verify {{ $person->email }}?" data-confirm="Only do this when you are sure the email belongs to them. They can open the app right away." data-confirm-action="Verify">
                                             @csrf
                                             <button type="submit" class="btn-primary px-3 py-1.5 text-xs" data-loading-text="Verifying…"><x-icon name="check" class="size-3.5" /> Verify</button>
                                         </form>

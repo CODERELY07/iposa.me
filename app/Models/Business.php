@@ -11,16 +11,18 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Arr;
 
 #[Fillable([
     'business_type', 'business_name', 'user_id', 'status', 'start_date', 'due_date',
     'plan', 'plan_price', 'address', 'tin', 'receipt_footer', 'settings', 'suspended_at', 'suspension_reason',
+    'deletion_reason',
 ])]
 class Business extends Model
 {
     /** @use HasFactory<BusinessFactory> */
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     /**
      * Resolved per instance: the plan row behind `businesses.plan`.

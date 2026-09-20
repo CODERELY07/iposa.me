@@ -28,7 +28,7 @@
                                 @csrf
                                 <button type="submit" class="btn-quiet px-2 text-xs" data-loading-text="Sending…">Resend invite</button>
                             </form>
-                            <form method="POST" action="{{ route('admin.team.destroy', $member) }}" onsubmit="return confirm('Remove {{ e(addslashes($member->name)) }}? They are logged out right away. Their past orders keep their name.')">
+                            <form method="POST" action="{{ route('admin.team.destroy', $member) }}" data-confirm-title="Remove {{ $member->name }}?" data-confirm="They are logged out right away. Their past orders keep their name." data-confirm-action="Remove" data-confirm-danger>
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn-quiet px-2 text-xs text-loss-600 dark:text-loss-400" data-loading-text="Removing…">Remove</button>

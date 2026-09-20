@@ -48,6 +48,74 @@ Alpine.store('loader', {
     },
 });
 
+/**
+ * Confirmation dialog. Replaces window.confirm/prompt everywhere: a form with
+ * data-confirm="…" is intercepted below, and code can await $store.confirm.ask().
+ */
+Alpine.store('confirm', {
+    open: false,
+    title: 'Are you sure?',
+    message: '',
+    action: 'Confirm',
+    cancelAction: 'Cancel',
+    danger: false,
+    phrase: null,
+    typed: '',
+    promptLabel: null,
+    promptPlaceholder: '',
+    promptRequired: false,
+    note: '',
+    resolver: null,
+
+    /**
+     * Returns a promise: false when cancelled, otherwise { note }.
+     */
+    ask(options = {}) {
+        this.settle(false);
+
+        this.title = options.title || 'Are you sure?';
+        this.message = options.message || '';
+        this.action = options.action || 'Confirm';
+        this.cancelAction = options.cancelAction || 'Cancel';
+        this.danger = Boolean(options.danger);
+        this.phrase = options.phrase || null;
+        this.typed = '';
+        this.promptLabel = options.promptLabel || null;
+        this.promptPlaceholder = options.promptPlaceholder || '';
+        this.promptRequired = Boolean(options.promptRequired);
+        this.note = '';
+        this.open = true;
+
+        return new Promise((resolve) => (this.resolver = resolve));
+    },
+
+    get ready() {
+        if (this.phrase && this.typed.trim() !== this.phrase) {
+            return false;
+        }
+
+        return !(this.promptRequired && this.note.trim() === '');
+    },
+
+    accept() {
+        if (this.ready) {
+            this.settle({ note: this.note.trim() });
+        }
+    },
+
+    cancel() {
+        this.settle(false);
+    },
+
+    settle(result) {
+        this.open = false;
+
+        const resolve = this.resolver;
+        this.resolver = null;
+        resolve?.(result);
+    },
+});
+
 const spinnerMarkup = '<svg class="size-4 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>';
 
 const isPlainNavigation = (event, link) => {
@@ -74,6 +142,47 @@ document.addEventListener('click', (event) => {
         Alpine.store('loader').show();
     }
 });
+
+/**
+ * Any form carrying data-confirm asks in the modal first, then submits itself.
+ * Runs in the capture phase, so the loading-state listener below never sees a
+ * submission the person may still cancel.
+ */
+document.addEventListener('submit', (event) => {
+    const form = event.target;
+
+    if (!(form instanceof HTMLFormElement) || form.dataset.confirm === undefined || form.dataset.confirmed === 'yes') {
+        return;
+    }
+
+    event.preventDefault();
+
+    Alpine.store('confirm')
+        .ask({
+            title: form.dataset.confirmTitle,
+            message: form.dataset.confirm,
+            action: form.dataset.confirmAction,
+            danger: form.dataset.confirmDanger !== undefined,
+            phrase: form.dataset.confirmPhrase,
+            promptLabel: form.dataset.confirmPromptLabel,
+            promptPlaceholder: form.dataset.confirmPromptPlaceholder,
+            promptRequired: form.dataset.confirmPromptRequired !== undefined,
+        })
+        .then((result) => {
+            if (result === false) {
+                return;
+            }
+
+            const noteField = form.dataset.confirmPromptName ? form.elements[form.dataset.confirmPromptName] : null;
+
+            if (noteField) {
+                noteField.value = result.note;
+            }
+
+            form.dataset.confirmed = 'yes';
+            form.requestSubmit ? form.requestSubmit() : form.submit();
+        });
+}, true);
 
 // Real form posts (login, sign-up, profile, logout). Forms handled by Alpine with
 // @submit.prevent are already defaultPrevented here, so they are skipped.
@@ -485,15 +594,33 @@ document.addEventListener('submit', (event) => {
     }
 
     const waiting = Alpine.store('offlineQueue').total;
+    const clearCachedPages = () => navigator.serviceWorker?.controller?.postMessage('clear-user-pages');
 
-    if (waiting > 0 && !window.confirm(`${waiting} sale(s) saved offline haven't synced yet. They'll sync the next time you log in on this device. Log out anyway?`)) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
+    if (waiting === 0 || form.dataset.confirmed === 'yes') {
+        clearCachedPages();
 
         return;
     }
 
-    navigator.serviceWorker?.controller?.postMessage('clear-user-pages');
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    Alpine.store('confirm')
+        .ask({
+            title: 'Offline sales not synced yet',
+            message: `${waiting} sale(s) saved on this device haven't synced. They sync the next time you log in here. Log out anyway?`,
+            action: 'Log out',
+            danger: true,
+        })
+        .then((result) => {
+            if (result === false) {
+                return;
+            }
+
+            clearCachedPages();
+            form.dataset.confirmed = 'yes';
+            form.requestSubmit ? form.requestSubmit() : form.submit();
+        });
 }, true);
 
 /**

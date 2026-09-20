@@ -29,7 +29,7 @@ Net = Sales − Ingredients (COGS) − Bulk used − Expenses
 | 07 | [Expenses & equipment](modules/07-expenses.md) | ✅ month view, installments | `ExpenseTest` |
 | 08 | [Today & reports](modules/08-reports.md) | ✅ one ledger feeds every number | `ReportsTest` |
 | 09 | [Team, settings & billing](modules/09-team-settings.md) | ✅ manual billing (no gateway) | `TeamTest`, `SettingsAndBillingTest` |
-| 10 | [Platform console](modules/10-platform.md) | ✅ metrics, business editing, tenant actions, plan CRUD, verifications | `SuperAdminBusinessesTest`, `BusinessEditTest`, `PlanManagementTest`, `ManualVerificationTest` |
+| 10 | [Platform console](modules/10-platform.md) | ✅ metrics, business editing, trash, tenant actions, plan CRUD, verifications | `SuperAdminBusinessesTest`, `BusinessEditTest`, `BusinessTrashTest`, `PlanManagementTest` |
 | 11 | [UI foundation](modules/11-ui-foundation.md) | ✅ shell, theme, feedback, components | `UiScreensTest` |
 | 12 | [Installable app & offline selling](modules/12-pwa-offline.md) | ✅ register sells offline and syncs | `PwaTest` |
 | 13 | [Deployment & operations](modules/13-deployment.md) | ✅ Docker + Render + Postgres | — |
@@ -89,4 +89,4 @@ Demo logins after seeding (password `password`): `admin@gmail.com` (owner), `sta
 php artisan test --compact
 ```
 
-**170 of 170 pass** (626 assertions). Run one file or one test with a path or `--filter=`. PHP style: `vendor/bin/pint --dirty`.
+**179 of 179 pass** (674 assertions). Run one file or one test with a path or `--filter=`. PHP style: `vendor/bin/pint --dirty`.

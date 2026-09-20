@@ -148,7 +148,7 @@
                         <p class="mt-0.5 text-loss-600 dark:text-loss-400" x-text="entry.error"></p>
                         <div class="mt-1 flex gap-3">
                             <button type="button" @click="$store.offlineQueue.retry(entry)" class="font-semibold hover:underline">Retry</button>
-                            <button type="button" @click="if (confirm('Discard this offline sale? It will not be recorded.')) $store.offlineQueue.discard(entry.uuid)" class="font-semibold text-loss-600 hover:underline dark:text-loss-400">Discard</button>
+                            <button type="button" @click="$store.confirm.ask({ title: 'Discard this offline sale?', message: 'It was refused by the server and will never be recorded.', action: 'Discard', danger: true }).then((ok) => ok !== false && $store.offlineQueue.discard(entry.uuid))" class="font-semibold text-loss-600 hover:underline dark:text-loss-400">Discard</button>
                         </div>
                     </div>
                 </template>

@@ -136,6 +136,7 @@
 
             <main class="min-w-0 flex-1">
                 <x-flash />
+                <x-confirm-modal />
 
                 @isset($header)
                     <div class="border-b border-ink-200 px-4 py-6 sm:px-8 dark:border-white/[0.06]">
