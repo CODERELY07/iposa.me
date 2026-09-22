@@ -40,7 +40,7 @@ The cashier's screen: fast to tap, readable at arm's length, and impossible to d
 
 ## Menu grid
 
-Colored text tiles (no photos, for speed), grouped by category, searchable with the `/` key. Sizes are separate taps, never a pop-up. A "N left" pill appears when stock runs low, worked out from the linked pieces (`min(piece on hand ÷ recipe qty)`).
+Colored text tiles (no photos, for speed), grouped by category, searchable with the `/` key. **The search and category filters stay pinned at the top; only the tiles scroll** — on phones and tablets too, in and out of full screen. Sizes are separate taps, never a pop-up. A "N left" pill appears when stock runs low, worked out from the linked pieces (`min(piece on hand ÷ recipe qty)`).
 
 **The payload never contains cost prices**, so margins stay private even from cashiers.
 
@@ -106,7 +106,7 @@ Server side, a synced sale carries `offline_created_at` (accepted within the las
 
 ## Tests
 
-`PosCheckoutTest`: recipe deduction · size-specific recipes · items that count themselves · the same uuid never charges twice · prices come from the menu, not the browser · cash must cover the total · per-shop order numbering · cross-shop and archived items refused · disabled payment method refused · no costs in the payload · receipt output · the full screen toggle is on the register.
+`PosCheckoutTest`: recipe deduction · size-specific recipes · items that count themselves · the same uuid never charges twice · prices come from the menu, not the browser · cash must cover the total · per-shop order numbering · cross-shop and archived items refused · disabled payment method refused · no costs in the payload · receipt output · the full screen toggle is on the register · only the tiles scroll.
 
 `VoidOrderTest`: request, approve (stock back), reject, direct void with permission, voided orders leave sales, no double void, cross-shop 404.
 

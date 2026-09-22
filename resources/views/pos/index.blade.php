@@ -27,9 +27,12 @@
         @keydown.window.slash="if (! ['INPUT', 'TEXTAREA'].includes($event.target.tagName)) { $event.preventDefault(); $refs.search.focus() }"
         class="lg:flex lg:h-dvh">
 
-        {{-- Menu --}}
-        <section class="flex min-w-0 flex-1 flex-col lg:h-dvh">
-            <div class="space-y-3 border-b border-ink-200 px-4 py-4 sm:px-6 dark:border-white/[0.06]">
+        {{-- Menu: search and categories stay put, only the tiles scroll.
+             Below lg the height leaves room for the app's top bar (h-14), which
+             full screen hides, so the section then takes the whole screen. --}}
+        <section x-bind:data-fullscreen="$store.fullscreen.active ? 'true' : 'false'"
+            class="flex h-[calc(100dvh-3.5rem)] min-w-0 flex-1 flex-col data-[fullscreen=true]:h-dvh lg:h-dvh">
+            <div class="shrink-0 space-y-3 border-b border-ink-200 px-4 py-4 sm:px-6 dark:border-white/[0.06]">
                 <div class="flex items-center gap-3">
                     <div class="relative flex-1">
                         <x-icon name="search" class="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-400" />
@@ -62,7 +65,7 @@
                 </div>
             </div>
 
-            <div class="flex-1 overflow-y-auto p-4 pb-28 sm:p-6 lg:pb-6">
+            <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-28 sm:p-6 lg:pb-6">
                 @if (empty($menu))
                     <div class="mx-auto max-w-sm py-20 text-center">
                         <p class="font-semibold">No menu items yet</p>

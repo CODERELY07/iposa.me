@@ -149,3 +149,11 @@ it('hides the top bar while in full screen', function () {
         ->assertOk()
         ->assertSee('x-show="! $store.fullscreen.active"', false);
 });
+
+it('keeps the search and filters fixed and scrolls only the tiles', function () {
+    $this->actingAs($this->cashier)->get(route('pos'))
+        ->assertOk()
+        ->assertSee('h-[calc(100dvh-3.5rem)]', false)
+        ->assertSee('data-[fullscreen=true]:h-dvh', false)
+        ->assertSee('min-h-0 flex-1 overflow-y-auto overscroll-contain', false);
+});
