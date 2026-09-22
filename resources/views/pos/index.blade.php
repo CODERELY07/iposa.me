@@ -36,6 +36,17 @@
                         <input x-ref="search" x-model="search" type="search" placeholder="Search menu" class="field py-3 pl-10 pr-10" aria-label="Search menu">
                         <span class="kbd absolute right-3 top-1/2 hidden -translate-y-1/2 sm:inline-flex">/</span>
                     </div>
+                    <button type="button" x-data x-show="$store.fullscreen.supported" x-cloak
+                        @click="$store.fullscreen.toggle()"
+                        :aria-label="$store.fullscreen.active ? 'Exit full screen' : 'Full screen'"
+                        :title="$store.fullscreen.active ? 'Exit full screen' : 'Full screen'"
+                        :aria-pressed="$store.fullscreen.active ? 'true' : 'false'"
+                        class="btn-ghost h-12 shrink-0 gap-2 px-3 sm:px-4">
+                        <x-icon name="expand" class="size-5" x-show="! $store.fullscreen.active" />
+                        <x-icon name="collapse" class="size-5" x-show="$store.fullscreen.active" x-cloak />
+                        <span class="hidden text-sm font-medium sm:inline" x-text="$store.fullscreen.active ? 'Exit full screen' : 'Full screen'">Full screen</span>
+                    </button>
+
                     <div class="hidden text-right xl:block">
                         <p class="text-xs text-ink-500">{{ $cashierName }}</p>
                         <p class="num text-sm font-medium">Order <span x-text="'#' + orderNumber"></span></p>

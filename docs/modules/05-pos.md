@@ -13,6 +13,7 @@ The cashier's screen: fast to tap, readable at arm's length, and impossible to d
 | [Receipts](#receipts) | ✅ Built |
 | [My orders](#my-orders) | ✅ Built |
 | [Voids](#voids) | ✅ Built |
+| [Full screen](#full-screen) | ✅ Built |
 | [Offline selling](#offline-selling) | ✅ Built |
 
 ## Routes
@@ -89,6 +90,12 @@ Today's orders for the logged-in cashier, with drawer totals per payment method 
 
 Voiding reverses exactly the movements the sale made (`Void` reason) and excludes the order from every report. The owner can also reject a request, returning the order to Paid.
 
+## Full screen
+
+A **Full screen** button next to the search hides the browser's own bars, so a counter tablet shows nothing but the register; the same button reads **Exit full screen** while it's on. It follows the browser too — leaving with Esc or a swipe puts the button back.
+
+It uses the Fullscreen API (`Alpine.store('fullscreen')`, with the webkit-prefixed call for iPad Safari). **iPhone Safari has no element full screen, so the button hides itself there** — installing the app to the home screen gives the same chrome-less register ([12](12-pwa-offline.md#install--icons)). Receipts open in their own small window, so printing one doesn't drop out of full screen.
+
 ## Offline selling
 
 The register works without internet: the page is cached, sales queue on the device and sync by themselves. Full details in [PWA & offline](12-pwa-offline.md).
@@ -99,7 +106,7 @@ Server side, a synced sale carries `offline_created_at` (accepted within the las
 
 ## Tests
 
-`PosCheckoutTest`: recipe deduction · size-specific recipes · items that count themselves · the same uuid never charges twice · prices come from the menu, not the browser · cash must cover the total · per-shop order numbering · cross-shop and archived items refused · disabled payment method refused · no costs in the payload · receipt output.
+`PosCheckoutTest`: recipe deduction · size-specific recipes · items that count themselves · the same uuid never charges twice · prices come from the menu, not the browser · cash must cover the total · per-shop order numbering · cross-shop and archived items refused · disabled payment method refused · no costs in the payload · receipt output · the full screen toggle is on the register.
 
 `VoidOrderTest`: request, approve (stock back), reject, direct void with permission, voided orders leave sales, no double void, cross-shop 404.
 

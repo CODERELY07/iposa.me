@@ -116,6 +116,58 @@ Alpine.store('confirm', {
     },
 });
 
+/**
+ * Full screen for the register: hides the browser's own bars on a counter
+ * tablet. Uses the Fullscreen API, with the webkit-prefixed one for iPad Safari.
+ * iPhone Safari has no element fullscreen, so the button hides itself there.
+ */
+Alpine.store('fullscreen', {
+    supported: Boolean(document.fullscreenEnabled || document.webkitFullscreenEnabled),
+    active: false,
+
+    sync() {
+        this.active = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+    },
+
+    async enter() {
+        const root = document.documentElement;
+
+        try {
+            if (root.requestFullscreen) {
+                await root.requestFullscreen({ navigationUI: 'hide' });
+            } else if (root.webkitRequestFullscreen) {
+                root.webkitRequestFullscreen();
+            }
+        } catch (e) {
+            // Refused by the browser (e.g. not triggered by a tap): stay as we are.
+        }
+
+        this.sync();
+    },
+
+    async exit() {
+        try {
+            if (document.exitFullscreen && document.fullscreenElement) {
+                await document.exitFullscreen();
+            } else if (document.webkitExitFullscreen && document.webkitFullscreenElement) {
+                document.webkitExitFullscreen();
+            }
+        } catch (e) {
+            // Already out of full screen.
+        }
+
+        this.sync();
+    },
+
+    toggle() {
+        return this.active ? this.exit() : this.enter();
+    },
+});
+
+['fullscreenchange', 'webkitfullscreenchange'].forEach((name) =>
+    document.addEventListener(name, () => Alpine.store('fullscreen').sync()),
+);
+
 const spinnerMarkup = '<svg class="size-4 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>';
 
 const isPlainNavigation = (event, link) => {

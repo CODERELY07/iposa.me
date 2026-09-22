@@ -136,3 +136,10 @@ it('prints a receipt for the order', function () {
         ->assertSee('₱109.00', false)
         ->assertSee('₱91.00', false);
 });
+
+it('offers a full screen toggle on the register', function () {
+    $this->actingAs($this->cashier)->get(route('pos'))
+        ->assertOk()
+        ->assertSee('$store.fullscreen.toggle()', false)
+        ->assertSee('Exit full screen', false);
+});

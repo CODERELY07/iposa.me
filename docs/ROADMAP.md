@@ -1,6 +1,6 @@
 # iPOSa roadmap
 
-**Where things stand:** the product is built and deployed. Sign-up → menu → sell → closing audit → true daily profit works end to end, on real data, offline-capable, with 179 passing tests. What follows is what's *not* built, in the order that gets to the first paying shop fastest.
+**Where things stand:** the product is built and deployed. Sign-up → menu → sell → closing audit → true daily profit works end to end, on real data, offline-capable, with 180 passing tests. What follows is what's *not* built, in the order that gets to the first paying shop fastest.
 
 Sizing assumes one developer: **S** = under a day, **M** = 1–3 days, **L** = 3–5 days.
 

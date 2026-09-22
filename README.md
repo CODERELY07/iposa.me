@@ -7,7 +7,7 @@ Cafés, burger stands, milk tea shops and carinderias ring up orders, count bulk
 Net = Sales − Ingredients (COGS) − Bulk used − Expenses
 ```
 
-> **Status:** the app is built and deployed — sign-up through closing audit runs on real data, works offline, and is covered by 179 tests. What's not built is listed in [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status:** the app is built and deployed — sign-up through closing audit runs on real data, works offline, and is covered by 180 tests. What's not built is listed in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ---
 
@@ -71,7 +71,7 @@ Seeded verified, password `password` (local development only — the login page 
 php artisan test --compact
 ```
 
-179 tests, 674 assertions. Format PHP before committing:
+180 tests, 677 assertions. Format PHP before committing:
 
 ```bash
 vendor/bin/pint --dirty
