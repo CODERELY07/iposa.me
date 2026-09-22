@@ -48,7 +48,8 @@
         <x-page-loader />
         <div x-data="{ drawerOpen: false }" class="min-h-dvh lg:flex">
             {{-- Mobile top bar --}}
-            <header class="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-ink-200 bg-ink-50/90 px-4 backdrop-blur lg:hidden dark:border-white/[0.06] dark:bg-ink-950/90">
+            {{-- Hidden in full screen (the register's toggle): only the screen itself should show. --}}
+            <header x-show="! $store.fullscreen.active" class="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-ink-200 bg-ink-50/90 px-4 backdrop-blur lg:hidden dark:border-white/[0.06] dark:bg-ink-950/90">
                 <button type="button" class="btn-quiet size-9 !px-0" @click="drawerOpen = true" aria-label="Open navigation">
                     <x-icon name="menu" />
                 </button>

@@ -143,3 +143,9 @@ it('offers a full screen toggle on the register', function () {
         ->assertSee('$store.fullscreen.toggle()', false)
         ->assertSee('Exit full screen', false);
 });
+
+it('hides the top bar while in full screen', function () {
+    $this->actingAs($this->cashier)->get(route('pos'))
+        ->assertOk()
+        ->assertSee('x-show="! $store.fullscreen.active"', false);
+});

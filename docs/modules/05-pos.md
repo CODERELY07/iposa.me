@@ -92,7 +92,7 @@ Voiding reverses exactly the movements the sale made (`Void` reason) and exclude
 
 ## Full screen
 
-A **Full screen** button next to the search hides the browser's own bars, so a counter tablet shows nothing but the register; the same button reads **Exit full screen** while it's on. It follows the browser too — leaving with Esc or a swipe puts the button back.
+A **Full screen** button next to the search hides the browser's own bars, so a counter tablet shows nothing but the register; the same button reads **Exit full screen** while it's on. The app's top bar (menu, logo, theme) is hidden too, so the register starts at the very top of the screen. It follows the browser too — leaving with Esc or a swipe puts the button back.
 
 It uses the Fullscreen API (`Alpine.store('fullscreen')`, with the webkit-prefixed call for iPad Safari). **iPhone Safari has no element full screen, so the button hides itself there** — installing the app to the home screen gives the same chrome-less register ([12](12-pwa-offline.md#install--icons)). Receipts open in their own small window, so printing one doesn't drop out of full screen.
 
