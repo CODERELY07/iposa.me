@@ -23,7 +23,7 @@ Net = Sales − Ingredients (COGS) − Bulk used − Expenses
 | 01 | [Authentication](modules/01-authentication.md) | ✅ sign-up creates a shop, verification, resets, email-failure fallback | `Auth/*`, `ProfileTest`, `ManualVerificationTest` |
 | 02 | [Access control (RBAC)](modules/02-access-control.md) | ✅ roles, middleware, cashier permission gates | `UiScreensTest`, `ClosingAuditTest`, `VoidOrderTest` |
 | 03 | [Business & tenancy](modules/03-business-tenancy.md) | ✅ scoping, trial, plans, suspension | `TenancyTest`, `SubscriptionAccessTest` |
-| 04 | [Inventory](modules/04-inventory.md) | ✅ menu/pieces/bulk, recipes, CSV import, archive & delete | `InventoryTest` |
+| 04 | [Inventory](modules/04-inventory.md) | ✅ menu/pieces/bulk, containers & exact costs, restock, recipes with liquids, CSV import, archive & delete | `InventoryTest`, `ContainerStockTest` |
 | 05 | [Register (POS)](modules/05-pos.md) | ✅ idempotent checkout, receipts, voids | `PosCheckoutTest`, `VoidOrderTest` |
 | 06 | [Closing audit](modules/06-closing-audit.md) | 🟡 built; the reminder isn't sent yet | `ClosingAuditTest` |
 | 07 | [Expenses & equipment](modules/07-expenses.md) | ✅ month view, installments | `ExpenseTest` |
@@ -89,4 +89,4 @@ Demo logins after seeding (password `password`): `admin@gmail.com` (owner), `sta
 php artisan test --compact
 ```
 
-**182 of 182 pass** (683 assertions). Run one file or one test with a path or `--filter=`. PHP style: `vendor/bin/pint --dirty`.
+**196 of 196 pass** (760 assertions). Run one file or one test with a path or `--filter=`. PHP style: `vendor/bin/pint --dirty`.

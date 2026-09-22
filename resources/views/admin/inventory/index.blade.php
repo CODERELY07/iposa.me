@@ -177,7 +177,7 @@
                                     </td>
                                     <td class="num px-3 py-3 text-right text-ink-500">{{ isset($usedToday[$piece->id]) ? '−'.$formatQty($usedToday[$piece->id]) : '—' }}</td>
                                     <td class="num px-3 py-3 text-right text-ink-500">{{ $formatQty($threshold) }}</td>
-                                    <td class="num px-3 py-3 text-right text-ink-500">₱{{ number_format((float) $piece->unit_cost, 2) }}</td>
+                                    <td class="num px-3 py-3 text-right text-ink-500">₱{{ \App\Models\Item::formatUnitCost($piece->unit_cost) }}</td>
                                     <td class="num px-5 py-3 text-right">₱{{ number_format(max(0, (float) $piece->on_hand) * (float) $piece->unit_cost, 2) }}</td>
                                 </tr>
                             @endforeach
@@ -231,10 +231,19 @@
                                     <tr class="hover:bg-ink-50 dark:hover:bg-white/[0.02]">
                                         <td class="px-5 py-3">
                                             <a href="{{ route('admin.inventory.edit', $bulk) }}" class="font-medium hover:underline">{{ $bulk->name }}</a>
-                                            <p class="text-xs text-ink-500">per {{ $bulk->unit ?? 'unit' }}</p>
+                                            @if ($bulk->hasContainers())
+                                                <p class="text-xs text-ink-500">{{ $bulk->containers->map(fn ($container) => '1 '.$container->label.' = '.\App\Models\Item::trimNumber((float) $container->size).' '.$bulk->unit)->join(' · ') }}</p>
+                                            @else
+                                                <p class="text-xs text-ink-500">per {{ $bulk->unit ?? 'unit' }}</p>
+                                            @endif
                                         </td>
-                                        <td class="num px-3 py-3 text-right font-semibold">{{ $formatQty($bulk->on_hand) }}</td>
-                                        <td class="num px-3 py-3 text-right text-ink-500">{{ $formatQty($dailyUse) }}</td>
+                                        @if ($bulk->hasContainers())
+                                            <td class="num px-3 py-3 text-right font-semibold">{{ $bulk->describeQuantity($bulk->on_hand) }}</td>
+                                            <td class="num px-3 py-3 text-right text-ink-500">{{ $dailyUse ? \App\Models\Item::trimNumber($dailyUse).' '.$bulk->unit : '—' }}</td>
+                                        @else
+                                            <td class="num px-3 py-3 text-right font-semibold">{{ $formatQty($bulk->on_hand) }}</td>
+                                            <td class="num px-3 py-3 text-right text-ink-500">{{ $formatQty($dailyUse) }}</td>
+                                        @endif
                                         <td class="px-3 py-3 text-right">
                                             @if ($daysLeft !== null)
                                                 <span @class(['num font-medium', 'text-loss-600 dark:text-loss-400' => $daysLeft < 4])>{{ number_format($daysLeft, 1) }}</span>
@@ -242,7 +251,14 @@
                                                 <span class="text-ink-400">—</span>
                                             @endif
                                         </td>
-                                        <td class="num px-3 py-3 text-right text-ink-500">₱{{ number_format((float) $bulk->unit_cost, 2) }}</td>
+                                        <td class="num px-3 py-3 text-right text-ink-500">
+                                            @if ($bulk->hasContainers() && $bulk->containers->first()->price !== null)
+                                                ₱{{ number_format((float) $bulk->containers->first()->price, 2) }} / {{ $bulk->containers->first()->label }}
+                                                <span class="block text-xs">₱{{ \App\Models\Item::formatUnitCost($bulk->unit_cost) }} / {{ $bulk->unit }}</span>
+                                            @else
+                                                ₱{{ \App\Models\Item::formatUnitCost($bulk->unit_cost) }}
+                                            @endif
+                                        </td>
                                         <td class="num px-5 py-3 text-right">{{ $dailyUse ? '₱'.number_format($dailyUse * (float) $bulk->unit_cost, 2) : '—' }}</td>
                                     </tr>
                                 @endforeach

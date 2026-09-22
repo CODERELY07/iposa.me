@@ -14,6 +14,7 @@ use App\Models\RecipeLine;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Reports\DailyLedger;
+use App\Reports\RecipeVariance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
@@ -23,7 +24,7 @@ class DashboardController extends Controller
     /**
      * Today: true profit so far, what needs attention tonight, the last 7 days.
      */
-    public function __invoke(Request $request, DailyLedger $ledger): View
+    public function __invoke(Request $request, DailyLedger $ledger, RecipeVariance $variance): View
     {
         $business = $request->user()->business;
 
@@ -47,6 +48,7 @@ class DashboardController extends Controller
             'voidRequests' => Order::query()->where('status', OrderStatus::VoidRequested)->with('lines')->latest('paid_at')->get(),
             'auditDone' => $today['audited'],
             'setupSteps' => $this->setupSteps(),
+            'recipeVariance' => $variance->latest($business),
         ]);
     }
 

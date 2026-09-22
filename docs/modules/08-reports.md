@@ -33,6 +33,7 @@ Net = Sales − Ingredients (COGS) − Bulk used − Expenses
 - Orders today, the last 7 days as a small bar chart, today's best sellers.
 - **Running low**, with "runs out in about N days" from the last 7 days of use.
 - **Void requests** waiting for approval ([Register › Voids](05-pos.md#voids)).
+- **Liquids · recipes vs the count** — for liquids that are in recipes, what the recipes used against what the last closing count found ([06 › Liquids in recipes](06-closing-audit.md#liquids-in-recipes)).
 - A **setup checklist** for a new shop: add your menu, add bulk & liquids, link ingredients, invite a cashier, ring up a sale, finish a closing audit. It disappears once everything is done.
 
 ## Daily ledger

@@ -19,6 +19,21 @@ class Item extends Model
     use BelongsToBusiness, HasFactory;
 
     /**
+     * Units small enough that nobody counts them one by one: the audit steps in
+     * fifties, and containers (a bottle, a tin) are how staff actually count.
+     *
+     * @var list<string>
+     */
+    public const SMALL_UNITS = ['ml', 'g'];
+
+    /**
+     * Units an owner can pick when an item is bought in containers.
+     *
+     * @var array<string, string>
+     */
+    public const MEASURES = ['ml' => 'ml', 'l' => 'L', 'g' => 'g', 'kg' => 'kg'];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -29,7 +44,7 @@ class Item extends Model
             'kind' => ItemKind::class,
             'on_hand' => 'decimal:3',
             'low_threshold' => 'decimal:3',
-            'unit_cost' => 'decimal:2',
+            'unit_cost' => 'decimal:6',
             'archived_at' => 'datetime',
         ];
     }
@@ -60,6 +75,17 @@ class Item extends Model
     public function recipeLines(): HasMany
     {
         return $this->hasMany(RecipeLine::class);
+    }
+
+    /**
+     * How this item is bought and counted (bottle, jug, tin), smallest first by sort.
+     * Empty for items counted in their own unit, which behave as they always did.
+     *
+     * @return HasMany<ItemContainer, $this>
+     */
+    public function containers(): HasMany
+    {
+        return $this->hasMany(ItemContainer::class)->orderBy('sort')->orderBy('id');
     }
 
     /**
@@ -94,6 +120,64 @@ class Item extends Model
     public function tracksStock(): bool
     {
         return $this->on_hand !== null;
+    }
+
+    public function hasContainers(): bool
+    {
+        return $this->containers->isNotEmpty();
+    }
+
+    public function isSmallUnit(): bool
+    {
+        return in_array(strtolower(trim((string) $this->unit)), self::SMALL_UNITS, true);
+    }
+
+    /**
+     * How much one tap of − / + changes a count in the item's own unit.
+     */
+    public function countStep(): float
+    {
+        return $this->isSmallUnit() ? 50.0 : 0.25;
+    }
+
+    /**
+     * A quantity the way an owner reads it: "2.5 bottles · 2,500 ml", or "4.5 1L bottle"
+     * for an item without containers.
+     */
+    public function describeQuantity(float|string|null $quantity): string
+    {
+        $quantity = (float) ($quantity ?? 0);
+        $unit = $this->unit ?: ($this->kind === ItemKind::Piece ? 'pcs' : '');
+        $inUnit = trim(self::trimNumber($quantity).' '.$unit);
+        $container = $this->containers->first();
+
+        if ($container === null || (float) $container->size <= 0) {
+            return $inUnit;
+        }
+
+        $containers = $quantity / (float) $container->size;
+
+        return self::trimNumber($containers).' '.str($container->label)->plural($containers).' · '.$inUnit;
+    }
+
+    /**
+     * A cost per unit with at least 2 and at most 6 decimals: 145 → "145.00",
+     * 0.145 → "0.145", 0.011889 → "0.011889".
+     */
+    public static function formatUnitCost(float|string|null $cost): string
+    {
+        $formatted = rtrim(number_format((float) ($cost ?? 0), 6), '0');
+        [$whole, $decimals] = explode('.', $formatted) + [1 => ''];
+
+        return $whole.'.'.str_pad($decimals, 2, '0');
+    }
+
+    /**
+     * 2 → "2", 2.5 → "2.5", 2838.75 → "2,838.75".
+     */
+    public static function trimNumber(float $value, int $decimals = 2): string
+    {
+        return rtrim(rtrim(number_format($value, $decimals), '0'), '.');
     }
 
     /**

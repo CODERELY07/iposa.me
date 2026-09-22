@@ -171,6 +171,48 @@
                     </ol>
                 @endif
             </section>
+
+            {{-- Liquids in recipes: what the recipes say against what the count says --}}
+            @if ($recipeVariance)
+                <section class="surface p-6 lg:col-span-3">
+                    <div class="flex flex-wrap items-baseline justify-between gap-2">
+                        <p class="eyebrow">Liquids · recipes vs the count</p>
+                        <span class="text-[11px] text-ink-400">closing audit {{ $recipeVariance['date']->isToday() ? 'tonight' : $recipeVariance['date']->format('D j M') }}</span>
+                    </div>
+                    <div class="mt-4 overflow-x-auto">
+                        <table class="w-full min-w-[560px] text-sm">
+                            <thead class="table-head">
+                                <tr class="border-b border-ink-200 dark:border-white/[0.07]">
+                                    <th class="py-2 pr-3 font-semibold">Item</th>
+                                    <th class="px-3 py-2 text-right font-semibold">Recipes used</th>
+                                    <th class="px-3 py-2 text-right font-semibold">Extra the count found</th>
+                                    <th class="px-3 py-2 text-right font-semibold">Total used</th>
+                                    <th class="py-2 pl-3 font-semibold">What it means</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-ink-100 dark:divide-white/[0.05]">
+                                @foreach ($recipeVariance['rows'] as $row)
+                                    <tr>
+                                        <td class="py-2.5 pr-3 font-medium">{{ $row['name'] }}</td>
+                                        <td class="num px-3 py-2.5 text-right">{{ \App\Models\Item::trimNumber($row['recipe']) }} {{ $row['unit'] }}</td>
+                                        <td class="num px-3 py-2.5 text-right">
+                                            @if ($row['over_deducted'] > 0)
+                                                <span class="text-gain-600 dark:text-gain-400">−{{ \App\Models\Item::trimNumber($row['over_deducted']) }} {{ $row['unit'] }}</span>
+                                            @else
+                                                {{ \App\Models\Item::trimNumber($row['extra']) }} {{ $row['unit'] }}
+                                                @if ($row['extra_cost'] > 0)<span class="block text-xs text-ink-500">₱{{ number_format($row['extra_cost'], 2) }}</span>@endif
+                                            @endif
+                                        </td>
+                                        <td class="num px-3 py-2.5 text-right font-semibold">{{ \App\Models\Item::trimNumber($row['total']) }} {{ $row['unit'] }}</td>
+                                        <td class="py-2.5 pl-3 text-xs text-ink-500">{{ $row['verdict'] }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="mt-3 text-[11px] text-ink-400">Recipes are charged in Ingredients through each item's cost; the audit only charges the extra, in Bulk &amp; liquids. Nothing is counted twice.</p>
+                </section>
+            @endif
         </div>
 
         {{-- Setup checklist: disappears once everything is done --}}

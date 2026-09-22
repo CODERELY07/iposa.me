@@ -45,7 +45,7 @@
                     <div>
                         <p class="eyebrow">Closing audit · {{ now()->format('D j M') }}</p>
                         <h1 class="mt-1 text-2xl font-semibold tracking-tight">{{ $alreadyClosed ? 'Correct tonight’s counts' : 'What’s left on the shelf?' }}</h1>
-                        <p class="mt-1 text-sm text-ink-500 dark:text-ink-400">Look at each container and type what you see. Half a bottle is 0.5.</p>
+                        <p class="mt-1 text-sm text-ink-500 dark:text-ink-400">Tap the full containers and how full the open one is. Or type what you see: half a bottle is 0.5.</p>
                     </div>
 
                     {{-- Progress --}}
@@ -64,34 +64,89 @@
                                     <div class="min-w-0">
                                         <p class="font-semibold" x-text="item.name"></p>
                                         <p class="text-xs text-ink-500">
-                                            per <span x-text="item.unit"></span> · system says <span class="num font-medium text-ink-700 dark:text-ink-300" x-text="item.expected"></span>
+                                            <template x-if="! item.rows.length"><span>per <span x-text="item.unit"></span> · </span></template>
+                                            system says <span class="num font-medium text-ink-700 dark:text-ink-300" x-text="item.rows.length ? amount(item, item.expected) : item.expected"></span>
                                         </p>
                                     </div>
                                     <template x-if="item.touched && item.counted < item.expected">
                                         <span class="pill shrink-0 bg-ink-100 text-ink-600 dark:bg-white/[0.06] dark:text-ink-300">
-                                            used <span class="num" x-text="(item.expected - item.counted).toFixed(2).replace(/\.?0+$/, '')"></span>
+                                            used <span class="num" x-text="item.rows.length ? amount(item, item.expected - item.counted) : (item.expected - item.counted).toFixed(2).replace(/\.?0+$/, '')"></span>
                                         </span>
                                     </template>
-                                    <template x-if="item.touched && item.counted > item.expected">
+                                    <template x-if="item.touched && item.counted > item.expected && ! item.inRecipes">
                                         <span class="pill shrink-0 bg-brand-400/15 text-brand-700 dark:text-brand-300">restocked?</span>
                                     </template>
                                 </div>
 
-                                <div class="mt-4 flex items-center gap-2">
-                                    <button type="button" @click="step(item, -0.25)" class="btn-ghost size-14 shrink-0 !rounded-2xl !px-0" aria-label="Minus a quarter">
-                                        <x-icon name="minus" />
-                                    </button>
-                                    <input type="number" inputmode="decimal" step="0.25" min="0"
-                                        :value="item.counted" @input="set(item, $event.target.value)" @focus="$event.target.select()"
-                                        class="field num h-14 flex-1 text-center text-2xl font-semibold" :aria-label="item.name + ' count'">
-                                    <button type="button" @click="step(item, 0.25)" class="btn-ghost size-14 shrink-0 !rounded-2xl !px-0" aria-label="Plus a quarter">
-                                        <x-icon name="plus" />
-                                    </button>
-                                </div>
+                                {{-- Bought in containers: tap full ones and how full the open one is --}}
+                                <template x-if="item.rows.length">
+                                    <div class="mt-4 space-y-3">
+                                        <template x-for="row in item.rows" :key="row.label">
+                                            <div class="space-y-2 rounded-xl bg-ink-100/60 p-3 dark:bg-white/[0.04]">
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <p class="text-sm font-medium">Full <span x-text="row.label + 's'"></span> <span class="text-xs font-normal text-ink-500" x-text="'(' + amount(item, row.size) + ' each)'"></span></p>
+                                                    <div class="flex items-center gap-2">
+                                                        <button type="button" @click="bumpFull(item, row, -1)" class="btn-ghost size-11 !rounded-xl !px-0" :aria-label="'One fewer full ' + row.label"><x-icon name="minus" /></button>
+                                                        <span class="num w-8 text-center text-xl font-semibold" x-text="row.full"></span>
+                                                        <button type="button" @click="bumpFull(item, row, 1)" class="btn-ghost size-11 !rounded-xl !px-0" :aria-label="'One more full ' + row.label"><x-icon name="plus" /></button>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <p class="mb-1 text-xs text-ink-500">Open <span x-text="row.label"></span></p>
+                                                    <div class="grid grid-cols-5 gap-1.5">
+                                                        <template x-for="choice in [{ label: 'Empty', value: 0 }, { label: '¼', value: 0.25 }, { label: '½', value: 0.5 }, { label: '¾', value: 0.75 }, { label: 'Full', value: 1 }]" :key="choice.label">
+                                                            <button type="button" @click="setOpen(item, row, choice.value)"
+                                                                :class="row.open === choice.value && item.touched && item.exact === '' ? 'bg-ink-900 text-white dark:bg-white dark:text-ink-950' : 'bg-white text-ink-700 ring-1 ring-ink-200 dark:bg-ink-900 dark:text-ink-200 dark:ring-white/10'"
+                                                                class="h-11 rounded-xl text-sm font-semibold transition" x-text="choice.label"></button>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <div class="flex items-center justify-between gap-3">
+                                            <p class="text-sm">Counted <span class="num font-semibold" x-text="amount(item, item.counted)"></span></p>
+                                            <label class="flex items-center gap-2 text-xs text-ink-500">
+                                                or exactly
+                                                <input type="number" inputmode="decimal" min="0" step="any" :value="item.exact" @input="setExact(item, $event.target.value)"
+                                                    class="field num h-9 w-28 py-1 text-right" :placeholder="item.unit" :aria-label="item.name + ' exact amount'">
+                                            </label>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                {{-- Counted in its own unit: − / + by a step that suits the unit --}}
+                                <template x-if="! item.rows.length">
+                                    <div class="mt-4 flex items-center gap-2">
+                                        <button type="button" @click="step(item, -item.step)" class="btn-ghost size-14 shrink-0 !rounded-2xl !px-0" :aria-label="'Minus ' + item.step">
+                                            <x-icon name="minus" />
+                                        </button>
+                                        <input type="number" inputmode="decimal" :step="item.step" min="0"
+                                            :value="item.counted" @input="set(item, $event.target.value)" @focus="$event.target.select()"
+                                            class="field num h-14 flex-1 text-center text-2xl font-semibold" :aria-label="item.name + ' count'">
+                                        <button type="button" @click="step(item, item.step)" class="btn-ghost size-14 shrink-0 !rounded-2xl !px-0" :aria-label="'Plus ' + item.step">
+                                            <x-icon name="plus" />
+                                        </button>
+                                    </div>
+                                </template>
+
+                                {{-- A liquid in recipes counted higher than expected: restock, or recipes set too high? --}}
+                                <template x-if="item.inRecipes && item.touched && item.counted > item.expected">
+                                    <fieldset class="mt-3 rounded-xl border border-brand-400/40 bg-brand-400/[0.06] p-3">
+                                        <legend class="px-1 text-xs font-semibold text-brand-800 dark:text-brand-200">
+                                            <span x-text="(item.rows.length ? amount(item, item.counted - item.expected) : (item.counted - item.expected)) + ' more than the system expected'"></span>
+                                        </legend>
+                                        <label class="flex items-center gap-2 text-sm">
+                                            <input type="radio" value="restock" x-model="item.surplus" class="text-brand-500 focus:ring-brand-400"> We restocked today
+                                        </label>
+                                        <label class="mt-1 flex items-center gap-2 text-sm">
+                                            <input type="radio" value="recipe" x-model="item.surplus" class="text-brand-500 focus:ring-brand-400"> Recipes use less than set
+                                        </label>
+                                    </fieldset>
+                                </template>
 
                                 <button type="button" x-show="! item.touched" @click="confirmUnchanged(item)"
                                     class="mt-2 w-full rounded-xl py-2 text-xs font-medium text-ink-500 hover:bg-ink-100 hover:text-ink-900 dark:hover:bg-white/5 dark:hover:text-white">
-                                    Still <span class="num" x-text="item.expected"></span>, nothing used
+                                    Still <span class="num" x-text="item.rows.length ? amount(item, item.expected) : item.expected"></span>, nothing used
                                 </button>
                             </li>
                         </template>

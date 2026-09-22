@@ -567,7 +567,15 @@ Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl })
  * Closing audit: staff type what they see on the shelf, in decimals. Saved by the server.
  */
 Alpine.data('closingAudit', ({ items, storeUrl, alreadyClosed }) => ({
-    items: items.map((item) => ({ ...item, counted: item.counted ?? item.expected, touched: item.counted !== null })),
+    items: items.map((item) => ({
+        ...item,
+        counted: item.counted ?? item.expected,
+        touched: item.counted !== null,
+        // Containers: full ones plus how full the open one is. A correction starts from the saved number.
+        rows: (item.containers ?? []).map((container) => ({ ...container, full: 0, open: 0 })),
+        exact: item.counted ?? '',
+        surplus: 'restock',
+    })),
     storeUrl,
     startedAt: new Date().toISOString(),
     submitted: false,
@@ -586,7 +594,11 @@ Alpine.data('closingAudit', ({ items, storeUrl, alreadyClosed }) => ({
 
         const result = await window.sendJson(this.storeUrl, {
             started_at: this.startedAt,
-            counts: this.items.map((item) => ({ item_id: item.id, counted: item.counted })),
+            counts: this.items.map((item) => ({
+                item_id: item.id,
+                counted: item.counted,
+                surplus: item.inRecipes && item.counted > item.expected ? item.surplus : null,
+            })),
         });
 
         this.saving = false;
@@ -614,12 +626,48 @@ Alpine.data('closingAudit', ({ items, storeUrl, alreadyClosed }) => ({
         item.touched = true;
     },
 
+    /**
+     * Container items: counted = Σ (full + open fraction) × size, unless an exact amount is typed.
+     */
+    recount(item) {
+        const exact = parseFloat(item.exact);
+
+        item.counted = item.exact !== '' && ! isNaN(exact)
+            ? Math.max(0, exact)
+            : Math.round(item.rows.reduce((total, row) => total + (row.full + row.open) * row.size, 0) * 1000) / 1000;
+        item.touched = true;
+    },
+
+    bumpFull(item, row, delta) {
+        row.full = Math.max(0, row.full + delta);
+        item.exact = '';
+        this.recount(item);
+    },
+
+    setOpen(item, row, fraction) {
+        row.open = fraction;
+        item.exact = '';
+        this.recount(item);
+    },
+
+    setExact(item, value) {
+        item.exact = value;
+        this.recount(item);
+    },
+
+    amount(item, value) {
+        return `${Number((Math.round(value * 100) / 100).toFixed(2)).toLocaleString()} ${item.unit}`;
+    },
+
     set(item, value) {
         item.counted = Math.max(0, parseFloat(value) || 0);
         item.touched = true;
     },
 
     confirmUnchanged(item) {
+        item.counted = item.expected;
+        item.exact = '';
+        item.rows.forEach((row) => { row.full = 0; row.open = 0; });
         item.touched = true;
     },
 }));

@@ -37,7 +37,7 @@ class ItemController extends Controller
             ->when(! $showArchived, fn ($query) => $query->whereNull('archived_at'))
             ->when($showArchived, fn ($query) => $query->whereNotNull('archived_at'))
             ->when($search !== '', fn ($query) => $query->whereLike('name', '%'.$search.'%'))
-            ->with(['category', 'variants', 'recipeLines.piece', 'recipeLines.variant'])
+            ->with(['category', 'variants', 'recipeLines.piece', 'recipeLines.variant', 'containers'])
             ->orderBy('name')
             ->get();
 
@@ -82,7 +82,7 @@ class ItemController extends Controller
 
     public function edit(Request $request, Item $item): View
     {
-        return view('admin.inventory.item', $this->formData($request, $item->load(['variants', 'recipeLines'])));
+        return view('admin.inventory.item', $this->formData($request, $item->load(['variants', 'recipeLines', 'containers'])));
     }
 
     public function update(SaveItemRequest $request, Item $item, ItemService $items): RedirectResponse
@@ -183,17 +183,23 @@ class ItemController extends Controller
     {
         $business = $request->user()->business;
 
+        // What a sale can use: pieces (1 bun) and liquids (15 ml ketchup).
         $pieces = Item::query()
             ->active()
-            ->ofKind(ItemKind::Piece)
+            ->whereIn('kind', [ItemKind::Piece, ItemKind::Bulk])
+            ->orderByRaw('case when kind = ? then 0 else 1 end', [ItemKind::Piece->value])
             ->orderBy('name')
-            ->get(['id', 'name', 'unit', 'unit_cost']);
+            ->get(['id', 'kind', 'name', 'unit', 'unit_cost']);
 
         $variants = $item->relationLoaded('variants') ? $item->variants : collect();
+        $containers = $item->relationLoaded('containers') ? $item->containers : collect();
 
         return [
             'item' => $item,
             'canDelete' => $item->exists && $this->deleteBlockers($item) === [],
+            'canRestock' => $item->exists && ($item->kind !== ItemKind::Menu || $item->tracksStock()),
+            'expensesEnabled' => $business->hasFeature('expenses'),
+            'measures' => Item::MEASURES,
             'categories' => Category::query()->orderBy('sort')->orderBy('name')->get(),
             'pieces' => $pieces,
             'recipesEnabled' => $business->hasFeature('recipes'),
@@ -206,6 +212,13 @@ class ItemController extends Controller
                     'cost' => (float) $variant->cost,
                     'price' => (float) $variant->price,
                 ])->values()->all() ?: [['id' => null, 'label' => 'Regular', 'cost' => null, 'price' => null]]),
+                'unit' => old('unit', $item->unit ?? ''),
+                'containers' => array_values(old('containers', $containers->map(fn ($container) => [
+                    'id' => $container->id,
+                    'label' => $container->label,
+                    'size' => (float) $container->size,
+                    'price' => $container->price !== null ? (float) $container->price : null,
+                ])->values()->all())),
                 'recipe' => old('recipe', $item->relationLoaded('recipeLines') ? $item->recipeLines->map(fn ($line) => [
                     'piece_item_id' => $line->piece_item_id,
                     'qty' => (float) $line->qty,
@@ -213,6 +226,7 @@ class ItemController extends Controller
                 ])->values()->all() : []),
             ],
             'pieceCosts' => $pieces->mapWithKeys(fn (Item $piece) => [$piece->id => (float) $piece->unit_cost])->all(),
+            'pieceUnits' => $pieces->mapWithKeys(fn (Item $piece) => [$piece->id => $piece->unit ?: ($piece->kind === ItemKind::Piece ? 'pc' : '')])->all(),
         ];
     }
 

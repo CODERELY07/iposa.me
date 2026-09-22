@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['audit_id', 'item_id', 'expected', 'counted', 'used', 'restocked', 'unit_cost'])]
+#[Fillable(['audit_id', 'item_id', 'expected', 'counted', 'used', 'restocked', 'recipe_surplus', 'unit_cost'])]
 class AuditLine extends Model
 {
     /**
@@ -21,7 +21,8 @@ class AuditLine extends Model
             'counted' => 'decimal:3',
             'used' => 'decimal:3',
             'restocked' => 'decimal:3',
-            'unit_cost' => 'decimal:2',
+            'recipe_surplus' => 'decimal:3',
+            'unit_cost' => 'decimal:6',
         ];
     }
 

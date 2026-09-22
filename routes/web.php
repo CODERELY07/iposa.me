@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ExportController;
 use App\Http\Controllers\Admin\ItemController;
 use App\Http\Controllers\Admin\ItemImportController;
+use App\Http\Controllers\Admin\ItemRestockController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\TeamController;
@@ -69,6 +70,7 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
     Route::patch('/inventory/items/{item}/archive', [ItemController::class, 'archive'])->name('inventory.archive');
     Route::patch('/inventory/items/{item}/restore', [ItemController::class, 'restore'])->name('inventory.restore');
     Route::delete('/inventory/items/{item}', [ItemController::class, 'destroy'])->name('inventory.destroy');
+    Route::post('/inventory/items/{item}/restock', ItemRestockController::class)->name('inventory.restock');
     Route::post('/inventory/import', ItemImportController::class)->name('inventory.import');
     Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
 

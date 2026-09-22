@@ -7,6 +7,7 @@ use App\Enums\StockMovementReason;
 use App\Models\Audit;
 use App\Models\Business;
 use App\Models\Item;
+use App\Models\RecipeLine;
 use App\Models\User;
 use App\Services\Inventory\StockService;
 use Carbon\CarbonInterface;
@@ -33,16 +34,20 @@ class ClosingAuditService
      * Save the shelf counts for a day. The first submit records "expected" from the system;
      * a correction by the owner keeps the original expected and only moves stock by the difference.
      *
+     * A count above expected is a restock, unless the item is used in recipes and
+     * the counter says the recipes deduct more than the kitchen uses ("recipe").
+     *
      * @param  array<int, float>  $counts  item id => counted
+     * @param  array<int, string>  $surplusReasons  item id => "restock" | "recipe"
      *
      * @throws ValidationException
      */
-    public function submit(Business $business, User $user, array $counts, ?CarbonInterface $startedAt = null, ?CarbonInterface $date = null, ?CarbonInterface $submittedAt = null): Audit
+    public function submit(Business $business, User $user, array $counts, ?CarbonInterface $startedAt = null, ?CarbonInterface $date = null, ?CarbonInterface $submittedAt = null, array $surplusReasons = []): Audit
     {
         $date ??= now();
         $submittedAt ??= now();
 
-        return DB::transaction(function () use ($business, $user, $counts, $startedAt, $date, $submittedAt): Audit {
+        return DB::transaction(function () use ($business, $user, $counts, $startedAt, $date, $submittedAt, $surplusReasons): Audit {
             $items = Item::withoutGlobalScopes()
                 ->where('business_id', $business->id)
                 ->where('kind', ItemKind::Bulk)
@@ -77,6 +82,7 @@ class ClosingAuditService
             }
 
             $changes = [];
+            $inRecipes = RecipeLine::query()->whereIn('piece_item_id', $items->keys())->distinct()->pluck('piece_item_id')->flip();
 
             foreach ($items as $item) {
                 $counted = round((float) $counts[$item->id], 3);
@@ -84,11 +90,15 @@ class ClosingAuditService
                 $expected = $line !== null ? (float) $line->expected : (float) ($item->on_hand ?? 0);
                 $previouslyCounted = $line !== null ? (float) $line->counted : $expected;
 
+                $surplus = max(0, round($counted - $expected, 3));
+                $recipeOverDeducted = $surplus > 0 && $inRecipes->has($item->id) && ($surplusReasons[$item->id] ?? null) === 'recipe';
+
                 $audit->lines()->updateOrCreate(['item_id' => $item->id], [
                     'expected' => $expected,
                     'counted' => $counted,
                     'used' => max(0, round($expected - $counted, 3)),
-                    'restocked' => max(0, round($counted - $expected, 3)),
+                    'restocked' => $recipeOverDeducted ? 0 : $surplus,
+                    'recipe_surplus' => $recipeOverDeducted ? $surplus : 0,
                     'unit_cost' => $line?->unit_cost ?? ($item->unit_cost ?? 0),
                 ]);
 

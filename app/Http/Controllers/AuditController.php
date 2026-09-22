@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\ItemKind;
 use App\Http\Requests\SubmitAuditRequest;
 use App\Models\Item;
+use App\Models\RecipeLine;
 use App\Services\Audit\ClosingAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,11 +24,16 @@ class AuditController extends Controller
         $todaysAudit = $audits->forDate($business, now());
         $countedToday = $todaysAudit?->lines->keyBy('item_id');
 
-        $items = Item::query()
+        $bulk = Item::query()
             ->active()
             ->ofKind(ItemKind::Bulk)
+            ->with('containers')
             ->orderBy('name')
-            ->get()
+            ->get();
+
+        $inRecipes = RecipeLine::query()->whereIn('piece_item_id', $bulk->modelKeys())->distinct()->pluck('piece_item_id')->flip();
+
+        $items = $bulk
             ->map(fn (Item $item) => [
                 'id' => $item->id,
                 'name' => $item->name,
@@ -36,6 +42,10 @@ class AuditController extends Controller
                 'expected' => (float) ($countedToday?->get($item->id)?->expected ?? $item->on_hand ?? 0),
                 'counted' => $countedToday?->has($item->id) ? (float) $countedToday->get($item->id)->counted : null,
                 'unitCost' => (float) ($item->unit_cost ?? 0),
+                // Tap-counting: full containers plus how full the open one is.
+                'containers' => $item->containers->map(fn ($container) => ['label' => $container->label, 'size' => (float) $container->size])->values()->all(),
+                'step' => $item->countStep(),
+                'inRecipes' => $inRecipes->has($item->id),
             ])
             ->values()
             ->all();
@@ -64,6 +74,7 @@ class AuditController extends Controller
             $request->user(),
             $request->counts(),
             $request->filled('started_at') ? Carbon::parse($request->validated('started_at')) : null,
+            surplusReasons: $request->surplusReasons(),
         );
 
         return response()->json([

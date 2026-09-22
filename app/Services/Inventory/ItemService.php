@@ -18,6 +18,7 @@ class ItemService
      * @param  array{
      *     kind: string, name: string, category_id?: int|null, unit?: string|null,
      *     on_hand?: float|string|null, low_threshold?: float|string|null, unit_cost?: float|string|null,
+     *     containers?: list<array{id?: int|null, label: string, size: float|string, price?: float|string|null}>,
      *     variants?: list<array{id?: int|null, label: string, cost?: float|string|null, price: float|string}>,
      *     recipe?: list<array{piece_item_id: int, qty: float|string, variant_index?: int|null}>
      * }  $data
@@ -29,16 +30,32 @@ class ItemService
             $isNew = $item === null;
             $item ??= new Item(['business_id' => $business->id]);
 
+            $containerRows = $kind === ItemKind::Menu ? [] : array_values($data['containers'] ?? []);
+
             $item->fill([
                 'kind' => $kind,
                 'name' => $data['name'],
                 'category_id' => $data['category_id'] ?? null,
                 'unit' => $data['unit'] ?? null,
                 'low_threshold' => self::nullableNumber($data['low_threshold'] ?? null),
-                'unit_cost' => $kind === ItemKind::Menu ? null : self::nullableNumber($data['unit_cost'] ?? null),
             ]);
+
+            // With containers the cost comes from what the owner paid for one;
+            // without, it is typed per unit as before.
+            if ($kind === ItemKind::Menu) {
+                $item->unit_cost = null;
+            } elseif ($containerRows === []) {
+                $item->unit_cost = self::nullableCost($data['unit_cost'] ?? null);
+            }
+
             $item->business_id = $business->id;
             $item->save();
+
+            $costFromContainers = $this->syncContainers($item, $containerRows);
+
+            if ($costFromContainers !== null) {
+                $item->forceFill(['unit_cost' => $costFromContainers])->save();
+            }
 
             $variants = $kind === ItemKind::Menu ? $this->syncVariants($item, $data['variants'] ?? []) : [];
 
@@ -56,8 +73,55 @@ class ItemService
                 $this->stock->setOnHand($item, $onHand, $user->id);
             }
 
-            return $item->refresh()->load(['variants', 'recipeLines']);
+            return $item->refresh()->load(['variants', 'recipeLines', 'containers']);
         });
+    }
+
+    /**
+     * Keep existing containers (by id), add new ones, delete removed ones.
+     *
+     * Returns the cost per unit to use, or null to leave the item's cost alone:
+     * the first container that is new, or whose price or size changed, sets it.
+     * So saving the form untouched never overwrites the price of the last restock.
+     *
+     * @param  list<array{id?: int|null, label: string, size: float|string, price?: float|string|null}>  $rows
+     */
+    private function syncContainers(Item $item, array $rows): ?float
+    {
+        $existing = $item->containers()->get()->keyBy('id');
+        $keptIds = [];
+        $cost = null;
+
+        foreach ($rows as $sort => $row) {
+            $attributes = [
+                'label' => trim($row['label']),
+                'size' => round((float) $row['size'], 3),
+                'price' => ($row['price'] ?? '') === '' ? null : round((float) $row['price'], 2),
+                'sort' => $sort,
+            ];
+
+            $container = ! empty($row['id']) ? $existing->get((int) $row['id']) : null;
+            $pricingChanged = $container === null
+                || abs((float) $container->size - $attributes['size']) >= 0.0005
+                || ($container->price === null ? null : (float) $container->price) !== $attributes['price'];
+
+            if ($container !== null) {
+                $container->update($attributes);
+            } else {
+                $container = $item->containers()->create($attributes);
+            }
+
+            $keptIds[] = $container->id;
+
+            if ($cost === null && $pricingChanged) {
+                $cost = $container->costPerUnit();
+            }
+        }
+
+        $item->containers()->whereNotIn('id', $keptIds)->delete();
+        $item->unsetRelation('containers');
+
+        return $cost;
     }
 
     /**
@@ -118,5 +182,13 @@ class ItemService
     private static function nullableNumber(mixed $value): ?float
     {
         return $value === null || $value === '' ? null : round((float) $value, 3);
+    }
+
+    /**
+     * Costs keep six decimals: ₱0.011889 per ml must not become ₱0.012.
+     */
+    private static function nullableCost(mixed $value): ?float
+    {
+        return $value === null || $value === '' ? null : round((float) $value, 6);
     }
 }
