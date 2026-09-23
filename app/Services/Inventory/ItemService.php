@@ -126,6 +126,21 @@ class ItemService
     }
 
     /**
+     * Replace only what one sale uses, leaving names, sizes, prices and costs alone.
+     * `variant_index` points at the item's sizes in their saved order.
+     *
+     * @param  list<array{piece_item_id: int, qty: float|string, variant_index?: int|null}>  $rows
+     */
+    public function saveRecipe(Item $item, array $rows): Item
+    {
+        return DB::transaction(function () use ($item, $rows): Item {
+            $this->syncRecipe($item, array_values($rows), $item->variants()->pluck('id')->all());
+
+            return $item->load('recipeLines');
+        });
+    }
+
+    /**
      * Keep existing sizes (by id), add new ones, delete removed ones.
      *
      * @param  list<array{id?: int|null, label: string, cost?: float|string|null, price: float|string}>  $rows

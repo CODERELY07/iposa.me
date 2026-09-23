@@ -6,6 +6,7 @@
     $role = $currentUser?->role;
     $shop = $currentUser?->business;
     $canRunAudit = $currentUser?->can('run-audit') ?? false;
+    $canOpenProducts = $role === 'staff' && ($currentUser->can('restock-stock') || ($currentUser->can('link-pieces') && $shop?->hasFeature('recipes')));
 
     $navigation = match ($role) {
         'super_admin' => [
@@ -27,6 +28,7 @@
         default => array_values(array_filter([
             ['label' => 'Register', 'route' => 'pos', 'icon' => 'pos'],
             $canRunAudit ? ['label' => 'Closing audit', 'route' => 'audit', 'icon' => 'audit'] : null,
+            $canOpenProducts ? ['label' => 'Products', 'route' => 'staff.products', 'icon' => 'box', 'match' => 'staff.products*'] : null,
             ['label' => 'My orders', 'route' => 'staff.orders', 'icon' => 'receipt'],
         ])),
     };

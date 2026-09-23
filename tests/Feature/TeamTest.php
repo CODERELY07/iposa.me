@@ -72,10 +72,12 @@ it('cannot remove someone from another shop', function () {
 
 it('saves cashier permissions', function () {
     $this->actingAs($this->owner)->patch(route('admin.team.permissions'), ['permissions' => [
-        'run_audit' => 1, 'view_costs' => 1, 'void_orders' => 0, 'log_expenses' => 0,
+        'run_audit' => 1, 'view_costs' => 1, 'void_orders' => 0, 'log_expenses' => 0, 'restock_stock' => 1, 'link_pieces' => 0,
     ]])->assertRedirect();
 
     $business = $this->owner->business->refresh();
     expect($business->cashierCan('view_costs'))->toBeTrue()
-        ->and($business->cashierCan('log_expenses'))->toBeFalse();
+        ->and($business->cashierCan('log_expenses'))->toBeFalse()
+        ->and($business->cashierCan('restock_stock'))->toBeTrue()
+        ->and($business->cashierCan('link_pieces'))->toBeFalse();
 });
