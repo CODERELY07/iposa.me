@@ -17,7 +17,7 @@ class ItemService
      *
      * @param  array{
      *     kind: string, name: string, category_id?: int|null, unit?: string|null,
-     *     on_hand?: float|string|null, low_threshold?: float|string|null, unit_cost?: float|string|null,
+     *     on_hand?: float|string|null, low_threshold?: float|string|null, unit_cost?: float|string|null, include_recipe_cost?: bool|null,
      *     containers?: list<array{id?: int|null, label: string, size: float|string, price?: float|string|null}>,
      *     variants?: list<array{id?: int|null, label: string, cost?: float|string|null, price: float|string}>,
      *     recipe?: list<array{piece_item_id: int, qty: float|string, variant_index?: int|null}>
@@ -38,6 +38,7 @@ class ItemService
                 'category_id' => $data['category_id'] ?? null,
                 'unit' => $data['unit'] ?? null,
                 'low_threshold' => self::nullableNumber($data['low_threshold'] ?? null),
+                'include_recipe_cost' => $kind === ItemKind::Menu && (bool) ($data['include_recipe_cost'] ?? false),
             ]);
 
             // With containers the cost comes from what the owner paid for one;

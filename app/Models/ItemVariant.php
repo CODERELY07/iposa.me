@@ -30,9 +30,17 @@ class ItemVariant extends Model
         return $this->belongsTo(Item::class);
     }
 
+    /**
+     * The cost of one sale, linked pieces and liquids included when the item asks for it.
+     */
+    public function costPerSale(): float
+    {
+        return $this->item->costPerSale($this);
+    }
+
     public function profit(): float
     {
-        return round((float) $this->price - (float) $this->cost, 2);
+        return round((float) $this->price - $this->costPerSale(), 2);
     }
 
     /**

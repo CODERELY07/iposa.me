@@ -50,7 +50,7 @@ class CheckoutService
             }
 
             $variants = ItemVariant::query()
-                ->with('item.recipeLines')
+                ->with('item.recipeLines.piece')
                 ->whereKey(array_keys($quantities))
                 ->whereHas('item', fn ($item) => $item->withoutGlobalScopes()
                     ->where('business_id', $lockedBusiness->id)
@@ -102,7 +102,7 @@ class CheckoutService
                     'name' => $variant->item->name,
                     'variant_label' => $variant->label,
                     'price' => $variant->price,
-                    'unit_cost' => $variant->cost,
+                    'unit_cost' => $variant->costPerSale(),
                     'qty' => $qty,
                 ]);
 

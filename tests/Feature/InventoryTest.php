@@ -37,6 +37,27 @@ it('adds a menu item with sizes and ingredient links', function () {
         ->and($item->recipeLines->firstWhere('piece_item_id', $this->menu['cup22']->id)->item_variant_id)->toBe($item->variants->last()->id);
 });
 
+it('counts linked pieces in the cost of a sale only when the owner asks for it', function () {
+    $payload = [
+        'kind' => 'menu',
+        'name' => 'Cheeseburger',
+        'variants' => [['id' => $this->menu['burgerRegular']->id, 'label' => 'Regular', 'cost' => 10, 'price' => 100]],
+        'recipe' => [['piece_item_id' => $this->menu['bun']->id, 'qty' => 2]],
+    ];
+
+    $this->actingAs($this->owner)->put(route('admin.inventory.update', $this->menu['burger']), $payload + ['include_recipe_cost' => '1'])->assertRedirect();
+
+    $burger = $this->menu['burger']->refresh()->load('recipeLines.piece');
+    expect($burger->include_recipe_cost)->toBeTrue()
+        ->and($burger->variants->first()->costPerSale())->toBe(25.0)
+        ->and($burger->variants->first()->marginPercent())->toBe(75.0);
+
+    $this->actingAs($this->owner)->put(route('admin.inventory.update', $this->menu['burger']), $payload + ['include_recipe_cost' => '0'])->assertRedirect();
+
+    expect($this->menu['burger']->refresh()->include_recipe_cost)->toBeFalse()
+        ->and($this->menu['burger']->variants->first()->costPerSale())->toBe(10.0);
+});
+
 it('updates sizes in place and removes deleted ones', function () {
     $tea = $this->menu['tea'];
 

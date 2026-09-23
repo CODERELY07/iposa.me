@@ -212,6 +212,7 @@ class ItemController extends Controller
                     'cost' => (float) $variant->cost,
                     'price' => (float) $variant->price,
                 ])->values()->all() ?: [['id' => null, 'label' => 'Regular', 'cost' => null, 'price' => null]]),
+                'includeRecipeCost' => (bool) old('include_recipe_cost', $item->include_recipe_cost ?? false),
                 'unit' => old('unit', $item->unit ?? ''),
                 'containers' => array_values(old('containers', $containers->map(fn ($container) => [
                     'id' => $container->id,

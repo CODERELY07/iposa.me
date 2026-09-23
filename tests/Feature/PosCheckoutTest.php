@@ -30,6 +30,21 @@ it('rings up a sale and deducts every linked piece', function () {
     expect(StockMovement::withoutGlobalScopes()->where('order_id', $order->id)->where('reason', StockMovementReason::Sale)->count())->toBe(2);
 });
 
+it('adds what the linked pieces cost when the item includes them', function () {
+    $this->menu['burger']->update(['include_recipe_cost' => true]);
+    $this->menu['tea']->update(['include_recipe_cost' => true]);
+
+    $this->actingAs($this->cashier)
+        ->postJson(route('pos.orders.store'), orderPayload([[$this->menu['burgerRegular'], 2], [$this->menu['tea22'], 1]], 'gcash'))
+        ->assertCreated();
+
+    $lines = Order::withoutGlobalScopes()->sole()->lines->keyBy('item_variant_id');
+
+    expect((float) $lines[$this->menu['burgerRegular']->id]->unit_cost)->toBe(77.5)
+        ->and((float) $lines[$this->menu['tea22']->id]->unit_cost)->toBe(17.1)
+        ->and((float) $this->menu['bun']->refresh()->on_hand)->toBe(98.0);
+});
+
 it('uses the size-specific recipe line', function () {
     $this->actingAs($this->cashier)
         ->postJson(route('pos.orders.store'), orderPayload([[$this->menu['tea22'], 3]], 'gcash'))

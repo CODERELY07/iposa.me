@@ -16,6 +16,7 @@
         'categories' => $categories->map(fn ($category) => ['id' => $category->id, 'name' => $category->name, 'color' => $category->color])->values(),
         'variants' => array_values($formState['variants']),
         'recipe' => array_values($formState['recipe']),
+        'includeRecipeCost' => $recipesEnabled && $formState['includeRecipeCost'],
         'pieceCosts' => $pieceCosts,
         'pieceUnits' => $pieceUnits,
         'unit' => $formState['unit'],
@@ -91,17 +92,18 @@
                     const category = this.categories.find((c) => String(c.id) === String(this.categoryId));
                     return this.tones[category?.color ?? 'ink'];
                 },
-                margin(variant) {
-                    const price = parseFloat(variant.price);
-                    return price > 0 ? ((price - (parseFloat(variant.cost) || 0)) / price) * 100 : null;
+                costPerSale(index) {
+                    const own = parseFloat(this.variants[index].cost) || 0;
+                    return Math.round((own + (this.includeRecipeCost ? this.recipeCostFor(index) : 0)) * 100) / 100;
+                },
+                margin(index) {
+                    const price = parseFloat(this.variants[index].price);
+                    return price > 0 ? ((price - this.costPerSale(index)) / price) * 100 : null;
                 },
                 recipeCostFor(variantIndex) {
                     return this.recipe
                         .filter((line) => line.variant_index === null || line.variant_index === '' || String(line.variant_index) === String(variantIndex))
                         .reduce((total, line) => total + (this.pieceCosts[line.piece_item_id] || 0) * (parseFloat(line.qty) || 0), 0);
-                },
-                useRecipeCosts() {
-                    this.variants.forEach((variant, index) => { variant.cost = Math.round(this.recipeCostFor(index) * 100) / 100 });
                 },
                 async createCategory() {
                     if (! this.newCategory.trim()) return;
@@ -221,8 +223,8 @@
                                         <input x-model="variant.price" :name="`variants[${index}][price]`" :disabled="! isMenu" type="number" step="0.01" min="0" class="field num pl-7 text-right" placeholder="0.00" aria-label="Selling price">
                                     </div>
                                     <p class="num text-right text-sm font-semibold"
-                                        :class="margin(variant) === null ? 'text-ink-400' : (margin(variant) >= 50 ? 'text-gain-600 dark:text-gain-400' : (margin(variant) >= 25 ? 'text-brand-600 dark:text-brand-300' : 'text-loss-600 dark:text-loss-400'))"
-                                        x-text="margin(variant) === null ? '—' : margin(variant).toFixed(1) + '%'"></p>
+                                        :class="margin(index) === null ? 'text-ink-400' : (margin(index) >= 50 ? 'text-gain-600 dark:text-gain-400' : (margin(index) >= 25 ? 'text-brand-600 dark:text-brand-300' : 'text-loss-600 dark:text-loss-400'))"
+                                        x-text="margin(index) === null ? '—' : margin(index).toFixed(1) + '%'"></p>
                                     <button type="button" x-show="variants.length > 1" @click="variants.splice(index, 1); recipe.forEach((line) => { if (line.variant_index === index) line.variant_index = null; else if (line.variant_index > index) line.variant_index-- })" class="btn-quiet size-9 justify-self-end !px-0" aria-label="Remove size"><x-icon name="x" class="size-4" /></button>
                                 </div>
                             </template>
@@ -269,17 +271,37 @@
                                     </template>
                                 </div>
 
-                                <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-                                    <button type="button" @click="recipe.push({ piece_item_id: {{ $pieces->first()->id }}, qty: 1, variant_index: null })" class="btn-quiet text-brand-600 dark:text-brand-300">
-                                        <x-icon name="plus" class="size-4" /> Link a piece or liquid
-                                    </button>
-                                    <p x-show="recipe.length" class="text-xs text-ink-500">
-                                        Pieces cost per sale:
+                                <button type="button" @click="recipe.push({ piece_item_id: {{ $pieces->first()->id }}, qty: 1, variant_index: null })" class="btn-quiet mt-3 text-brand-600 dark:text-brand-300">
+                                    <x-icon name="plus" class="size-4" /> Link a piece or liquid
+                                </button>
+
+                                {{-- Added at every sale, never copied into the Cost box: it can't be counted twice and follows price changes. --}}
+                                <div x-show="recipe.length" class="mt-4 rounded-xl bg-ink-100/70 p-4 dark:bg-white/[0.04]">
+                                    <input type="hidden" name="include_recipe_cost" value="0" :disabled="! isMenu">
+                                    <label class="flex cursor-pointer items-start gap-3">
+                                        <input x-model="includeRecipeCost" type="checkbox" name="include_recipe_cost" value="1" :disabled="! isMenu" class="mt-0.5 size-4 rounded border-ink-300 text-brand-600 focus:ring-brand-500">
+                                        <span>
+                                            <span class="block text-sm font-semibold">Include linked pieces & liquids in cost</span>
+                                            <span class="text-xs text-ink-500">Type only your own cost above. The app adds what the links cost at today's prices to every sale.</span>
+                                        </span>
+                                    </label>
+                                    <ul class="mt-3 space-y-1 text-xs text-ink-500">
                                         <template x-for="(variant, index) in variants" :key="index">
-                                            <span><span x-show="variants.length > 1" x-text="(variant.label || 'Size ' + (index + 1)) + ' '"></span><span class="num font-semibold text-ink-900 dark:text-white" x-text="formatPeso(recipeCostFor(index))"></span><span x-show="index < variants.length - 1"> · </span></span>
+                                            <li class="num">
+                                                <span x-show="variants.length > 1" class="font-medium text-ink-700 dark:text-ink-200" x-text="(variant.label || 'Size ' + (index + 1)) + ': '"></span>
+                                                <template x-if="includeRecipeCost">
+                                                    <span>
+                                                        Your cost <span x-text="formatPeso(parseFloat(variant.cost) || 0)"></span>
+                                                        + Linked <span x-text="formatPeso(recipeCostFor(index))"></span>
+                                                        = <span class="font-semibold text-ink-900 dark:text-white" x-text="formatPeso(costPerSale(index)) + ' per sale'"></span>
+                                                    </span>
+                                                </template>
+                                                <template x-if="! includeRecipeCost">
+                                                    <span>Linked items cost <span class="font-semibold text-ink-900 dark:text-white" x-text="formatPeso(recipeCostFor(index))"></span>, not counted in cost.</span>
+                                                </template>
+                                            </li>
                                         </template>
-                                        <button type="button" @click="useRecipeCosts()" class="ml-1 font-semibold text-brand-600 hover:underline dark:text-brand-300">Use as cost</button>
-                                    </p>
+                                    </ul>
                                 </div>
                             @endif
                         </section>
@@ -435,7 +457,7 @@
                             <template x-for="(variant, index) in variants" :key="index">
                                 <li class="flex justify-between">
                                     <span class="text-ink-500" x-text="variant.label || 'Size'"></span>
-                                    <span class="num font-semibold" x-text="formatPeso((parseFloat(variant.price) || 0) - (parseFloat(variant.cost) || 0))"></span>
+                                    <span class="num font-semibold" x-text="formatPeso((parseFloat(variant.price) || 0) - costPerSale(index))"></span>
                                 </li>
                             </template>
                         </ul>
