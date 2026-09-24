@@ -6,10 +6,10 @@
     $setupDone = collect($setupSteps)->every(fn (array $step) => $step['done']);
     $waitingCount = $deliveries->count() + $recipeRequests->count() + $recipeFixes->count();
     $equation = [
-        ['label' => 'Sales', 'amount' => $today['sales'], 'negative' => false, 'hint' => $today['orders'].' '.\Illuminate\Support\Str::plural('order', $today['orders']), 'href' => $business->hasFeature('reports') ? route('admin.reports') : null],
-        ['label' => 'Ingredients', 'amount' => $today['cogs'], 'negative' => true, 'hint' => 'cost of what sold', 'href' => route('admin.inventory')],
-        ['label' => $business->auditsPieces() ? 'Used at closing' : 'Bulk used', 'amount' => $today['audited'] ? $today['bulk'] : null, 'negative' => true, 'hint' => $today['audited'] ? 'from tonight’s audit' : 'after closing audit', 'href' => route('audit')],
-        ['label' => 'Expenses', 'amount' => $today['expenses'], 'negative' => true, 'hint' => $today['expenseCount'].' '.\Illuminate\Support\Str::plural('entry', $today['expenseCount']).' today', 'href' => $business->hasFeature('expenses') ? route('admin.expenses') : null],
+        ['label' => 'Sales', 'amount' => $today['sales'], 'negative' => false, 'hint' => $today['orders'].' '.\Illuminate\Support\Str::plural('order', $today['orders']), 'href' => route('admin.day', 'sales')],
+        ['label' => 'Ingredients', 'amount' => $today['cogs'], 'negative' => true, 'hint' => 'cost of what sold', 'href' => route('admin.day', 'ingredients')],
+        ['label' => $business->auditsPieces() ? 'Used at closing' : 'Bulk used', 'amount' => $today['audited'] ? $today['bulk'] : null, 'negative' => true, 'hint' => $today['audited'] ? 'from tonight’s audit' : 'after closing audit', 'href' => route('admin.day', 'bulk')],
+        ['label' => 'Expenses', 'amount' => $today['expenses'], 'negative' => true, 'hint' => $today['expenseCount'].' '.\Illuminate\Support\Str::plural('entry', $today['expenseCount']).' today', 'href' => route('admin.day', 'expenses')],
     ];
 @endphp
 
@@ -44,12 +44,12 @@
                         <a href="{{ $part['href'] ?? '#' }}" @class(['group bg-white p-4 transition dark:bg-ink-900', 'hover:bg-ink-50 dark:hover:bg-ink-800/60' => $part['href'], 'pointer-events-none' => ! $part['href']])>
                             <p class="flex items-center justify-between text-xs text-ink-500">
                                 {{ $part['label'] }}
-                                @if ($part['href'])<x-icon name="chevron-right" class="size-3.5 opacity-0 transition group-hover:opacity-100" />@endif
+                                @if ($part['href'])<x-icon name="chevron-right" class="size-3.5 opacity-40 transition group-hover:opacity-100" />@endif
                             </p>
                             @if ($part['amount'] === null)
                                 <p class="num mt-1 text-lg font-semibold text-ink-400">pending</p>
                             @else
-                                <p class="num mt-1 text-lg font-semibold">{{ $part['negative'] && $part['amount'] > 0 ? '−' : '' }}₱{{ number_format($part['amount'], 2) }}</p>
+                                <p class="num mt-1 text-lg font-semibold">{{ $part['negative'] && $part['amount'] < 0 ? '+' : ($part['negative'] && $part['amount'] > 0 ? '−' : '') }}₱{{ number_format(abs($part['amount']), 2) }}</p>
                             @endif
                             <p class="mt-0.5 text-[11px] text-ink-400">{{ $part['hint'] }}</p>
                         </a>

@@ -1,6 +1,6 @@
 # Module 06 · Closing audit
 
-At closing, staff look at the bottles and tubs and type what's left. The drop becomes the day's **bulk cost**, which completes true daily profit. Target: under 60 seconds.
+At closing, staff look at the bottles and tubs (and, when the shop asks, the buns and cups) and type what's left. The drop becomes the day's **bulk cost**, which completes true daily profit. Target: under 60 seconds.
 
 **Who:** owners, and cashiers with the `run_audit` permission (on by default).
 
@@ -9,6 +9,8 @@ At closing, staff look at the bottles and tubs and type what's left. The drop be
 | [Daily count](#daily-count) | ✅ Built |
 | [Counting containers](#counting-containers) | ✅ Built |
 | [Liquids in recipes](#liquids-in-recipes) | ✅ Built |
+| [Recipes that use too much](#recipes-that-use-too-much) | ✅ Built |
+| [Counting pieces](#counting-pieces) | ✅ Built (optional) |
 | [Usage cost](#usage-cost) | ✅ Built |
 | [Restock detection](#restock-detection) | ✅ Built |
 | [Owner corrections](#owner-corrections) | ✅ Built |
@@ -26,8 +28,8 @@ At closing, staff look at the bottles and tubs and type what's left. The drop be
 
 | Table | Columns |
 |---|---|
-| `audits` | `business_id`, `date` (unique per shop), `user_id`, `counted_by`, `started_at`, `submitted_at`, `duration_seconds` |
-| `audit_lines` | `audit_id`, `item_id`, `expected`, `counted`, `used`, `restocked`, `recipe_surplus`, `unit_cost` (copied at count time, six decimals) |
+| `audits` | `business_id`, `date` (unique per shop), `user_id`, `counted_by`, `started_at`, `submitted_at`, `duration_seconds`, `last_movement_id` (where the count sits in the stock history) |
+| `audit_lines` | `audit_id`, `item_id`, `expected`, `counted`, `used`, `restocked`, `recipe_surplus`, `recipe_deducted`, `recipe_deducted_costed`, `recipe_surplus_costed`, `recipe_fix`, `recipe_fix_at`, `unit_cost` (copied at count time, six decimals) |
 
 ---
 
@@ -37,7 +39,7 @@ One card per bulk item: "system says 5". For items counted in their own unit: la
 
 Submitting posts the counts as JSON with `started_at`, so the saved `duration_seconds` shows how long the audit really took.
 
-`ClosingAuditService::submit()` runs one transaction: lock the bulk items, create the audit and its lines, set `on_hand` to what was counted, and write `Audit` stock movements. Every bulk item must be included, or it's rejected.
+`ClosingAuditService::submit()` runs one transaction: lock the counted items, create the audit and its lines, set `on_hand` to what was counted, and write `Audit` stock movements. Every item on the list must be included, or it's rejected.
 
 ## Counting containers
 
@@ -67,15 +69,27 @@ When a liquid is also in recipes, sales already took their share during the day.
 **Counted more than expected?** For a liquid in no recipe it is a restock, as before. For one in recipes the card asks:
 
 - ( ) We restocked today → `restocked`
-- ( ) Recipes use less than set → `recipe_surplus`, and Today suggests lowering the recipe amount
+- ( ) Recipes use less than set → `recipe_surplus`, and Today suggests lowering the recipe amount ([below](#recipes-that-use-too-much)) Today's **Liquids · recipes vs the count** card (`App\Reports\RecipeVariance`) shows, for the latest closing: recipe use, the extra the count found (with its pesos), the total, and a plain verdict — "close to what the recipes say", "more than the recipes explain: waste, bigger portions or free extras?", or "recipes deduct more than the kitchen uses".
 
-The cost is never negative either way. Today's **Liquids · recipes vs the count** card (`App\Reports\RecipeVariance`) shows, for the latest closing: recipe use, the extra the count found (with its pesos), the total, and a plain verdict — "close to what the recipes say", "more than the recipes explain: waste, bigger portions or free extras?", or "recipes deduct more than the kitchen uses".
+> Ingredients (COGS) comes from each menu size's cost. With **Include in cost** on, each sale adds what its links cost ([Inventory › Menu items](04-inventory.md#menu-items--sizes)). With it off, the typed cost must include the ketchup, or the recipe share isn't charged anywhere; the editor warns about exactly this.
 
-> Ingredients (COGS) comes from each menu size's cost, which the owner sets — **Use as cost** in the item editor adds up the recipe, liquids included. If a size's cost leaves the ketchup out, the recipe share isn't charged anywhere; only the audit's extra is.
+## Recipes that use too much
+
+"Recipes use less than set" means sales took and costed more than the kitchen used. Three rules keep that exact:
+
+1. **Capped at what recipes took since the previous count.** For each item the audit stores `recipe_deducted`: `Sale` minus `Void` movements after the previous count's `last_movement_id`. A surplus above that can't be the recipes, so the rest is still a `restocked`. An owner correction keeps the first count's window.
+2. **Only what was charged is given back.** `recipe_surplus_costed = recipe_surplus × recipe_deducted_costed ÷ recipe_deducted`. Sales from items with Include in cost off never charged the liquid, so nothing comes back for them. The line's cost is `(used − recipe_surplus_costed) × unit_cost`, which can be below zero: it adds back to profit.
+3. **Fix the cause.** Today lists **Recipes that use too much**: "Recipes took 150 ml since the count before, but only 120 ml was used (80%)". **Lower the recipes** sets every recipe that uses it to that share (15 ml → 12 ml) and records each change in the item's link history; **Keep as is** dismisses it. Only the newest count per item can be applied (`App\Services\Audit\RecipeFixService`).
+
+Example: 10 burgers at 15 ml ketchup (₱0.05/ml, Include in cost on) → Ingredients ₱7.50 of ketchup. The count finds 30 ml more than expected → **+₱1.50** on the closing count.
+
+## Counting pieces
+
+Settings → **Count pieces at closing** (`settings.audit_pieces`, off by default). When on, pieces join the list after the liquids, stepping by 1. Missing pieces (`used`) are costed in the same line of the profit, so a stolen bun shows up the night it goes missing. The labels change to "Used or missing today" / "Used at closing".
 
 ## Usage cost
 
-`used = max(0, expected − counted)`, priced with the unit cost copied into the line, so later price changes never rewrite history. Example: oil 5 → 4.5 at ₱145 = **₱72.50** for the day.
+`used = max(0, expected − counted)`, priced with the unit cost copied into the line, so later price changes never rewrite history. Example: oil 5 → 4.5 at ₱145 = **₱72.50** for the day. The line's cost is `(used − recipe_surplus_costed) × unit_cost` ([above](#recipes-that-use-too-much)).
 
 Peso totals are hidden from cashiers unless the owner allows `view_costs`; they see "N items left to check" instead.
 
@@ -98,6 +112,10 @@ A second submit on the same day is a **correction**, owners only (`can:correct-a
 ## Tests
 
 `ContainerStockTest` (audit parts): the scenario to the centavo · containers and step on the screen · "recipes use less than set" vs restock.
+
+`ProfitAccuracyTest`: the over-charge given back exactly · nothing given back for uncosted recipes · surplus above the recipes is a restock · voids left out · the window starts at the previous count · corrections keep it · lower the recipes / keep as is / out-of-date / other shop.
+
+`PiecesAuditTest`: bulk only by default · the setting saves · pieces required and costed when on.
 
 `ClosingAuditTest`: saves counts and prices usage (₱72.50) · owner sees the usage cost · counting above expected is a restock · every bulk item required · cashiers can't redo today · owner corrections move stock by the difference only · the audit permission can be switched off.
 

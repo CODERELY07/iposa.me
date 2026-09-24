@@ -115,3 +115,25 @@ it('keeps requests between the shop and its owner', function () {
 
     expect($change->refresh()->status)->toBe(RecipeChange::PENDING);
 });
+
+it('does not cancel a waiting request when someone saves the links unchanged', function () {
+    ($this->askFor)([['piece_item_id' => $this->menu['patty']->id, 'qty' => 1]]);
+    ($this->askFor)([['piece_item_id' => $this->menu['bun']->id, 'qty' => 1], ['piece_item_id' => $this->menu['patty']->id, 'qty' => 1]]);
+
+    expect(RecipeChange::withoutGlobalScopes()->sole()->status)->toBe(RecipeChange::PENDING);
+});
+
+it('refuses a size that the item no longer has', function () {
+    $this->actingAs($this->cashier)->put(route('staff.products.links.update', $this->menu['tea']), [
+        'recipe' => [['piece_item_id' => $this->menu['cup22']->id, 'qty' => 1, 'variant_index' => 2]],
+    ])->assertSessionHasErrors('recipe.0.variant_index');
+
+    $this->actingAs($this->owner)->put(route('admin.inventory.update', $this->menu['tea']), [
+        'kind' => 'menu',
+        'name' => 'Iced Tea',
+        'variants' => [['id' => $this->menu['tea16']->id, 'label' => '16oz', 'cost' => 9.5, 'price' => 45]],
+        'recipe' => [['piece_item_id' => $this->menu['cup22']->id, 'qty' => 1, 'variant_index' => 1]],
+    ])->assertSessionHasErrors('recipe.0.variant_index');
+
+    expect(RecipeChange::withoutGlobalScopes()->count())->toBe(0);
+});

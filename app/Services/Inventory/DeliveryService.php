@@ -4,10 +4,12 @@ namespace App\Services\Inventory;
 
 use App\Enums\ExpenseCategory;
 use App\Enums\StockMovementReason;
+use App\Models\AuditLine;
 use App\Models\Delivery;
 use App\Models\Item;
 use App\Models\ItemContainer;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -41,7 +43,7 @@ class DeliveryService
 
     /**
      * @param  float  $receiptQuantity  in the unit the cashier used (containers or the item's unit)
-     * @return array{shortage: float, overcount: float, missing_cost: float, expense_logged: bool}
+     * @return array{shortage: float, overcount: float, corrected_count: ?CarbonInterface, missing_cost: float, expense_logged: bool}
      *
      * @throws ValidationException
      */
@@ -59,11 +61,17 @@ class DeliveryService
             $size = $delivery->container_size !== null ? (float) $delivery->container_size : 1.0;
             $receiptAdded = round($receiptQuantity * $size, 3);
             $recorded = (float) $delivery->added;
-            $shortage = max(0, round($receiptAdded - $recorded, 3));
-            $overcount = max(0, round($recorded - $receiptAdded, 3));
+            $shortage = max(0.0, round($receiptAdded - $recorded, 3));
+            $overcount = max(0.0, round($recorded - $receiptAdded, 3));
 
             // More on the shelf count than the receipt: the count was wrong, bring it down.
-            if ($overcount > 0) {
+            // If a closing count happened since, it already brought the shelf down and charged
+            // the missing amount as used; take that phantom usage back out of the count instead.
+            $countedSince = $overcount > 0 ? $this->firstCountSince($delivery) : null;
+
+            if ($countedSince !== null) {
+                $countedSince->update(['used' => round(max(0.0, (float) $countedSince->used - $overcount), 3)]);
+            } elseif ($overcount > 0) {
                 $this->stock->apply($business, [$item->id => -$overcount], StockMovementReason::Adjustment, ['user_id' => $owner->id]);
             }
 
@@ -118,8 +126,23 @@ class DeliveryService
                 'checked_at' => now(),
             ]);
 
-            return ['shortage' => $shortage, 'overcount' => $overcount, 'missing_cost' => $isStock ? $missingCost : 0.0, 'expense_logged' => $expenseLogged];
+            return ['shortage' => $shortage, 'overcount' => $overcount, 'corrected_count' => $countedSince?->audit->date, 'missing_cost' => $isStock ? $missingCost : 0.0, 'expense_logged' => $expenseLogged];
         });
+    }
+
+    /**
+     * The first closing count of this item after the delivery was recorded, if any.
+     */
+    private function firstCountSince(Delivery $delivery): ?AuditLine
+    {
+        return AuditLine::query()
+            ->where('item_id', $delivery->item_id)
+            ->whereHas('audit', fn ($query) => $query->withoutGlobalScopes()
+                ->where('business_id', $delivery->business_id)
+                ->where('created_at', '>=', $delivery->created_at))
+            ->with(['audit' => fn ($query) => $query->withoutGlobalScopes()])
+            ->orderBy('id')
+            ->first();
     }
 
     private function describe(Item $item, Delivery $delivery, float $receiptQuantity): string

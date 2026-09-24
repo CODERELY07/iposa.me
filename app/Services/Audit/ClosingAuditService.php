@@ -98,7 +98,7 @@ class ClosingAuditService
                     ? [(float) $line->recipe_deducted, (float) $line->recipe_deducted_costed]
                     : $this->recipeDeductionsSinceLastCount($item, $audit);
 
-                $surplus = max(0, round($counted - $expected, 3));
+                $surplus = max(0.0, round($counted - $expected, 3));
                 $recipeSurplus = $surplus > 0 && $inRecipes->has($item->id) && ($surplusReasons[$item->id] ?? null) === 'recipe'
                     ? min($surplus, $deducted)
                     : 0.0;
@@ -106,7 +106,7 @@ class ClosingAuditService
                 $audit->lines()->updateOrCreate(['item_id' => $item->id], [
                     'expected' => $expected,
                     'counted' => $counted,
-                    'used' => max(0, round($expected - $counted, 3)),
+                    'used' => max(0.0, round($expected - $counted, 3)),
                     'restocked' => round($surplus - $recipeSurplus, 3),
                     'recipe_surplus' => $recipeSurplus,
                     'recipe_deducted' => $deducted,
@@ -165,21 +165,19 @@ class ClosingAuditService
             ->latest('id')
             ->first();
 
-        // Counts from before counts kept their place fall back to the item's last count movement.
-        $lastCountId = $previous?->last_movement_id ?? ($previous === null ? null : StockMovement::withoutGlobalScopes()
-            ->where('item_id', $item->id)
-            ->where('reason', StockMovementReason::Audit)
-            ->max('id'));
+        // Counts saved before counts kept their place fall back to when they were submitted.
+        $since = $previous !== null && $previous->last_movement_id === null ? ($previous->submitted_at ?? $previous->created_at) : null;
 
         $totals = StockMovement::withoutGlobalScopes()
             ->where('item_id', $item->id)
             ->whereIn('reason', [StockMovementReason::Sale, StockMovementReason::Void])
-            ->when($lastCountId !== null, fn ($query) => $query->where('id', '>', $lastCountId))
+            ->when($previous?->last_movement_id !== null, fn ($query) => $query->where('id', '>', $previous->last_movement_id))
+            ->when($since !== null, fn ($query) => $query->where('created_at', '>', $since))
             ->selectRaw('coalesce(-sum(qty_change), 0) as deducted, coalesce(-sum(costed_qty), 0) as costed')
             ->first();
 
-        $deducted = max(0, round((float) $totals->deducted, 3));
+        $deducted = max(0.0, round((float) $totals->deducted, 3));
 
-        return [$deducted, min($deducted, max(0, round((float) $totals->costed, 3)))];
+        return [$deducted, min($deducted, max(0.0, round((float) $totals->costed, 3)))];
     }
 }

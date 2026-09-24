@@ -47,6 +47,8 @@ Step-by-step hosting guide: **[DEPLOY-RENDER.md](DEPLOY-RENDER.md)**. What's sti
 | **Checkout is idempotent by client `uuid`** | A retry — or a sale synced twice from offline — can't double-charge |
 | Nothing changes `on_hand` outside `StockService` | Every number has a `stock_movements` row explaining it |
 | One `DailyLedger` class behind every report | Today, the P&L and the CSV can't disagree |
+| **Stock lowers profit when used, not when bought** | A stock purchase is listed but not subtracted; the buns are costed in the sale or the closing count, so they're never counted twice |
+| **Cashiers propose, owners decide** | A cashier's restock is checked against the receipt and a cashier's link change waits for approval, so stock can't be hidden quietly |
 | Email is assumed to fail | Sign-ups, invites and resets survive a dead SMTP server |
 | **A shop's price is locked on the business, not read from the plan** | The operator can raise a price without changing anyone's bill mid-period |
 
@@ -89,4 +91,4 @@ Demo logins after seeding (password `password`): `admin@gmail.com` (owner), `sta
 php artisan test --compact
 ```
 
-**196 of 196 pass** (760 assertions). Run one file or one test with a path or `--filter=`. PHP style: `vendor/bin/pint --dirty`.
+**255 of 255 pass** (1,086 assertions). Run one file or one test with a path or `--filter=`. PHP style: `vendor/bin/pint --dirty`.

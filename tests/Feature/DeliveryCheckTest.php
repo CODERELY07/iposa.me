@@ -133,3 +133,23 @@ it('does not turn an owner\'s own restock into a delivery to check', function ()
 
     expect(Delivery::withoutGlobalScopes()->count())->toBe(0);
 });
+
+it('does not take stock off twice when a closing count came before the check', function () {
+    $this->business->update(['settings' => ['audit_pieces' => true, 'cashier_permissions' => ['restock_stock' => true]]]);
+    ($this->receive)($this->menu['bun'], 40);
+
+    // The shelf really holds 130: the count finds 10 fewer than the 140 the system expects.
+    $this->travel(1)->minute();
+    $counts = collect([$this->menu['oil'], $this->menu['bun'], $this->menu['patty'], $this->menu['cup16'], $this->menu['cup22']])
+        ->map(fn (Item $item) => ['item_id' => $item->id, 'counted' => $item->is($this->menu['bun']) ? 130 : (float) $item->refresh()->on_hand])
+        ->all();
+    $this->actingAs($this->owner)->postJson(route('audit.store'), ['counts' => $counts])->assertOk();
+    expect(($this->today)()['bulk'])->toBe(75.0);
+
+    ($this->check)(['receipt_quantity' => 30, 'paid' => 225])
+        ->assertSessionHas('status', fn (string $status) => str_contains($status, 'closing count had already corrected the shelf'));
+
+    expect((float) $this->menu['bun']->refresh()->on_hand)->toBe(130.0)
+        ->and(StockMovement::withoutGlobalScopes()->where('reason', StockMovementReason::Adjustment)->exists())->toBeFalse()
+        ->and(($this->today)()['bulk'])->toBe(0.0);
+});

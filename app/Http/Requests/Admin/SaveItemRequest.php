@@ -71,7 +71,7 @@ class SaveItemRequest extends FormRequest
                 Rule::notIn(array_filter([$currentItemId])),
             ],
             'recipe.*.qty' => ['required', 'numeric', 'gt:0', 'max:99999'],
-            'recipe.*.variant_index' => ['nullable', 'integer', 'min:0'],
+            'recipe.*.variant_index' => ['nullable', 'integer', 'min:0', 'max:'.max(0, count((array) $this->input('variants', [])) - 1)],
         ];
     }
 

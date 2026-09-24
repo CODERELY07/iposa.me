@@ -178,3 +178,15 @@ it('logs the owner\'s restock as a stock purchase only for items whose use is co
     $this->business->update(['settings' => ['audit_pieces' => true]]);
     expect($bags->isCostedWhenUsed($this->business->refresh()))->toBeTrue();
 });
+
+it('starts the window at an older count\'s time when it predates the stored position', function () {
+    ($this->sell)(10);
+    ($this->count)(2850);
+    AuditLine::query()->latest('id')->first()->audit()->withoutGlobalScopes()->update(['last_movement_id' => null]);
+
+    $this->travel(1)->day();
+    ($this->sell)(2);
+    ($this->count)(2830, 'recipe');
+
+    expect((float) ($this->line)()->recipe_deducted)->toBe(30.0);
+});

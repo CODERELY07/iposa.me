@@ -54,7 +54,7 @@ Deletes the user and ends their sessions immediately, but **past orders keep the
 
 ## Cashier permissions
 
-Four switches, stored in `businesses.settings.cashier_permissions` and enforced by Gates:
+Six switches, stored in `businesses.settings.cashier_permissions` and enforced by Gates:
 
 | Switch | Default | Hint shown to the owner |
 |---|---|---|
@@ -62,6 +62,8 @@ Four switches, stored in `businesses.settings.cashier_permissions` and enforced 
 | See cost prices and margins | off | Off keeps your margins private |
 | Void a paid order | off | Off sends a void request to you instead |
 | Log a small expense | on | For ice, LPG, anything bought from the drawer |
+| Restock | off | Add deliveries to the count; you check each against the receipt on Today |
+| Link pieces & liquids | off | Ask to change what one sale uses; nothing changes until you approve. Hidden on plans without ingredient links |
 
 Details in [Access control › Cashier permissions](02-access-control.md#cashier-permissions).
 
@@ -76,6 +78,7 @@ Shop name, business type, address, TIN (digits and dashes only) and a receipt fo
 | `payment_methods` | cash, gcash, maya | Which buttons the cashier sees; at least one is required |
 | `audit_reminder_time` | 21:30 | Saved; the reminder itself isn't sent yet ([06](06-closing-audit.md#whats-left)) |
 | `default_low_threshold` | 10 | Used by items with no threshold of their own |
+| `audit_pieces` | off | **Count pieces at closing**: buns, patties and cups join the closing audit ([06](06-closing-audit.md#counting-pieces)) |
 
 Settings merge over `Business::DEFAULT_SETTINGS`, so a new switch added later has a sensible value for existing shops without a migration.
 

@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AssetController;
 use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\DayController;
 use App\Http\Controllers\Admin\DeliveryCheckController;
 use App\Http\Controllers\Admin\ExportController;
 use App\Http\Controllers\Admin\ItemController;
@@ -74,6 +75,7 @@ Route::middleware(['auth', 'verified', 'role:staff', 'business'])->prefix('staff
 // Owner screens
 Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', DashboardController::class)->name('dashboard');
+    Route::get('/day/{section}', DayController::class)->whereIn('section', DayController::SECTIONS)->name('day');
 
     Route::get('/inventory', [ItemController::class, 'index'])->name('inventory');
     Route::get('/inventory/items/new', [ItemController::class, 'create'])->name('inventory.create');

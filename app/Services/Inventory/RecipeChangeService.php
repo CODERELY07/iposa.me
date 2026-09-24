@@ -100,14 +100,15 @@ class RecipeChangeService
             $before = $this->snapshot($item);
             $after = $this->snapshotFromRows($item, $rows);
 
+            // Saving the links as they are must not cancel someone else's request.
+            if (RecipeChange::sameLinks($before, $after)) {
+                return null;
+            }
+
             RecipeChange::withoutGlobalScopes()
                 ->where('item_id', $item->id)
                 ->where('status', RecipeChange::PENDING)
                 ->update(['status' => RecipeChange::REPLACED]);
-
-            if (RecipeChange::sameLinks($before, $after)) {
-                return null;
-            }
 
             return RecipeChange::withoutGlobalScopes()->create([
                 'business_id' => $item->business_id,

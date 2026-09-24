@@ -49,7 +49,7 @@ class RecipeFixService
                 && (int) $newestLineIds[$line->item_id] === $line->id)
             ->map(function (AuditLine $line): array {
                 $deducted = (float) $line->recipe_deducted;
-                $used = max(0, $deducted - (float) $line->recipe_surplus);
+                $used = max(0.0, $deducted - (float) $line->recipe_surplus);
 
                 return [
                     'line' => $line,

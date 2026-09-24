@@ -34,7 +34,9 @@ class DeliveryCheckController extends Controller
         }
 
         if ($result['overcount'] > 0) {
-            $message .= ' The count was '.Item::trimNumber($result['overcount'])." {$unit} too high and was corrected.";
+            $message .= $result['corrected_count'] !== null
+                ? ' The '.$result['corrected_count']->format('M j').' closing count had already corrected the shelf; '.Item::trimNumber($result['overcount'])." {$unit} that never existed was taken out of that day's usage."
+                : ' The count was '.Item::trimNumber($result['overcount'])." {$unit} too high and was corrected.";
         }
 
         if ($result['expense_logged']) {
