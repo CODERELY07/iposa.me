@@ -16,7 +16,7 @@ use Illuminate\View\View;
 class AuditController extends Controller
 {
     /**
-     * Tonight's shelf count: bulk items with what the system expects.
+     * Tonight's shelf count: bulk items (and pieces, when the shop counts them) with what the system expects.
      */
     public function index(Request $request, ClosingAuditService $audits): View
     {
@@ -26,8 +26,9 @@ class AuditController extends Controller
 
         $bulk = Item::query()
             ->active()
-            ->ofKind(ItemKind::Bulk)
+            ->whereIn('kind', ClosingAuditService::countedKinds($business))
             ->with('containers')
+            ->orderByRaw('case when kind = ? then 0 else 1 end', [ItemKind::Bulk->value])
             ->orderBy('name')
             ->get();
 
@@ -37,7 +38,8 @@ class AuditController extends Controller
             ->map(fn (Item $item) => [
                 'id' => $item->id,
                 'name' => $item->name,
-                'unit' => $item->unit ?? 'unit',
+                'unit' => $item->unit ?: ($item->kind === ItemKind::Piece ? 'pc' : 'unit'),
+                'isPiece' => $item->kind === ItemKind::Piece,
                 // A correction starts from the numbers already saved tonight.
                 'expected' => (float) ($countedToday?->get($item->id)?->expected ?? $item->on_hand ?? 0),
                 'counted' => $countedToday?->has($item->id) ? (float) $countedToday->get($item->id)->counted : null,
@@ -55,6 +57,7 @@ class AuditController extends Controller
             'todaysAudit' => $todaysAudit,
             'canCorrect' => Gate::allows('correct-audit'),
             'canSeeCosts' => Gate::allows('view-costs'),
+            'countsPieces' => $business->auditsPieces(),
         ]);
     }
 

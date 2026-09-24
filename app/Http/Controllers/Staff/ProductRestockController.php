@@ -5,17 +5,28 @@ namespace App\Http\Controllers\Staff;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Staff\RestockProductRequest;
 use App\Models\Item;
+use App\Services\Inventory\DeliveryService;
 use App\Services\Inventory\RestockService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 
 class ProductRestockController extends Controller
 {
     /**
-     * Put a delivery on the shelf. The cost stays what the owner last paid.
+     * Put a delivery on the shelf. The owner checks it against the receipt later,
+     * which is when the price, the expense and any shortage are settled.
      */
-    public function __invoke(RestockProductRequest $request, Item $item, RestockService $restocks): RedirectResponse
+    public function __invoke(RestockProductRequest $request, Item $item, RestockService $restocks, DeliveryService $deliveries): RedirectResponse
     {
-        $result = $restocks->restock($item, $request->user(), (float) $request->validated('quantity'), $request->container(), null, false);
+        $quantity = (float) $request->validated('quantity');
+        $container = $request->container();
+
+        $result = DB::transaction(function () use ($item, $request, $restocks, $deliveries, $quantity, $container): array {
+            $result = $restocks->restock($item, $request->user(), $quantity, $container, null, false);
+            $deliveries->record($item, $request->user(), $quantity, $container, $result['added']);
+
+            return $result;
+        });
 
         $item->refresh();
 

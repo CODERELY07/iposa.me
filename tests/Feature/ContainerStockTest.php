@@ -281,18 +281,23 @@ it('records a count above expected as recipes set too high when the counter says
     ]));
     $ketchup = Item::withoutGlobalScopes()->where('name', 'Banana ketchup')->firstOrFail();
     $burger = Item::withoutGlobalScopes()->create(['business_id' => $this->business->id, 'kind' => 'menu', 'name' => 'Burger']);
+    $regular = $burger->variants()->create(['label' => 'Regular', 'price' => 100, 'cost' => 40]);
     $burger->recipeLines()->create(['piece_item_id' => $ketchup->id, 'qty' => 15]);
 
+    // 10 burgers take 150 ml off; the shelf shows 115 ml more than that left.
+    $this->actingAs($this->owner)->postJson(route('pos.orders.store'), orderPayload([[$regular, 10]], 'gcash'))->assertCreated();
+
     $this->actingAs($this->owner)->postJson(route('audit.store'), [
-        'counts' => [['item_id' => $ketchup->id, 'counted' => 3000, 'surplus' => 'recipe']],
+        'counts' => [['item_id' => $ketchup->id, 'counted' => 2850, 'surplus' => 'recipe']],
     ])->assertOk();
 
     $line = $ketchup->refresh()->stockMovements()->exists() ? AuditLine::query()->where('item_id', $ketchup->id)->first() : null;
 
     expect((float) $line->restocked)->toBe(0.0)
         ->and((float) $line->recipe_surplus)->toBe(115.0)
+        ->and((float) $line->recipe_deducted)->toBe(150.0)
         ->and((float) $line->used)->toBe(0.0)
-        ->and((float) $ketchup->on_hand)->toBe(3000.0);
+        ->and((float) $ketchup->on_hand)->toBe(2850.0);
 });
 
 it('keeps a count above expected as a restock for liquids that are in no recipe', function () {

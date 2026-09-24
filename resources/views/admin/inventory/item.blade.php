@@ -285,6 +285,10 @@
                                             <span class="text-xs text-ink-500">Type only your own cost above. The app adds what the links cost at today's prices to every sale.</span>
                                         </span>
                                     </label>
+                                    <p x-show="! includeRecipeCost" class="mt-3 flex gap-2 rounded-lg bg-loss-500/10 px-3 py-2 text-xs text-loss-700 dark:text-loss-300">
+                                        <x-icon name="alert" class="mt-0.5 size-3.5 shrink-0" />
+                                        <span>Sales will take these off the shelf but won't count what they cost. Tick the box, or make sure the cost you typed above already includes them.</span>
+                                    </p>
                                     <ul class="mt-3 space-y-1 text-xs text-ink-500">
                                         <template x-for="(variant, index) in variants" :key="index">
                                             <li class="num">
@@ -307,6 +311,10 @@
                         </section>
                     @else
                         <section x-show="isMenu" class="surface p-5 text-sm text-ink-500">
+                            @if ($savedLinks->isNotEmpty())
+                                <span class="block text-ink-700 dark:text-ink-200">Each sale still uses: {{ $savedLinks->map(fn ($line) => \App\Models\Item::trimNumber((float) $line->qty, 3).' '.($line->piece?->unit ?: 'pc').' '.($line->piece?->name ?? '?').($line->variant ? ' ('.$line->variant->label.')' : ''))->join(', ') }}.</span>
+                                These links are kept and keep working. Changing them needs ingredient links on your plan.
+                            @endif
                             Ingredient links (sell a burger, buns go down) are on the Negosyo plan.
                             <a href="{{ route('admin.settings') }}#billing" class="font-medium text-brand-600 hover:underline dark:text-brand-300">See plans</a>
                         </section>
@@ -540,14 +548,60 @@
                         <label class="flex items-center gap-2 text-sm">
                             <input type="hidden" name="log_expense" value="0">
                             <input type="checkbox" name="log_expense" value="1" @checked(old('log_expense', true)) class="size-4 rounded border-ink-300 text-brand-500 focus:ring-brand-400 dark:border-white/20 dark:bg-white/[0.06]">
-                            Log what I paid as a <span class="font-medium">Stock purchase</span> expense
+                            @if ($item->isCostedWhenUsed(auth()->user()->business))
+                                Log what I paid as a <span class="font-medium">Stock purchase</span>
+                            @else
+                                Log what I paid as a <span class="font-medium">Supplies</span> expense
+                            @endif
                         </label>
+                        <p class="-mt-2 pl-6 text-xs text-ink-500">
+                            @if ($item->isCostedWhenUsed(auth()->user()->business))
+                                Stock purchases are listed in Expenses but don't lower profit: {{ $item->name }} is counted when it's used.
+                            @else
+                                {{ $item->name }} isn't linked to a sale or counted at closing, so what you pay for it lowers profit now.
+                            @endif
+                        </p>
                     @endif
 
                     <div class="flex justify-end">
                         <button type="submit" class="btn-primary" data-loading-text="Restocking…">Restock</button>
                     </div>
                 </form>
+            </section>
+        @endif
+
+        @if ($recipeChanges->isNotEmpty())
+            <section class="surface mt-8 p-6">
+                <h2 class="font-semibold">Link history</h2>
+                <p class="text-xs text-ink-500">Who changed what one sale uses, and when. The last 10 changes.</p>
+                <ul class="mt-4 divide-y divide-ink-100 dark:divide-white/[0.06]">
+                    @foreach ($recipeChanges as $change)
+                        <li class="flex flex-wrap items-start justify-between gap-3 py-3">
+                            <div class="min-w-0">
+                                <p class="text-sm">{{ implode(' · ', $change->summary()) ?: 'No change' }}</p>
+                                <p class="text-xs text-ink-500">
+                                    {{ $change->requested_by }} · {{ $change->created_at->format('M j, g:i A') }}
+                                    · <span @class(['font-medium', 'text-brand-700 dark:text-brand-300' => $change->isPending(), 'text-loss-600 dark:text-loss-400' => $change->status === 'rejected'])>{{ $change->statusLabel() }}</span>
+                                    @if ($change->decided_by_name && $change->status !== 'saved')
+                                        by {{ $change->decided_by_name }}
+                                    @endif
+                                </p>
+                            </div>
+                            @if ($change->isPending())
+                                <div class="flex gap-2">
+                                    <form method="POST" action="{{ route('admin.recipe-changes.approve', $change) }}">
+                                        @csrf
+                                        <button type="submit" class="btn-ghost px-3 py-1.5 text-xs" data-loading-text="Saving…">Approve</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('admin.recipe-changes.reject', $change) }}">
+                                        @csrf
+                                        <button type="submit" class="btn-quiet px-3 py-1.5 text-xs" data-loading-text="…">Reject</button>
+                                    </form>
+                                </div>
+                            @endif
+                        </li>
+                    @endforeach
+                </ul>
             </section>
         @endif
 

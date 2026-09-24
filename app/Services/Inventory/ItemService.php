@@ -10,10 +10,11 @@ use Illuminate\Support\Facades\DB;
 
 class ItemService
 {
-    public function __construct(private StockService $stock) {}
+    public function __construct(private StockService $stock, private RecipeChangeService $recipeChanges) {}
 
     /**
      * Create or update an item with its sizes and recipe links in one transaction.
+     * Leave out `recipe` (and `include_recipe_cost`) to keep the item's links as they are.
      *
      * @param  array{
      *     kind: string, name: string, category_id?: int|null, unit?: string|null,
@@ -28,6 +29,7 @@ class ItemService
         return DB::transaction(function () use ($business, $user, $data, $item): Item {
             $kind = ItemKind::from($data['kind']);
             $isNew = $item === null;
+            $linksBefore = $isNew ? [] : $this->recipeChanges->snapshot($item);
             $item ??= new Item(['business_id' => $business->id]);
 
             $containerRows = $kind === ItemKind::Menu ? [] : array_values($data['containers'] ?? []);
@@ -38,8 +40,13 @@ class ItemService
                 'category_id' => $data['category_id'] ?? null,
                 'unit' => $data['unit'] ?? null,
                 'low_threshold' => self::nullableNumber($data['low_threshold'] ?? null),
-                'include_recipe_cost' => $kind === ItemKind::Menu && (bool) ($data['include_recipe_cost'] ?? false),
             ]);
+
+            if ($kind !== ItemKind::Menu) {
+                $item->include_recipe_cost = false;
+            } elseif (array_key_exists('include_recipe_cost', $data)) {
+                $item->include_recipe_cost = (bool) $data['include_recipe_cost'];
+            }
 
             // With containers the cost comes from what the owner paid for one;
             // without, it is typed per unit as before.
@@ -64,7 +71,13 @@ class ItemService
                 $item->variants()->delete();
             }
 
-            $this->syncRecipe($item, $kind === ItemKind::Menu ? ($data['recipe'] ?? []) : [], $variants);
+            if ($kind !== ItemKind::Menu) {
+                $item->recipeLines()->delete();
+            } elseif (array_key_exists('recipe', $data)) {
+                $this->syncRecipe($item, $data['recipe'] ?? [], $variants);
+            }
+
+            $this->recipeChanges->recordSaved($item, $user, $linksBefore);
 
             $onHand = self::nullableNumber($data['on_hand'] ?? null);
 
@@ -123,21 +136,6 @@ class ItemService
         $item->unsetRelation('containers');
 
         return $cost;
-    }
-
-    /**
-     * Replace only what one sale uses, leaving names, sizes, prices and costs alone.
-     * `variant_index` points at the item's sizes in their saved order.
-     *
-     * @param  list<array{piece_item_id: int, qty: float|string, variant_index?: int|null}>  $rows
-     */
-    public function saveRecipe(Item $item, array $rows): Item
-    {
-        return DB::transaction(function () use ($item, $rows): Item {
-            $this->syncRecipe($item, array_values($rows), $item->variants()->pluck('id')->all());
-
-            return $item->load('recipeLines');
-        });
     }
 
     /**

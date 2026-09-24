@@ -46,10 +46,12 @@ class RestockService
             $expenseLogged = false;
 
             if ($logExpense && $paid !== null && $paid > 0 && $item->business->hasFeature('expenses')) {
+                $category = $item->isCostedWhenUsed($item->business) ? ExpenseCategory::StockPurchase : ExpenseCategory::Supplies;
+
                 $item->business->expenses()->create([
                     'date' => today(),
-                    'category' => ExpenseCategory::StockPurchase,
-                    'kind' => ExpenseCategory::StockPurchase->defaultKind(),
+                    'category' => $category,
+                    'kind' => $category->defaultKind(),
                     'description' => $this->describe($item, $quantity, $container, $added),
                     'amount' => round($paid, 2),
                     'user_id' => $user->id,

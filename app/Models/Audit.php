@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * One closing audit per business per day.
  */
-#[Fillable(['business_id', 'date', 'user_id', 'counted_by', 'started_at', 'submitted_at', 'duration_seconds'])]
+#[Fillable(['business_id', 'date', 'user_id', 'counted_by', 'started_at', 'submitted_at', 'duration_seconds', 'last_movement_id'])]
 class Audit extends Model
 {
     use BelongsToBusiness;
@@ -43,6 +43,6 @@ class Audit extends Model
      */
     public function usageCost(): float
     {
-        return round($this->lines->sum(fn (AuditLine $line) => (float) $line->used * (float) $line->unit_cost), 2);
+        return round($this->lines->sum(fn (AuditLine $line) => ((float) $line->used - (float) $line->recipe_surplus_costed) * (float) $line->unit_cost), 2);
     }
 }

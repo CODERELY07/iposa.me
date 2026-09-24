@@ -61,6 +61,7 @@ class SettingsController extends Controller
         $settings['payment_methods'] = array_values(array_unique($request->validated('payment_methods')));
         $settings['audit_reminder_time'] = $request->validated('audit_reminder_time');
         $settings['default_low_threshold'] = (float) $request->validated('default_low_threshold');
+        $settings['audit_pieces'] = $request->boolean('audit_pieces');
 
         $business->update(['settings' => $settings]);
 

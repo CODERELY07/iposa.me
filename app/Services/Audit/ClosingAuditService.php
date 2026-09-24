@@ -8,6 +8,7 @@ use App\Models\Audit;
 use App\Models\Business;
 use App\Models\Item;
 use App\Models\RecipeLine;
+use App\Models\StockMovement;
 use App\Models\User;
 use App\Services\Inventory\StockService;
 use Carbon\CarbonInterface;
@@ -36,6 +37,8 @@ class ClosingAuditService
      *
      * A count above expected is a restock, unless the item is used in recipes and
      * the counter says the recipes deduct more than the kitchen uses ("recipe").
+     * Recipes can only have over-deducted what they deducted since the last count,
+     * so anything above that is still a restock.
      *
      * @param  array<int, float>  $counts  item id => counted
      * @param  array<int, string>  $surplusReasons  item id => "restock" | "recipe"
@@ -50,7 +53,7 @@ class ClosingAuditService
         return DB::transaction(function () use ($business, $user, $counts, $startedAt, $date, $submittedAt, $surplusReasons): Audit {
             $items = Item::withoutGlobalScopes()
                 ->where('business_id', $business->id)
-                ->where('kind', ItemKind::Bulk)
+                ->whereIn('kind', self::countedKinds($business))
                 ->whereNull('archived_at')
                 ->lockForUpdate()
                 ->get()
@@ -60,7 +63,7 @@ class ClosingAuditService
 
             if ($missing->isNotEmpty() || count($counts) !== $items->count()) {
                 throw ValidationException::withMessages([
-                    'counts' => 'Count every bulk item before closing the day. Refresh the page if the list changed.',
+                    'counts' => 'Count every item on the list before closing the day. Refresh the page if the list changed.',
                 ]);
             }
 
@@ -90,15 +93,28 @@ class ClosingAuditService
                 $expected = $line !== null ? (float) $line->expected : (float) ($item->on_hand ?? 0);
                 $previouslyCounted = $line !== null ? (float) $line->counted : $expected;
 
+                // A correction keeps the window of the first count.
+                [$deducted, $deductedCosted] = $line !== null
+                    ? [(float) $line->recipe_deducted, (float) $line->recipe_deducted_costed]
+                    : $this->recipeDeductionsSinceLastCount($item, $audit);
+
                 $surplus = max(0, round($counted - $expected, 3));
-                $recipeOverDeducted = $surplus > 0 && $inRecipes->has($item->id) && ($surplusReasons[$item->id] ?? null) === 'recipe';
+                $recipeSurplus = $surplus > 0 && $inRecipes->has($item->id) && ($surplusReasons[$item->id] ?? null) === 'recipe'
+                    ? min($surplus, $deducted)
+                    : 0.0;
 
                 $audit->lines()->updateOrCreate(['item_id' => $item->id], [
                     'expected' => $expected,
                     'counted' => $counted,
                     'used' => max(0, round($expected - $counted, 3)),
-                    'restocked' => $recipeOverDeducted ? 0 : $surplus,
-                    'recipe_surplus' => $recipeOverDeducted ? $surplus : 0,
+                    'restocked' => round($surplus - $recipeSurplus, 3),
+                    'recipe_surplus' => $recipeSurplus,
+                    'recipe_deducted' => $deducted,
+                    'recipe_deducted_costed' => $deductedCosted,
+                    // Give back only what sales had charged: the share of the deductions that was costed.
+                    'recipe_surplus_costed' => $deducted > 0 ? round($recipeSurplus * $deductedCosted / $deducted, 3) : 0,
+                    'recipe_fix' => $recipeSurplus > 0 ? $line?->recipe_fix : null,
+                    'recipe_fix_at' => $recipeSurplus > 0 ? $line?->recipe_fix_at : null,
                     'unit_cost' => $line?->unit_cost ?? ($item->unit_cost ?? 0),
                 ]);
 
@@ -115,7 +131,55 @@ class ClosingAuditService
                 'user_id' => $user->id,
             ], $submittedAt);
 
+            // The first submit is when the shelf was counted; a correction doesn't move it.
+            if ($audit->last_movement_id === null) {
+                $audit->forceFill(['last_movement_id' => (int) StockMovement::withoutGlobalScopes()->where('business_id', $business->id)->max('id')])->save();
+            }
+
             return $audit->refresh()->load('lines');
         });
+    }
+
+    /**
+     * Item kinds the closing audit counts: bulk and liquids always, pieces when the shop asks.
+     *
+     * @return list<ItemKind>
+     */
+    public static function countedKinds(Business $business): array
+    {
+        return $business->auditsPieces() ? [ItemKind::Bulk, ItemKind::Piece] : [ItemKind::Bulk];
+    }
+
+    /**
+     * What sales took off this item through recipes since its last count (voids given
+     * back), and the part of that whose cost the sales charged.
+     *
+     * @return array{0: float, 1: float}
+     */
+    private function recipeDeductionsSinceLastCount(Item $item, Audit $current): array
+    {
+        $previous = Audit::withoutGlobalScopes()
+            ->where('business_id', $item->business_id)
+            ->whereKeyNot($current->id)
+            ->whereHas('lines', fn ($query) => $query->where('item_id', $item->id))
+            ->latest('id')
+            ->first();
+
+        // Counts from before counts kept their place fall back to the item's last count movement.
+        $lastCountId = $previous?->last_movement_id ?? ($previous === null ? null : StockMovement::withoutGlobalScopes()
+            ->where('item_id', $item->id)
+            ->where('reason', StockMovementReason::Audit)
+            ->max('id'));
+
+        $totals = StockMovement::withoutGlobalScopes()
+            ->where('item_id', $item->id)
+            ->whereIn('reason', [StockMovementReason::Sale, StockMovementReason::Void])
+            ->when($lastCountId !== null, fn ($query) => $query->where('id', '>', $lastCountId))
+            ->selectRaw('coalesce(-sum(qty_change), 0) as deducted, coalesce(-sum(costed_qty), 0) as costed')
+            ->first();
+
+        $deducted = max(0, round((float) $totals->deducted, 3));
+
+        return [$deducted, min($deducted, max(0, round((float) $totals->costed, 3)))];
     }
 }

@@ -10,6 +10,7 @@ enum ExpenseCategory: string
     case Supplies = 'supplies';
     case StockPurchase = 'stock_purchase';
     case Payables = 'payables';
+    case MissingStock = 'missing_stock';
     case Misc = 'misc';
 
     public function label(): string
@@ -21,6 +22,7 @@ enum ExpenseCategory: string
             self::Supplies => 'Supplies',
             self::StockPurchase => 'Stock purchase',
             self::Payables => 'Equipment payables',
+            self::MissingStock => 'Missing stock',
             self::Misc => 'Misc',
         };
     }
@@ -37,12 +39,25 @@ enum ExpenseCategory: string
     }
 
     /**
-     * Categories an owner can pick in the quick-add row. Payables come from equipment installments.
+     * Whether this spending lowers profit on the day it is logged.
+     *
+     * Stock bought for the shelf does not: it lowers profit later, when it is used,
+     * through each sale's cost and the closing count. Subtracting the purchase too
+     * would count the same buns twice.
+     */
+    public function lowersProfit(): bool
+    {
+        return $this !== self::StockPurchase;
+    }
+
+    /**
+     * Categories an owner can pick in the quick-add row. Payables come from equipment
+     * installments and missing stock from checked deliveries.
      *
      * @return list<self>
      */
     public static function selectable(): array
     {
-        return array_values(array_filter(self::cases(), fn (self $category) => $category !== self::Payables));
+        return array_values(array_filter(self::cases(), fn (self $category) => ! in_array($category, [self::Payables, self::MissingStock], true)));
     }
 }

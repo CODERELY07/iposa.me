@@ -6,7 +6,7 @@
     $role = $currentUser?->role;
     $shop = $currentUser?->business;
     $canRunAudit = $currentUser?->can('run-audit') ?? false;
-    $canOpenProducts = $role === 'staff' && ($currentUser->can('restock-stock') || ($currentUser->can('link-pieces') && $shop?->hasFeature('recipes')));
+    $canOpenProducts = $role === 'staff' && ($currentUser->can('restock-stock') || $currentUser->can('link-pieces'));
 
     $navigation = match ($role) {
         'super_admin' => [

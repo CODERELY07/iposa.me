@@ -2,19 +2,23 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\ExpenseCategory;
 use App\Enums\ItemKind;
 use App\Enums\OrderStatus;
 use App\Enums\StockMovementReason;
 use App\Http\Controllers\Controller;
 use App\Models\Audit;
+use App\Models\Delivery;
 use App\Models\Expense;
 use App\Models\Item;
 use App\Models\Order;
+use App\Models\RecipeChange;
 use App\Models\RecipeLine;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Reports\DailyLedger;
 use App\Reports\RecipeVariance;
+use App\Services\Audit\RecipeFixService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
@@ -24,16 +28,16 @@ class DashboardController extends Controller
     /**
      * Today: true profit so far, what needs attention tonight, the last 7 days.
      */
-    public function __invoke(Request $request, DailyLedger $ledger, RecipeVariance $variance): View
+    public function __invoke(Request $request, DailyLedger $ledger, RecipeVariance $variance, RecipeFixService $recipeFixes): View
     {
         $business = $request->user()->business;
 
         $week = $ledger->forRange($business, today()->subDays(6), today());
         $today = $week->last();
-        $expenseCount = Expense::query()->whereDate('date', today())->count();
+        $expenseCount = Expense::query()->whereDate('date', today())->whereNot('category', ExpenseCategory::StockPurchase)->count();
 
         $yesterdaySoFar = $ledger->salesAndCogsBetween($business, today()->subDay(), now()->subDay());
-        $yesterdayExpenses = (float) Expense::query()->whereDate('date', today()->subDay())->sum('amount');
+        $yesterdayExpenses = (float) Expense::query()->whereDate('date', today()->subDay())->whereNot('category', ExpenseCategory::StockPurchase)->sum('amount');
         $profitSoFar = round($today['sales'] - $today['cogs'] - $today['bulk'] - $today['expenses'], 2);
         $yesterdayProfitAtThisHour = round($yesterdaySoFar['sales'] - $yesterdaySoFar['cogs'] - $yesterdayExpenses, 2);
 
@@ -49,6 +53,10 @@ class DashboardController extends Controller
             'auditDone' => $today['audited'],
             'setupSteps' => $this->setupSteps(),
             'recipeVariance' => $variance->latest($business),
+            'deliveries' => Delivery::query()->where('status', Delivery::PENDING)->with(['item' => fn ($query) => $query->withoutGlobalScopes()])->oldest('id')->get(),
+            'recipeRequests' => RecipeChange::query()->where('status', RecipeChange::PENDING)->with('item')->oldest('id')->get(),
+            'recipeFixes' => $recipeFixes->suggestions($business),
+            'expensesEnabled' => $business->hasFeature('expenses'),
         ]);
     }
 

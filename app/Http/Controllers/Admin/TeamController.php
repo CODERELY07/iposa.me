@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\InviteStaffRequest;
 use App\Http\Requests\Admin\UpdateCashierPermissionsRequest;
-use App\Models\Business;
 use App\Models\User;
 use App\Services\Team\TeamService;
 use Illuminate\Http\RedirectResponse;
@@ -37,7 +36,7 @@ class TeamController extends Controller
             'members' => $members,
             'lastSeen' => $lastSeen,
             'seatsLeft' => $business->staffSeatsLeft(),
-            'permissions' => Business::CASHIER_PERMISSIONS,
+            'permissions' => $business->cashierPermissionOptions(),
             'permissionValues' => $business->resolvedSettings()['cashier_permissions'],
         ]);
     }

@@ -4,10 +4,13 @@ use App\Http\Controllers\Admin\AssetController;
 use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\DeliveryCheckController;
 use App\Http\Controllers\Admin\ExportController;
 use App\Http\Controllers\Admin\ItemController;
 use App\Http\Controllers\Admin\ItemImportController;
 use App\Http\Controllers\Admin\ItemRestockController;
+use App\Http\Controllers\Admin\RecipeChangeController;
+use App\Http\Controllers\Admin\RecipeFixController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\TeamController;
@@ -86,6 +89,12 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
 
     Route::post('/orders/{order}/void/approve', [VoidRequestController::class, 'approve'])->name('orders.void.approve');
     Route::post('/orders/{order}/void/reject', [VoidRequestController::class, 'reject'])->name('orders.void.reject');
+
+    Route::post('/recipe-changes/{recipeChange}/approve', [RecipeChangeController::class, 'approve'])->name('recipe-changes.approve');
+    Route::post('/recipe-changes/{recipeChange}/reject', [RecipeChangeController::class, 'reject'])->name('recipe-changes.reject');
+    Route::post('/recipe-fixes/{auditLine}/apply', [RecipeFixController::class, 'apply'])->name('recipe-fixes.apply');
+    Route::post('/recipe-fixes/{auditLine}/dismiss', [RecipeFixController::class, 'dismiss'])->name('recipe-fixes.dismiss');
+    Route::post('/deliveries/{delivery}/check', DeliveryCheckController::class)->name('deliveries.check');
 
     Route::middleware('plan:expenses')->group(function () {
         Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses');

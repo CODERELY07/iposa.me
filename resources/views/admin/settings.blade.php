@@ -97,6 +97,15 @@
                         <p class="mt-1 text-xs text-ink-500">Used for items without their own alert level.</p>
                     </div>
                 </div>
+                <label class="flex items-start gap-3 sm:col-span-2">
+                    <input type="hidden" name="audit_pieces" value="0">
+                    <input type="checkbox" name="audit_pieces" value="1" @checked(old('audit_pieces', $settings['audit_pieces']))
+                        class="mt-0.5 rounded border-ink-300 text-brand-500 focus:ring-brand-400 dark:border-white/20 dark:bg-ink-900">
+                    <span>
+                        <span class="block text-sm font-medium">Count pieces at closing</span>
+                        <span class="text-xs text-ink-500">Buns, patties and cups are counted with the liquids. Missing pieces show up the same night and are costed in your profit. Adds a few minutes to closing.</span>
+                    </span>
+                </label>
                 <div class="sm:col-span-2 sm:text-right">
                     <button type="submit" class="btn-primary" data-loading-text="Saving…">Save</button>
                 </div>

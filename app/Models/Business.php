@@ -34,12 +34,13 @@ class Business extends Model
     /**
      * Settings every business starts with. Stored values are merged on top.
      *
-     * @var array{payment_methods: list<string>, audit_reminder_time: string, default_low_threshold: int, cashier_permissions: array<string, bool>}
+     * @var array{payment_methods: list<string>, audit_reminder_time: string, default_low_threshold: int, audit_pieces: bool, cashier_permissions: array<string, bool>}
      */
     public const DEFAULT_SETTINGS = [
         'payment_methods' => ['cash', 'gcash', 'maya'],
         'audit_reminder_time' => '21:30',
         'default_low_threshold' => 10,
+        'audit_pieces' => false,
         'cashier_permissions' => [
             'run_audit' => true,
             'view_costs' => false,
@@ -60,8 +61,8 @@ class Business extends Model
         'view_costs' => ['label' => 'See cost prices and margins', 'hint' => 'Off keeps your margins private.'],
         'void_orders' => ['label' => 'Void a paid order', 'hint' => 'Off sends a void request to you instead.'],
         'log_expenses' => ['label' => 'Log expenses', 'hint' => 'For ice, LPG and small cash buys.'],
-        'restock_stock' => ['label' => 'Restock', 'hint' => 'Add deliveries to the count. They never see or change what you paid.'],
-        'link_pieces' => ['label' => 'Link pieces & liquids', 'hint' => 'Set what one sale uses (1 bun, 15 ml ketchup). Names, prices and costs stay yours.'],
+        'restock_stock' => ['label' => 'Restock', 'hint' => 'Add deliveries to the count. You check each one against the receipt on your Today page.'],
+        'link_pieces' => ['label' => 'Link pieces & liquids', 'hint' => 'Ask to change what one sale uses (1 bun, 15 ml ketchup). Nothing changes until you approve.'],
     ];
 
     /**
@@ -298,6 +299,28 @@ class Business extends Model
         }
 
         return $resolved;
+    }
+
+    /**
+     * Whether the closing audit also counts pieces (buns, cups), not only bulk and liquids.
+     */
+    public function auditsPieces(): bool
+    {
+        return (bool) $this->setting('audit_pieces');
+    }
+
+    /**
+     * The cashier switches that apply to this shop's plan: linking needs ingredient links.
+     *
+     * @return array<string, array{label: string, hint: string}>
+     */
+    public function cashierPermissionOptions(): array
+    {
+        return array_filter(
+            self::CASHIER_PERMISSIONS,
+            fn (string $key) => $key !== 'link_pieces' || $this->hasFeature('recipes'),
+            ARRAY_FILTER_USE_KEY,
+        );
     }
 
     /**

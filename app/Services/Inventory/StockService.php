@@ -19,8 +19,9 @@ class StockService
      *
      * @param  array<int, float>  $changes
      * @param  array{order_id?: int|null, audit_id?: int|null, user_id?: int|null}  $references
+     * @param  array<int, float>  $costedChanges  item id => the part of the change a sale charged in its cost (same sign)
      */
-    public function apply(Business $business, array $changes, StockMovementReason $reason, array $references = [], ?CarbonInterface $at = null): void
+    public function apply(Business $business, array $changes, StockMovementReason $reason, array $references = [], ?CarbonInterface $at = null, array $costedChanges = []): void
     {
         $changes = array_filter($changes, fn (float $change) => abs($change) >= 0.0005);
 
@@ -50,6 +51,7 @@ class StockService
                 'business_id' => $business->id,
                 'item_id' => $item->id,
                 'qty_change' => round($change, 3),
+                'costed_qty' => round($costedChanges[$itemId] ?? 0, 3),
                 'reason' => $reason,
                 'order_id' => $references['order_id'] ?? null,
                 'audit_id' => $references['audit_id'] ?? null,
