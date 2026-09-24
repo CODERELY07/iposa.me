@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\ItemRestockController;
 use App\Http\Controllers\Admin\RecipeChangeController;
 use App\Http\Controllers\Admin\RecipeFixController;
 use App\Http\Controllers\Admin\ReportController;
+use App\Http\Controllers\Admin\ReportPdfController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\TeamController;
 use App\Http\Controllers\Admin\VoidRequestController;
@@ -107,6 +108,7 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
     });
 
     Route::get('/reports', ReportController::class)->middleware('plan:reports')->name('reports');
+    Route::get('/reports/pdf', ReportPdfController::class)->middleware('plan:reports')->name('reports.pdf');
     Route::get('/exports/{dataset}', ExportController::class)
         ->whereIn('dataset', ExportController::DATASETS)
         ->name('exports.download');

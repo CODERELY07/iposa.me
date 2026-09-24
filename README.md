@@ -9,7 +9,7 @@ Net = Sales − Ingredients (COGS) − Bulk used − Expenses
 
 Stock you buy lowers profit when it is **used** (a sale's cost, the closing count), not when you pay for it, so nothing is counted twice.
 
-> **Status:** the app is built and deployed — sign-up through closing audit runs on real data, works offline, and is covered by 255 tests. What's not built is listed in [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status:** the app is built and deployed — sign-up through closing audit runs on real data, works offline, and is covered by 263 tests. What's not built is listed in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ---
 
@@ -21,7 +21,7 @@ Stock you buy lowers profit when it is **used** (a sale's cost, the closing coun
 | **Inventory** | Three kinds of stock: *menu items* (sold), *pieces* (buns, patties — deducted by recipe), *bulk & liquids* (oil, mayo — counted by eye). Cashier restocks are checked against the receipt; cashier link changes wait for the owner |
 | **Closing audit** | Staff type what's left (oil 5 → 4.5); the drop becomes the day's bulk cost. Pieces can be counted too |
 | **Expenses** | Entries by date and category, plus equipment installments that hit the P&L exactly once |
-| **Today & reports** | Profit so far vs yesterday at this hour, every peso of it one click away (each order, each ingredient, each counted item, each expense), the daily ledger, best sellers, CSV/zip export |
+| **Today & reports** | Profit so far vs yesterday at this hour, every peso of it one click away (each order, each ingredient, each counted item, each expense), the daily ledger, best sellers, a **PDF business report** with charts and tables, CSV/zip export |
 | **Team & billing** | Cashier invites, per-shop permissions, manual GCash/bank subscriptions |
 | **Platform console** | For the operator: MRR, trial funnel, shops that went quiet, plans and prices, suspensions, manual email verification |
 
@@ -37,7 +37,7 @@ Details: [Access control](docs/modules/02-access-control.md).
 
 ## Tech stack
 
-Laravel 13 · PHP 8.4 · Breeze (Blade) · Postgres in production / MySQL or SQLite locally · Tailwind CSS 3 · Alpine.js 3 · Vite · Pest 5. **No other frontend dependencies.**
+Laravel 13 · PHP 8.4 · Breeze (Blade) · dompdf (PDF reports) · Postgres in production / MySQL or SQLite locally · Tailwind CSS 3 · Alpine.js 3 · Vite · Pest 5. **No other frontend dependencies.**
 
 ---
 
@@ -73,7 +73,7 @@ Seeded verified, password `password` (local development only — the login page 
 php artisan test --compact
 ```
 
-255 tests, 1,086 assertions. Format PHP before committing:
+263 tests, 1,136 assertions. Format PHP before committing:
 
 ```bash
 vendor/bin/pint --dirty

@@ -91,4 +91,4 @@ Demo logins after seeding (password `password`): `admin@gmail.com` (owner), `sta
 php artisan test --compact
 ```
 
-**255 of 255 pass** (1,086 assertions). Run one file or one test with a path or `--filter=`. PHP style: `vendor/bin/pint --dirty`.
+**263 of 263 pass** (1,136 assertions). Run one file or one test with a path or `--filter=`. PHP style: `vendor/bin/pint --dirty`.
