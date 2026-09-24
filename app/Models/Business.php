@@ -45,6 +45,8 @@ class Business extends Model
             'view_costs' => false,
             'void_orders' => false,
             'log_expenses' => true,
+            'restock_stock' => false,
+            'link_pieces' => false,
         ],
     ];
 
@@ -58,6 +60,8 @@ class Business extends Model
         'view_costs' => ['label' => 'See cost prices and margins', 'hint' => 'Off keeps your margins private.'],
         'void_orders' => ['label' => 'Void a paid order', 'hint' => 'Off sends a void request to you instead.'],
         'log_expenses' => ['label' => 'Log expenses', 'hint' => 'For ice, LPG and small cash buys.'],
+        'restock_stock' => ['label' => 'Restock', 'hint' => 'Add deliveries to the count. They never see or change what you paid.'],
+        'link_pieces' => ['label' => 'Link pieces & liquids', 'hint' => 'Set what one sale uses (1 bun, 15 ml ketchup). Names, prices and costs stay yours.'],
     ];
 
     /**

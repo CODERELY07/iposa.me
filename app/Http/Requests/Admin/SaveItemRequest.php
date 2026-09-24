@@ -62,6 +62,7 @@ class SaveItemRequest extends FormRequest
             'variants.*.cost' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
             'variants.*.price' => ['required', 'numeric', 'min:0', 'max:9999999'],
 
+            'include_recipe_cost' => ['nullable', 'boolean'],
             'recipe' => ['nullable', 'array', 'max:30'],
             'recipe.*.piece_item_id' => [
                 'required', 'integer',

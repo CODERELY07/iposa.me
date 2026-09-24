@@ -17,7 +17,7 @@ class ItemService
      *
      * @param  array{
      *     kind: string, name: string, category_id?: int|null, unit?: string|null,
-     *     on_hand?: float|string|null, low_threshold?: float|string|null, unit_cost?: float|string|null,
+     *     on_hand?: float|string|null, low_threshold?: float|string|null, unit_cost?: float|string|null, include_recipe_cost?: bool|null,
      *     containers?: list<array{id?: int|null, label: string, size: float|string, price?: float|string|null}>,
      *     variants?: list<array{id?: int|null, label: string, cost?: float|string|null, price: float|string}>,
      *     recipe?: list<array{piece_item_id: int, qty: float|string, variant_index?: int|null}>
@@ -38,6 +38,7 @@ class ItemService
                 'category_id' => $data['category_id'] ?? null,
                 'unit' => $data['unit'] ?? null,
                 'low_threshold' => self::nullableNumber($data['low_threshold'] ?? null),
+                'include_recipe_cost' => $kind === ItemKind::Menu && (bool) ($data['include_recipe_cost'] ?? false),
             ]);
 
             // With containers the cost comes from what the owner paid for one;
@@ -122,6 +123,21 @@ class ItemService
         $item->unsetRelation('containers');
 
         return $cost;
+    }
+
+    /**
+     * Replace only what one sale uses, leaving names, sizes, prices and costs alone.
+     * `variant_index` points at the item's sizes in their saved order.
+     *
+     * @param  list<array{piece_item_id: int, qty: float|string, variant_index?: int|null}>  $rows
+     */
+    public function saveRecipe(Item $item, array $rows): Item
+    {
+        return DB::transaction(function () use ($item, $rows): Item {
+            $this->syncRecipe($item, array_values($rows), $item->variants()->pluck('id')->all());
+
+            return $item->load('recipeLines');
+        });
     }
 
     /**

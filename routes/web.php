@@ -21,6 +21,8 @@ use App\Http\Controllers\Pos\RegisterController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ServiceWorkerController;
 use App\Http\Controllers\Staff\MyOrdersController;
+use App\Http\Controllers\Staff\ProductController;
+use App\Http\Controllers\Staff\ProductRestockController;
 use App\Http\Controllers\SuperAdmin\PlanController;
 use App\Http\Controllers\SuperAdmin\PlatformDashboardController;
 use App\Http\Controllers\SuperAdmin\SubscriptionPaymentController;
@@ -56,6 +58,14 @@ Route::middleware(['auth', 'verified', 'role:staff|admin', 'business'])->group(f
 // Cashier screens
 Route::middleware(['auth', 'verified', 'role:staff', 'business'])->prefix('staff')->name('staff.')->group(function () {
     Route::get('/orders', MyOrdersController::class)->name('orders');
+
+    // Only what the owner switched on (Team screen): restock counts, link pieces to menu items.
+    Route::get('/products', [ProductController::class, 'index'])->name('products');
+    Route::post('/products/{item}/restock', ProductRestockController::class)->middleware('can:restock-stock')->name('products.restock');
+    Route::middleware(['can:link-pieces', 'plan:recipes'])->group(function () {
+        Route::get('/products/{item}/links', [ProductController::class, 'editLinks'])->name('products.links');
+        Route::put('/products/{item}/links', [ProductController::class, 'updateLinks'])->name('products.links.update');
+    });
 });
 
 // Owner screens

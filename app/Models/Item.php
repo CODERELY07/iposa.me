@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['business_id', 'category_id', 'kind', 'name', 'unit', 'on_hand', 'low_threshold', 'unit_cost', 'archived_at'])]
+#[Fillable(['business_id', 'category_id', 'kind', 'name', 'unit', 'on_hand', 'low_threshold', 'unit_cost', 'include_recipe_cost', 'archived_at'])]
 class Item extends Model
 {
     /** @use HasFactory<ItemFactory> */
@@ -45,6 +45,7 @@ class Item extends Model
             'on_hand' => 'decimal:3',
             'low_threshold' => 'decimal:3',
             'unit_cost' => 'decimal:6',
+            'include_recipe_cost' => 'boolean',
             'archived_at' => 'datetime',
         ];
     }
@@ -64,7 +65,7 @@ class Item extends Model
      */
     public function variants(): HasMany
     {
-        return $this->hasMany(ItemVariant::class)->orderBy('sort')->orderBy('id');
+        return $this->hasMany(ItemVariant::class)->orderBy('sort')->orderBy('id')->chaperone();
     }
 
     /**
@@ -75,6 +76,32 @@ class Item extends Model
     public function recipeLines(): HasMany
     {
         return $this->hasMany(RecipeLine::class);
+    }
+
+    /**
+     * What the linked pieces and liquids of one sale of this size cost, at their current cost per unit.
+     * Expects `recipeLines.piece` to be loaded.
+     */
+    public function linkedCostFor(ItemVariant $variant): float
+    {
+        return (float) $this->recipeLines
+            ->filter(fn (RecipeLine $line) => $line->appliesTo($variant))
+            ->sum(fn (RecipeLine $line) => (float) $line->qty * (float) ($line->piece?->unit_cost ?? 0));
+    }
+
+    /**
+     * The cost of one sale of this size: what the owner typed, plus the linked
+     * pieces and liquids when the owner asked for them to be included.
+     */
+    public function costPerSale(ItemVariant $variant): float
+    {
+        $cost = (float) $variant->cost;
+
+        if ($this->include_recipe_cost) {
+            $cost += $this->linkedCostFor($variant);
+        }
+
+        return round($cost, 2);
     }
 
     /**

@@ -100,7 +100,7 @@
                                             @endif
                                         </td>
                                         <td class="px-3 py-3 text-ink-600 dark:text-ink-300">{{ $variant->label }}</td>
-                                        <td class="num px-3 py-3 text-right text-ink-500">₱{{ number_format((float) $variant->cost, 2) }}</td>
+                                        <td class="num px-3 py-3 text-right text-ink-500">₱{{ number_format($variant->costPerSale(), 2) }}@if ($item->include_recipe_cost && $item->recipeLines->isNotEmpty())<span class="block text-[11px]">with links</span>@endif</td>
                                         <td class="num px-3 py-3 text-right">₱{{ number_format((float) $variant->price, 2) }}</td>
                                         <td class="num px-3 py-3 text-right font-medium">₱{{ number_format($variant->profit(), 2) }}</td>
                                         <td class="px-3 py-3 text-right">

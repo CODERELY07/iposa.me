@@ -56,6 +56,8 @@ class BusinessExports
 
     /**
      * The pricing matrix, same columns the importer reads (name, category, size, cost, price).
+     * Cost is what the owner typed, so a re-import never adds the links twice;
+     * profit and margin include linked pieces for items that ask for it.
      *
      * @return iterable<int, list<string|int|float|null>>
      */
@@ -67,7 +69,7 @@ class BusinessExports
             ->where('business_id', $business->id)
             ->where('kind', ItemKind::Menu)
             ->whereNull('archived_at')
-            ->with(['category', 'variants'])
+            ->with(['category', 'variants', 'recipeLines.piece'])
             ->orderBy('name')
             ->get();
 

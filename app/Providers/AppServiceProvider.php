@@ -39,6 +39,8 @@ class AppServiceProvider extends ServiceProvider
             'view-costs' => 'view_costs',
             'void-orders' => 'void_orders',
             'log-expenses' => 'log_expenses',
+            'restock-stock' => 'restock_stock',
+            'link-pieces' => 'link_pieces',
         ];
 
         foreach ($gates as $ability => $permission) {
