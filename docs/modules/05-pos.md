@@ -71,7 +71,7 @@ The button locks and shows "Processing sale, please wait…". Server errors appe
 | No recipe lines, but tracks its own stock | Itself |
 | No recipe, no stock tracking | Nothing |
 
-Items are locked (`lockForUpdate`) while updating, and every change writes a `Sale` stock movement tied to the order. Stock may go negative: a real kitchen sometimes sells before it counts, and the dashboard flags it rather than blocking the sale.
+Items are locked (`lockForUpdate`) while updating, and every change writes a `Sale` stock movement tied to the order. When the menu item has **Include in cost** on, the line's `unit_cost` is its typed cost plus what its links cost right now, and the movement's `costed_qty` records how much of the deduction that cost covered. A void puts both back, so the closing audit knows exactly what sales charged. Stock may go negative: a real kitchen sometimes sells before it counts, and the dashboard flags it rather than blocking the sale.
 
 ## Receipts
 

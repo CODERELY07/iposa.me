@@ -24,6 +24,9 @@ class UpdateProductLinksRequest extends FormRequest
      */
     public function rules(): array
     {
+        // A size that no longer exists must not silently become "all sizes".
+        $lastSize = max(0, $this->route('item')->variants()->count() - 1);
+
         return [
             'recipe' => ['nullable', 'array', 'max:30'],
             'recipe.*.piece_item_id' => [
@@ -31,7 +34,7 @@ class UpdateProductLinksRequest extends FormRequest
                 Rule::exists('items', 'id')->where('business_id', $this->user()->business_id)->whereIn('kind', [ItemKind::Piece->value, ItemKind::Bulk->value])->whereNull('archived_at'),
             ],
             'recipe.*.qty' => ['required', 'numeric', 'gt:0', 'max:99999'],
-            'recipe.*.variant_index' => ['nullable', 'integer', 'min:0'],
+            'recipe.*.variant_index' => ['nullable', 'integer', 'min:0', 'max:'.$lastSize],
         ];
     }
 
@@ -42,6 +45,7 @@ class UpdateProductLinksRequest extends FormRequest
     {
         return [
             'recipe.*.piece_item_id.exists' => 'Pick a piece or a liquid from the list.',
+            'recipe.*.variant_index.max' => 'The sizes of this item changed. Reload the page and try again.',
         ];
     }
 }

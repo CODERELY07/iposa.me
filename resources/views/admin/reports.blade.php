@@ -1,12 +1,13 @@
 @php
     $sales = $totals['sales'];
-    $operatingExpenses = round($totals['expenses'] - $totals['payables'], 2);
+    $operatingExpenses = round($totals['expenses'] - $totals['payables'] - $totals['missing'], 2);
     $net = $totals['net'];
     $base = max($sales, 0.01);
     $waterfall = [
         ['label' => 'Gross revenue', 'amount' => $sales, 'kind' => 'total', 'note' => number_format($totals['orders']).' '.\Illuminate\Support\Str::plural('order', $totals['orders']).' from the register'],
         ['label' => 'Ingredients (COGS)', 'amount' => -$totals['cogs'], 'kind' => 'cost', 'note' => 'Cost of each size sold'],
-        ['label' => 'Bulk & liquids', 'amount' => -$totals['bulk'], 'kind' => 'cost', 'note' => 'From closing audits'],
+        ['label' => 'Bulk & liquids', 'amount' => -$totals['bulk'], 'kind' => 'cost', 'note' => 'From closing audits, beyond what recipes took'],
+        ['label' => 'Missing stock', 'amount' => -$totals['missing'], 'kind' => 'cost', 'note' => 'Bought but never reached the shelf'],
         ['label' => 'Operating expenses', 'amount' => -$operatingExpenses, 'kind' => 'cost', 'note' => 'Rent, wages, utilities, supplies'],
         ['label' => 'Equipment payables', 'amount' => -$totals['payables'], 'kind' => 'cost', 'note' => 'Installments paid in this period'],
         ['label' => 'Net profit', 'amount' => $net, 'kind' => 'result', 'note' => $sales > 0 ? number_format($net / $sales * 100, 1).'% of revenue' : 'No sales yet'],
@@ -49,10 +50,17 @@
                 <div>
                     <p class="eyebrow">Net profit · {{ $periodLabel }}</p>
                     <p @class(['num mt-2 text-4xl font-semibold tracking-tight', 'text-loss-600 dark:text-loss-400' => $net < 0])>{{ $net < 0 ? '−' : '' }}₱{{ number_format(abs($net), 2) }}</p>
-                    <p class="mt-2 text-sm text-ink-500">Revenue minus every cost, including equipment installments.</p>
+                    <p class="mt-2 text-sm text-ink-500">Revenue minus every cost, including equipment installments. Stock you bought counts when it's used, not when you pay for it.</p>
+                    @if ($uncheckedDeliveries > 0)
+                        <a href="{{ route('admin.dashboard') }}#waiting" class="mt-3 flex gap-2 rounded-xl bg-brand-400/10 px-3 py-2 text-xs text-brand-800 hover:underline dark:text-brand-200">
+                            <x-icon name="alert" class="mt-0.5 size-3.5 shrink-0" />
+                            {{ $uncheckedDeliveries }} {{ \Illuminate\Support\Str::plural('delivery', $uncheckedDeliveries) }} not checked yet. A short delivery lowers profit once you check it.
+                        </a>
+                    @endif
                     <dl class="mt-6 space-y-2 border-t border-ink-100 pt-4 text-sm dark:border-white/[0.06]">
                         <div class="flex justify-between"><dt class="text-ink-500">Avg per day</dt><dd class="num">₱{{ number_format($net / max(1, $dayCount), 2) }}</dd></div>
                         <div class="flex justify-between"><dt class="text-ink-500">Best day</dt><dd class="num">{{ $bestDay ? $bestDay['date']->format('D j').' · ₱'.number_format($bestDay['net'], 0) : '—' }}</dd></div>
+                        <div class="flex justify-between"><dt class="text-ink-500">Stock bought</dt><dd class="num">₱{{ number_format($totals['stock_purchases'], 2) }}</dd></div>
                         <div class="flex justify-between"><dt class="text-ink-500">Food cost %</dt><dd class="num">{{ $sales > 0 ? number_format(($totals['cogs'] + $totals['bulk']) / $sales * 100, 1).'%' : '—' }}</dd></div>
                     </dl>
                 </div>

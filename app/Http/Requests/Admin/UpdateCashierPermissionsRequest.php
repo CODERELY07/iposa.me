@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests\Admin;
 
-use App\Models\Business;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateCashierPermissionsRequest extends FormRequest
@@ -24,7 +23,7 @@ class UpdateCashierPermissionsRequest extends FormRequest
     {
         $rules = ['permissions' => ['required', 'array']];
 
-        foreach (array_keys(Business::CASHIER_PERMISSIONS) as $permission) {
+        foreach (array_keys($this->user()->business->cashierPermissionOptions()) as $permission) {
             $rules["permissions.{$permission}"] = ['required', 'boolean'];
         }
 

@@ -28,6 +28,7 @@ class UpdateRegisterSettingsRequest extends FormRequest
             'payment_methods.*' => [Rule::enum(PaymentMethod::class)],
             'audit_reminder_time' => ['required', 'date_format:H:i'],
             'default_low_threshold' => ['required', 'numeric', 'min:0', 'max:99999'],
+            'audit_pieces' => ['nullable', 'boolean'],
         ];
     }
 

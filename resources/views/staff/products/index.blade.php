@@ -15,7 +15,7 @@
             <section class="space-y-3">
                 <div>
                     <h2 class="font-semibold">Restock</h2>
-                    <p class="text-xs text-ink-500">Enter how many arrived. It is added to what is on the shelf.</p>
+                    <p class="text-xs text-ink-500">Enter how many arrived. It is added to what is on the shelf, and the owner checks it against the receipt.</p>
                 </div>
 
                 @if ($stockItems->isEmpty())
@@ -55,7 +55,7 @@
             <section class="space-y-3">
                 <div>
                     <h2 class="font-semibold">What one sale uses</h2>
-                    <p class="text-xs text-ink-500">Each sale takes these off the shelf: 1 bun, 15 ml ketchup.</p>
+                    <p class="text-xs text-ink-500">Each sale takes these off the shelf: 1 bun, 15 ml ketchup. Changes need the owner's approval.</p>
                 </div>
 
                 @if ($menuItems->isEmpty())
@@ -65,7 +65,11 @@
                         @foreach ($menuItems as $item)
                             <li class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3.5 sm:px-5">
                                 <div class="min-w-0 flex-1">
-                                    <p class="truncate text-sm font-medium">{{ $item->name }}</p>
+                                    <p class="truncate text-sm font-medium">{{ $item->name }}
+                                        @if ($pendingItemIds->has($item->id))
+                                            <span class="pill ml-1 bg-brand-400/15 text-brand-700 dark:text-brand-300">waiting for owner</span>
+                                        @endif
+                                    </p>
                                     <p class="truncate text-xs text-ink-500">
                                         @if ($item->recipeLines->isEmpty())
                                             No links

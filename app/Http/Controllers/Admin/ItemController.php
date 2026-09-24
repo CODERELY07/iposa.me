@@ -212,7 +212,8 @@ class ItemController extends Controller
                     'cost' => (float) $variant->cost,
                     'price' => (float) $variant->price,
                 ])->values()->all() ?: [['id' => null, 'label' => 'Regular', 'cost' => null, 'price' => null]]),
-                'includeRecipeCost' => (bool) old('include_recipe_cost', $item->include_recipe_cost ?? false),
+                // New items start with links counted in cost, so nothing linked goes uncosted by default.
+                'includeRecipeCost' => (bool) old('include_recipe_cost', $item->exists ? $item->include_recipe_cost : true),
                 'unit' => old('unit', $item->unit ?? ''),
                 'containers' => array_values(old('containers', $containers->map(fn ($container) => [
                     'id' => $container->id,
@@ -226,13 +227,15 @@ class ItemController extends Controller
                     'variant_index' => $line->item_variant_id !== null ? $variants->search(fn ($variant) => $variant->id === $line->item_variant_id) : null,
                 ])->values()->all() : []),
             ],
+            'recipeChanges' => $item->exists ? $item->recipeChanges()->limit(10)->get() : collect(),
+            'savedLinks' => $item->exists && $item->relationLoaded('recipeLines') ? $item->recipeLines->load('piece', 'variant') : collect(),
             'pieceCosts' => $pieces->mapWithKeys(fn (Item $piece) => [$piece->id => (float) $piece->unit_cost])->all(),
             'pieceUnits' => $pieces->mapWithKeys(fn (Item $piece) => [$piece->id => $piece->unit ?: ($piece->kind === ItemKind::Piece ? 'pc' : '')])->all(),
         ];
     }
 
     /**
-     * Drop recipe links when the plan doesn't include them.
+     * Links come from the form only when the plan includes them; otherwise they stay as saved.
      *
      * @return array<string, mixed>
      */
@@ -240,8 +243,12 @@ class ItemController extends Controller
     {
         $data = $request->validated();
 
-        if (! $request->user()->business->hasFeature('recipes')) {
-            unset($data['recipe']);
+        if ($request->user()->business->hasFeature('recipes')) {
+            // An empty list sends nothing, so "no links" must be said out loud.
+            $data['recipe'] ??= [];
+        } else {
+            // Without ingredient links on the plan the form has no links: keep the ones saved.
+            unset($data['recipe'], $data['include_recipe_cost']);
         }
 
         return $data;

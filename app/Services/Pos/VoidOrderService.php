@@ -46,18 +46,19 @@ class VoidOrderService
         }
 
         return DB::transaction(function () use ($order, $approver): Order {
-            $restock = StockMovement::withoutGlobalScopes()
+            $saleMovements = StockMovement::withoutGlobalScopes()
                 ->where('order_id', $order->id)
                 ->where('reason', StockMovementReason::Sale)
                 ->get()
-                ->groupBy('item_id')
-                ->map(fn ($movements) => -1 * $movements->sum(fn (StockMovement $movement) => (float) $movement->qty_change))
-                ->all();
+                ->groupBy('item_id');
+
+            $restock = $saleMovements->map(fn ($movements) => -1 * $movements->sum(fn (StockMovement $movement) => (float) $movement->qty_change))->all();
+            $costedRestock = $saleMovements->map(fn ($movements) => -1 * $movements->sum(fn (StockMovement $movement) => (float) $movement->costed_qty))->all();
 
             $this->stock->apply($order->business, $restock, StockMovementReason::Void, [
                 'order_id' => $order->id,
                 'user_id' => $approver->id,
-            ]);
+            ], costedChanges: $costedRestock);
 
             $order->update([
                 'status' => OrderStatus::Voided,

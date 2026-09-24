@@ -4,11 +4,12 @@
     $chartMax = max(1, $week->max('sales'));
     $daysLeft = $business->daysUntilDue();
     $setupDone = collect($setupSteps)->every(fn (array $step) => $step['done']);
+    $waitingCount = $deliveries->count() + $recipeRequests->count() + $recipeFixes->count();
     $equation = [
-        ['label' => 'Sales', 'amount' => $today['sales'], 'negative' => false, 'hint' => $today['orders'].' '.\Illuminate\Support\Str::plural('order', $today['orders']), 'href' => $business->hasFeature('reports') ? route('admin.reports') : null],
-        ['label' => 'Ingredients', 'amount' => $today['cogs'], 'negative' => true, 'hint' => 'cost of what sold', 'href' => route('admin.inventory')],
-        ['label' => 'Bulk used', 'amount' => $today['audited'] ? $today['bulk'] : null, 'negative' => true, 'hint' => $today['audited'] ? 'from tonight’s audit' : 'after closing audit', 'href' => route('audit')],
-        ['label' => 'Expenses', 'amount' => $today['expenses'], 'negative' => true, 'hint' => $today['expenseCount'].' '.\Illuminate\Support\Str::plural('entry', $today['expenseCount']).' today', 'href' => $business->hasFeature('expenses') ? route('admin.expenses') : null],
+        ['label' => 'Sales', 'amount' => $today['sales'], 'negative' => false, 'hint' => $today['orders'].' '.\Illuminate\Support\Str::plural('order', $today['orders']), 'href' => route('admin.day', 'sales')],
+        ['label' => 'Ingredients', 'amount' => $today['cogs'], 'negative' => true, 'hint' => 'cost of what sold', 'href' => route('admin.day', 'ingredients')],
+        ['label' => $business->auditsPieces() ? 'Used at closing' : 'Bulk used', 'amount' => $today['audited'] ? $today['bulk'] : null, 'negative' => true, 'hint' => $today['audited'] ? 'from tonight’s audit' : 'after closing audit', 'href' => route('admin.day', 'bulk')],
+        ['label' => 'Expenses', 'amount' => $today['expenses'], 'negative' => true, 'hint' => $today['expenseCount'].' '.\Illuminate\Support\Str::plural('entry', $today['expenseCount']).' today', 'href' => route('admin.day', 'expenses')],
     ];
 @endphp
 
@@ -43,12 +44,12 @@
                         <a href="{{ $part['href'] ?? '#' }}" @class(['group bg-white p-4 transition dark:bg-ink-900', 'hover:bg-ink-50 dark:hover:bg-ink-800/60' => $part['href'], 'pointer-events-none' => ! $part['href']])>
                             <p class="flex items-center justify-between text-xs text-ink-500">
                                 {{ $part['label'] }}
-                                @if ($part['href'])<x-icon name="chevron-right" class="size-3.5 opacity-0 transition group-hover:opacity-100" />@endif
+                                @if ($part['href'])<x-icon name="chevron-right" class="size-3.5 opacity-40 transition group-hover:opacity-100" />@endif
                             </p>
                             @if ($part['amount'] === null)
                                 <p class="num mt-1 text-lg font-semibold text-ink-400">pending</p>
                             @else
-                                <p class="num mt-1 text-lg font-semibold">{{ $part['negative'] && $part['amount'] > 0 ? '−' : '' }}₱{{ number_format($part['amount'], 2) }}</p>
+                                <p class="num mt-1 text-lg font-semibold">{{ $part['negative'] && $part['amount'] < 0 ? '+' : ($part['negative'] && $part['amount'] > 0 ? '−' : '') }}₱{{ number_format(abs($part['amount']), 2) }}</p>
                             @endif
                             <p class="mt-0.5 text-[11px] text-ink-400">{{ $part['hint'] }}</p>
                         </a>
@@ -66,6 +67,16 @@
                             <div class="min-w-0 flex-1">
                                 <a href="{{ route('audit') }}" class="text-sm font-medium hover:underline">Closing audit not done</a>
                                 <p class="text-xs text-ink-500">Profit leaves out oil, mayo and sauces until it is.</p>
+                            </div>
+                        </li>
+                    @endif
+
+                    @if ($waitingCount > 0)
+                        <li class="flex gap-3 rounded-xl bg-brand-400/10 p-3">
+                            <x-icon name="check" class="size-5 text-brand-600 dark:text-brand-300" />
+                            <div class="min-w-0 flex-1">
+                                <a href="#waiting" class="text-sm font-medium hover:underline">{{ $waitingCount }} {{ \Illuminate\Support\Str::plural('thing', $waitingCount) }} to check</a>
+                                <p class="text-xs text-ink-500">{{ collect([$deliveries->isNotEmpty() ? $deliveries->count().' '.\Illuminate\Support\Str::plural('delivery', $deliveries->count()) : null, $recipeRequests->isNotEmpty() ? $recipeRequests->count().' link '.\Illuminate\Support\Str::plural('request', $recipeRequests->count()) : null, $recipeFixes->isNotEmpty() ? $recipeFixes->count().' recipe '.\Illuminate\Support\Str::plural('suggestion', $recipeFixes->count()) : null])->filter()->join(', ') }}</p>
                             </div>
                         </li>
                     @endif
@@ -97,7 +108,7 @@
                         </li>
                     @endforeach
 
-                    @if ($auditDone && $voidRequests->isEmpty() && $lowStock->isEmpty())
+                    @if ($auditDone && $voidRequests->isEmpty() && $lowStock->isEmpty() && $waitingCount === 0)
                         <li class="flex h-full flex-col items-center justify-center py-8 text-center text-sm text-ink-500">
                             <x-icon name="check" class="mb-2 size-6 text-gain-500" />
                             All clear for tonight.
@@ -107,6 +118,10 @@
                 <a href="{{ route('admin.inventory', ['tab' => 'pieces']) }}" class="btn-ghost mt-4 w-full">Review stock</a>
             </section>
         </div>
+
+        @if ($waitingCount > 0)
+            @include('admin.partials.waiting')
+        @endif
 
         <div class="grid gap-6 lg:grid-cols-3">
             {{-- 7-day chart --}}
@@ -210,7 +225,7 @@
                             </tbody>
                         </table>
                     </div>
-                    <p class="mt-3 text-[11px] text-ink-400">Recipes are charged in Ingredients through each item's cost; the audit only charges the extra, in Bulk &amp; liquids. Nothing is counted twice.</p>
+                    <p class="mt-3 text-[11px] text-ink-400">What recipes take is costed in Ingredients for items with “Include in cost” on (otherwise it should be in the cost you typed). The count only charges the extra, and gives back what recipes over-charged. Nothing is counted twice.</p>
                 </section>
             @endif
         </div>

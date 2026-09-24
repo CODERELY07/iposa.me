@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * Audit trail: every change to an item's on-hand count, and why.
  */
-#[Fillable(['business_id', 'item_id', 'qty_change', 'reason', 'order_id', 'audit_id', 'user_id', 'created_at'])]
+#[Fillable(['business_id', 'item_id', 'qty_change', 'costed_qty', 'reason', 'order_id', 'audit_id', 'user_id', 'created_at'])]
 class StockMovement extends Model
 {
     use BelongsToBusiness;
@@ -27,6 +27,7 @@ class StockMovement extends Model
     {
         return [
             'qty_change' => 'decimal:3',
+            'costed_qty' => 'decimal:3',
             'reason' => StockMovementReason::class,
         ];
     }

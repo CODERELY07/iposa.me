@@ -1,7 +1,9 @@
 <?php
 
 use App\Enums\StockMovementReason;
+use App\Models\Delivery;
 use App\Models\Expense;
+use App\Models\RecipeChange;
 use App\Models\StockMovement;
 use App\Services\Team\TeamService;
 
@@ -39,6 +41,11 @@ it('lets a cashier restock the count without touching the cost', function () {
         ->and((float) $bun->unit_cost)->toBe(7.5)
         ->and(Expense::withoutGlobalScopes()->count())->toBe(0)
         ->and(StockMovement::withoutGlobalScopes()->where('item_id', $bun->id)->where('reason', StockMovementReason::Restock)->sole()->user_id)->toBe($this->cashier->id);
+
+    $delivery = Delivery::withoutGlobalScopes()->sole();
+    expect($delivery->status)->toBe(Delivery::PENDING)
+        ->and((float) $delivery->added)->toBe(50.0)
+        ->and($delivery->received_by)->toBe($this->cashier->name);
 });
 
 it('does not restock made-to-order food', function () {
@@ -49,13 +56,14 @@ it('does not restock made-to-order food', function () {
         ->assertForbidden();
 });
 
-it('lets a cashier change only the links of a menu item', function () {
+it('sends a cashier\'s link change to the owner instead of applying it', function () {
     ($this->allow)(['link_pieces' => true]);
     $burger = $this->menu['burger'];
 
     $this->actingAs($this->cashier)->get(route('staff.products.links', $burger))
         ->assertOk()
         ->assertSee('Beef patty')
+        ->assertSee('Send to owner')
         ->assertDontSee('₱');
 
     $this->actingAs($this->cashier)->put(route('staff.products.links.update', $burger), [
@@ -69,18 +77,25 @@ it('lets a cashier change only the links of a menu item', function () {
     expect($burger->name)->toBe('Cheeseburger')
         ->and($burger->include_recipe_cost)->toBeFalse()
         ->and((float) $this->menu['burgerRegular']->refresh()->price)->toBe(109.0)
-        ->and($burger->recipeLines)->toHaveCount(1)
-        ->and((float) $burger->recipeLines->first()->qty)->toBe(2.0);
+        ->and($burger->recipeLines)->toHaveCount(2);
 
+    $change = RecipeChange::withoutGlobalScopes()->sole();
+    expect($change->status)->toBe(RecipeChange::PENDING)
+        ->and($change->requested_by)->toBe($this->cashier->name)
+        ->and($change->summary())->toBe(['Burger bun: 1 → 2 pc', 'Remove 1 pc Beef patty']);
+
+    $this->actingAs($this->cashier)->get(route('staff.products.links', $burger))->assertSee('Waiting for the owner');
     $this->actingAs($this->cashier)->post(route('staff.products.restock', $this->menu['bun']), ['quantity' => 1])->assertForbidden();
 });
 
-it('links a piece to one size by its position', function () {
+it('links a piece to one size by its position once the owner approves', function () {
     ($this->allow)(['link_pieces' => true]);
 
     $this->actingAs($this->cashier)->put(route('staff.products.links.update', $this->menu['tea']), [
         'recipe' => [['piece_item_id' => $this->menu['cup22']->id, 'qty' => 1, 'variant_index' => 1]],
     ])->assertRedirect();
+
+    $this->actingAs($this->owner)->post(route('admin.recipe-changes.approve', RecipeChange::withoutGlobalScopes()->sole()))->assertRedirect();
 
     expect($this->menu['tea']->recipeLines()->sole()->item_variant_id)->toBe($this->menu['tea22']->id);
 });

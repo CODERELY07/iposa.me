@@ -16,12 +16,15 @@ use Illuminate\Support\Facades\DB;
  *
  *   Net = Sales − Ingredients (COGS) − Bulk used − Expenses
  *
+ * Stock purchases are listed but never subtracted: bought stock lowers profit
+ * when it is used (COGS and the closing count), not when it is paid for.
+ *
  * Every report and dashboard reads from here, so the numbers always match.
  */
 class DailyLedger
 {
     /**
-     * @return Collection<string, array{date: CarbonImmutable, orders: int, sales: float, cogs: float, bulk: float, audited: bool, expenses: float, payables: float, net: float}>
+     * @return Collection<string, array{date: CarbonImmutable, orders: int, sales: float, cogs: float, bulk: float, audited: bool, expenses: float, payables: float, missing: float, stock_purchases: float, net: float}>
      */
     public function forRange(Business $business, CarbonInterface $from, CarbonInterface $to): Collection
     {
@@ -46,6 +49,8 @@ class DailyLedger
                 'audited' => isset($bulk[$key]),
                 'expenses' => round((float) ($expenses[$key]->expenses ?? 0), 2),
                 'payables' => round((float) ($expenses[$key]->payables ?? 0), 2),
+                'missing' => round((float) ($expenses[$key]->missing ?? 0), 2),
+                'stock_purchases' => round((float) ($expenses[$key]->stock_purchases ?? 0), 2),
             ];
             $row['net'] = round($row['sales'] - $row['cogs'] - $row['bulk'] - $row['expenses'], 2);
 
@@ -59,7 +64,7 @@ class DailyLedger
      * Column totals for a set of ledger rows.
      *
      * @param  Collection<string, array<string, mixed>>  $rows
-     * @return array{orders: int, sales: float, cogs: float, bulk: float, expenses: float, payables: float, net: float}
+     * @return array{orders: int, sales: float, cogs: float, bulk: float, expenses: float, payables: float, missing: float, stock_purchases: float, net: float}
      */
     public function totals(Collection $rows): array
     {
@@ -70,6 +75,8 @@ class DailyLedger
             'bulk' => round($rows->sum('bulk'), 2),
             'expenses' => round($rows->sum('expenses'), 2),
             'payables' => round($rows->sum('payables'), 2),
+            'missing' => round($rows->sum('missing'), 2),
+            'stock_purchases' => round($rows->sum('stock_purchases'), 2),
             'net' => round($rows->sum('net'), 2),
         ];
     }
@@ -157,7 +164,8 @@ class DailyLedger
             ->join('audits', 'audits.id', '=', 'audit_lines.audit_id')
             ->where('audits.business_id', $business->id)
             ->whereBetween('audits.date', [$from->toDateString(), $to->toDateString().' 23:59:59'])
-            ->selectRaw('date(audits.date) as day, sum(audit_lines.used * audit_lines.unit_cost) as bulk')
+            // Used beyond the recipes, minus what the recipes over-charged in sales.
+            ->selectRaw('date(audits.date) as day, sum((audit_lines.used - audit_lines.recipe_surplus_costed) * audit_lines.unit_cost) as bulk')
             ->groupByRaw('date(audits.date)')
             ->get()
             ->keyBy('day');
@@ -171,7 +179,10 @@ class DailyLedger
         return DB::table('expenses')
             ->where('business_id', $business->id)
             ->whereBetween('date', [$from->toDateString(), $to->toDateString().' 23:59:59'])
-            ->selectRaw('date(date) as day, sum(amount) as expenses, sum(case when category = ? then amount else 0 end) as payables', [ExpenseCategory::Payables->value])
+            ->selectRaw(
+                'date(date) as day, sum(case when category = ? then 0 else amount end) as expenses, sum(case when category = ? then amount else 0 end) as payables, sum(case when category = ? then amount else 0 end) as missing, sum(case when category = ? then amount else 0 end) as stock_purchases',
+                [ExpenseCategory::StockPurchase->value, ExpenseCategory::Payables->value, ExpenseCategory::MissingStock->value, ExpenseCategory::StockPurchase->value],
+            )
             ->groupByRaw('date(date)')
             ->get()
             ->keyBy('day');

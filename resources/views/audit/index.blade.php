@@ -1,5 +1,6 @@
 @php
     $alreadyClosed = $todaysAudit !== null;
+    $usedLabel = $countsPieces ? 'Used or missing today' : 'Bulk used today';
     $auditConfig = [
         'items' => $bulkItems,
         'storeUrl' => route('audit.store', absolute: false),
@@ -13,7 +14,7 @@
             <div class="py-20 text-center">
                 <h1 class="text-2xl font-semibold">Nothing to count yet</h1>
                 <p class="mx-auto mt-2 max-w-sm text-sm text-ink-500">
-                    The closing audit lists your bulk & liquid items: oil, mayo, sauces, LPG.
+                    The closing audit lists your bulk & liquid items: oil, mayo, sauces, LPG{{ $countsPieces ? ', and your pieces: buns, patties, cups' : '' }}.
                     @if (auth()->user()->isAdmin())
                         <a href="{{ route('admin.inventory.create', ['kind' => 'bulk']) }}" class="font-medium text-brand-600 hover:underline dark:text-brand-300">Add the first one</a>.
                     @else
@@ -162,7 +163,7 @@
                     <h1 class="mt-5 text-2xl font-semibold">Day closed. Salamat!</h1>
                     <p class="mt-2 max-w-xs text-sm text-ink-500 dark:text-ink-400">Your counts were saved. Today's profit report is now complete.</p>
                     @if ($canSeeCosts)
-                        <p x-show="usageCost !== null" class="mt-3 text-sm">Bulk used today: <span class="num font-semibold" x-text="formatPeso(usageCost)"></span></p>
+                        <p x-show="usageCost !== null" class="mt-3 text-sm">{{ $usedLabel }}: <span class="num font-semibold" x-text="formatPeso(usageCost)"></span></p>
                     @endif
                     <a href="{{ route('dashboard') }}" class="btn-ghost mt-8">Done</a>
                 </div>
@@ -178,7 +179,7 @@
                     <div class="flex items-center gap-4">
                         @if ($canSeeCosts)
                             <div class="min-w-0">
-                                <p class="text-xs text-ink-500">Bulk used today</p>
+                                <p class="text-xs text-ink-500">{{ $usedLabel }}</p>
                                 <p class="num text-lg font-semibold" x-text="formatPeso(usageValue)"></p>
                             </div>
                         @else

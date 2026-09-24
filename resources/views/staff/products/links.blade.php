@@ -4,7 +4,15 @@
             <x-icon name="chevron-right" class="size-4 rotate-180" /> Products
         </a>
 
-        <x-page-header :title="$item->name" description="What one sale uses. Each sale takes these off the shelf." />
+        <x-page-header :title="$item->name" description="What one sale uses. Each sale takes these off the shelf. Changes go to the owner, and apply once they approve." />
+
+        @if ($pendingChange)
+            <div class="rounded-xl bg-brand-400/10 p-4 text-sm">
+                <p class="font-medium">Waiting for the owner</p>
+                <p class="mt-1 text-ink-600 dark:text-ink-300">{{ $pendingChange->requested_by }} asked on {{ $pendingChange->created_at->format('M j, g:i A') }}: {{ implode(' · ', $pendingChange->summary()) }}.</p>
+                <p class="mt-1 text-xs text-ink-500">Sending new changes replaces this request. Below are the links in use now.</p>
+            </div>
+        @endif
 
         <form method="POST" action="{{ route('staff.products.links.update', $item) }}" class="surface p-6"
             x-data="{ recipe: @js(array_values($recipe)), variants: @js($variants), pieceUnits: @js($pieceUnits) }">
@@ -53,7 +61,7 @@
 
             <div class="mt-6 flex justify-end gap-2 border-t border-ink-200 pt-5 dark:border-white/[0.06]">
                 <a href="{{ route('staff.products') }}" class="btn-ghost">Cancel</a>
-                <button type="submit" class="btn-primary" data-loading-text="Saving…">Save links</button>
+                <button type="submit" class="btn-primary" data-loading-text="Sending…">Send to owner</button>
             </div>
         </form>
     </div>

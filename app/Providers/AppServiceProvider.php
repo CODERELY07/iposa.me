@@ -40,13 +40,16 @@ class AppServiceProvider extends ServiceProvider
             'void-orders' => 'void_orders',
             'log-expenses' => 'log_expenses',
             'restock-stock' => 'restock_stock',
-            'link-pieces' => 'link_pieces',
         ];
 
         foreach ($gates as $ability => $permission) {
             Gate::define($ability, fn (User $user): bool => $user->isAdmin()
                 || ($user->isStaff() && (bool) $user->business?->cashierCan($permission)));
         }
+
+        // Links are a plan feature: a cashier switch left on from a bigger plan does nothing.
+        Gate::define('link-pieces', fn (User $user): bool => ($user->isAdmin() || ($user->isStaff() && (bool) $user->business?->cashierCan('link_pieces')))
+            && (bool) $user->business?->hasFeature('recipes'));
 
         Gate::define('correct-audit', fn (User $user): bool => $user->isAdmin());
     }

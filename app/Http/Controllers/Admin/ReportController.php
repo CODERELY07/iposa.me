@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Delivery;
 use App\Reports\DailyLedger;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -36,6 +37,7 @@ class ReportController extends Controller
             'totals' => $totals,
             'dayCount' => $rows->count(),
             'bestSellers' => $ledger->bestSellers($business, $from, $to),
+            'uncheckedDeliveries' => Delivery::query()->where('status', Delivery::PENDING)->count(),
         ]);
     }
 

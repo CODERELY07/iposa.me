@@ -79,6 +79,16 @@ class Item extends Model
     }
 
     /**
+     * Every change to this item's links, newest first.
+     *
+     * @return HasMany<RecipeChange, $this>
+     */
+    public function recipeChanges(): HasMany
+    {
+        return $this->hasMany(RecipeChange::class)->latest('id');
+    }
+
+    /**
      * What the linked pieces and liquids of one sale of this size cost, at their current cost per unit.
      * Expects `recipeLines.piece` to be loaded.
      */
@@ -149,6 +159,20 @@ class Item extends Model
         return $this->on_hand !== null;
     }
 
+    /**
+     * Whether using this item already lowers profit somewhere else: a sale's cost
+     * (menu items that count themselves, pieces and liquids in recipes) or the
+     * closing count (bulk, and pieces when the shop counts them).
+     * Buying such stock is not an expense; buying anything else is a supply.
+     */
+    public function isCostedWhenUsed(Business $business): bool
+    {
+        return match ($this->kind) {
+            ItemKind::Menu, ItemKind::Bulk => true,
+            ItemKind::Piece => $business->auditsPieces() || RecipeLine::query()->where('piece_item_id', $this->id)->exists(),
+        };
+    }
+
     public function hasContainers(): bool
     {
         return $this->containers->isNotEmpty();
@@ -164,7 +188,11 @@ class Item extends Model
      */
     public function countStep(): float
     {
-        return $this->isSmallUnit() ? 50.0 : 0.25;
+        return match (true) {
+            $this->isSmallUnit() => 50.0,
+            $this->kind === ItemKind::Piece => 1.0,
+            default => 0.25,
+        };
     }
 
     /**

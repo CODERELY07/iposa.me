@@ -13,7 +13,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
 /**
- * For liquids that are both in recipes and counted at closing: what the recipes
+ * For liquids (and pieces, when counted) that are both in recipes and counted at closing: what the recipes
  * say the sales used, against what the shelf count says really went.
  *
  * The audit only charges what the recipes don't explain (its "expected" is the
@@ -40,7 +40,7 @@ class RecipeVariance
         }
 
         $liquidIds = RecipeLine::query()
-            ->whereIn('piece_item_id', Item::withoutGlobalScopes()->where('business_id', $business->id)->where('kind', ItemKind::Bulk)->select('id'))
+            ->whereIn('piece_item_id', Item::withoutGlobalScopes()->where('business_id', $business->id)->whereIn('kind', [ItemKind::Bulk, ItemKind::Piece])->select('id'))
             ->distinct()
             ->pluck('piece_item_id');
 
@@ -63,7 +63,8 @@ class RecipeVariance
             ->filter(fn ($line) => $items->has($line->item_id))
             ->map(function ($line) use ($items, $recipeUse): array {
                 $item = $items->get($line->item_id);
-                $recipe = round((float) ($recipeUse[$line->item_id] ?? 0), 3);
+                // Counts since this migration know exactly what recipes took since the previous count.
+                $recipe = round((float) $line->recipe_deducted > 0 ? (float) $line->recipe_deducted : (float) ($recipeUse[$line->item_id] ?? 0), 3);
                 $extra = (float) $line->used;
                 $overDeducted = (float) $line->recipe_surplus;
 
@@ -76,8 +77,8 @@ class RecipeVariance
                     'over_deducted' => $overDeducted,
                     'total' => round($recipe + $extra - $overDeducted, 3),
                     'verdict' => match (true) {
-                        $overDeducted > 0 => 'Recipes deduct more than the kitchen uses. Lower the amount in the recipe?',
-                        $recipe <= 0 && $extra > 0 => 'Used without any recipe sales today.',
+                        $overDeducted > 0 => 'Recipes deduct more than the kitchen uses. See the suggestion above.',
+                        $recipe <= 0 && $extra > 0 => 'Used without any recipe sales since the last count.',
                         $recipe > 0 && $extra > $recipe * 0.25 => 'More than the recipes explain: waste, bigger portions or free extras?',
                         default => 'Close to what the recipes say.',
                     },

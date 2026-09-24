@@ -92,6 +92,7 @@ class CheckoutService
             ]);
 
             $deductions = [];
+            $costedDeductions = [];
 
             foreach ($variants as $variant) {
                 $qty = $quantities[$variant->id];
@@ -110,7 +111,12 @@ class CheckoutService
 
                 if ($recipe->isNotEmpty()) {
                     foreach ($recipe as $recipeLine) {
-                        $deductions[$recipeLine->piece_item_id] = ($deductions[$recipeLine->piece_item_id] ?? 0) - (float) $recipeLine->qty * $qty;
+                        $used = (float) $recipeLine->qty * $qty;
+                        $deductions[$recipeLine->piece_item_id] = ($deductions[$recipeLine->piece_item_id] ?? 0) - $used;
+
+                        if ($variant->item->include_recipe_cost) {
+                            $costedDeductions[$recipeLine->piece_item_id] = ($costedDeductions[$recipeLine->piece_item_id] ?? 0) - $used;
+                        }
                     }
                 } elseif ($variant->item->tracksStock()) {
                     $deductions[$variant->item_id] = ($deductions[$variant->item_id] ?? 0) - $qty;
@@ -120,7 +126,7 @@ class CheckoutService
             $this->stock->apply($lockedBusiness, $deductions, StockMovementReason::Sale, [
                 'order_id' => $order->id,
                 'user_id' => $cashier->id,
-            ], $order->paid_at);
+            ], $order->paid_at, $costedDeductions);
 
             return $order->load('lines');
         });

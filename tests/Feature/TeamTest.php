@@ -3,6 +3,7 @@
 use App\Models\Order;
 use App\Models\User;
 use App\Notifications\StaffInvitation;
+use App\Services\Team\TeamService;
 use Illuminate\Support\Facades\Notification;
 
 beforeEach(function () {
@@ -80,4 +81,25 @@ it('saves cashier permissions', function () {
         ->and($business->cashierCan('log_expenses'))->toBeFalse()
         ->and($business->cashierCan('restock_stock'))->toBeTrue()
         ->and($business->cashierCan('link_pieces'))->toBeFalse();
+});
+
+it('hides the link switch on plans without ingredient links', function () {
+    $this->owner->business->update(['plan' => 'tindahan']);
+
+    $this->actingAs($this->owner)->get(route('admin.team'))
+        ->assertOk()
+        ->assertSee('Restock')
+        ->assertDontSee('Link pieces &amp; liquids', false);
+
+    $this->actingAs($this->owner)->patch(route('admin.team.permissions'), ['permissions' => [
+        'run_audit' => 1, 'view_costs' => 0, 'void_orders' => 0, 'log_expenses' => 1, 'restock_stock' => 1,
+    ]])->assertRedirect()->assertSessionHasNoErrors();
+});
+
+it('gives cashiers no linking on a plan without links, even with the switch left on', function () {
+    app(TeamService::class)->updateCashierPermissions($this->owner->business, ['link_pieces' => true]);
+    $this->owner->business->update(['plan' => 'tindahan']);
+    $cashier = cashierOf($this->owner);
+
+    $this->actingAs($cashier)->get(route('staff.products'))->assertForbidden();
 });

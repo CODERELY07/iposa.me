@@ -8,7 +8,7 @@ Everything a shop buys, stores and sells. Three kinds of stock, each counted the
 | **Piece** | Buns, patties, cheese, cups | No | Automatically, through recipe links |
 | **Bulk** | Oil, mayo, ketchup, LPG | No | By eye at the [closing audit](06-closing-audit.md), in decimals (4.5) |
 
-**Who:** owners only. Cashiers only ever see menu items, on the register.
+**Who:** owners. Cashiers see menu items on the register and, when the owner allows it, a [Products page](#cashier-products--deliveries) to restock and ask for link changes.
 
 | Feature | Status |
 |---|---|
@@ -18,6 +18,8 @@ Everything a shop buys, stores and sells. Three kinds of stock, each counted the
 | [Containers & exact costs](#containers--exact-costs) | ✅ Built |
 | [Restock](#restock) | ✅ Built |
 | [Recipe links](#recipe-links) | ✅ Built (Negosyo plan) — pieces and liquids |
+| [Link history & approvals](#link-history--approvals) | ✅ Built |
+| [Cashier products & deliveries](#cashier-products--deliveries) | ✅ Built |
 | [Categories](#categories) | ✅ Built |
 | [Low-stock alerts](#low-stock-alerts) | ✅ Built |
 | [Stock movements](#stock-movements) | ✅ Built |
@@ -38,17 +40,24 @@ Everything a shop buys, stores and sells. Three kinds of stock, each counted the
 | POST | `/admin/inventory/items/{item}/restock` | `admin.inventory.restock` | `Admin\ItemRestockController` |
 | POST | `/admin/inventory/import` | `admin.inventory.import` | `Admin\ItemImportController` |
 | POST | `/admin/categories` | `admin.categories.store` | `Admin\CategoryController@store` (JSON) |
+| POST | `/admin/recipe-changes/{recipeChange}/approve` · `/reject` | `admin.recipe-changes.approve` · `.reject` | `Admin\RecipeChangeController` |
+| POST | `/admin/deliveries/{delivery}/check` | `admin.deliveries.check` | `Admin\DeliveryCheckController` |
+| GET | `/staff/products` | `staff.products` | `Staff\ProductController@index` (needs `restock-stock` or `link-pieces`) |
+| POST | `/staff/products/{item}/restock` | `staff.products.restock` | `Staff\ProductRestockController` (`can:restock-stock`) |
+| GET · PUT | `/staff/products/{item}/links` | `staff.products.links` · `.links.update` | `Staff\ProductController` (`can:link-pieces`, `plan:recipes`) |
 
 ## Data model
 
 | Table | Columns |
 |---|---|
 | `categories` | `business_id`, `name` (unique per shop), `color`, `sort` |
-| `items` | `business_id`, `category_id`, `kind`, `name`, `unit`, `on_hand` (12,3), `low_threshold`, `unit_cost` (**14,6**), `archived_at` |
+| `items` | `business_id`, `category_id`, `kind`, `name`, `unit`, `on_hand` (12,3), `low_threshold`, `unit_cost` (**14,6**), `include_recipe_cost`, `archived_at` |
 | `item_containers` | `item_id`, `label` (bottle, jug, tin), `size` (in the item's unit), `price` (per container), `sort` |
 | `item_variants` | `item_id`, `label`, `cost`, `price`, `sort` |
 | `recipe_lines` | `item_id`, `item_variant_id` (null = all sizes), `piece_item_id`, `qty` |
-| `stock_movements` | `business_id`, `item_id`, `qty_change`, `reason`, `order_id`, `audit_id`, `user_id`, `created_at` |
+| `stock_movements` | `business_id`, `item_id`, `qty_change`, `costed_qty` (the part a sale charged in its cost), `reason`, `order_id`, `audit_id`, `user_id`, `created_at` |
+| `recipe_changes` | `business_id`, `item_id`, `user_id`, `requested_by`, `status` (saved, pending, approved, rejected, replaced), `before`/`after` (JSON snapshots with names and units), `decided_by`, `decided_by_name`, `decided_at` |
+| `deliveries` | `business_id`, `item_id`, `user_id`, `received_by`, `quantity`, `item_container_id`, `container_label`, `container_size`, `added`, `status` (pending, checked), `receipt_added`, `paid`, `missing_cost`, `checked_by`, `checked_by_name`, `checked_at` |
 
 Quantities are `decimal(12,3)` so half a bottle is exact. **Cost per unit keeps six decimals** (`decimal(14,6)`, on items and on audit lines), so ₱145 for 1,000 ml is stored as ₱0.145000 per ml instead of ₱0.15; peso totals are rounded to the centavo only where they're shown and reported. Other money stays `decimal(12,2)`.
 
@@ -56,7 +65,9 @@ Quantities are `decimal(12,3)` so half a bottle is exact. **Cost per unit keeps 
 
 ## Menu items & sizes
 
-The Excel pricing matrix: one row per size, each with its own **cost** and **selling price**. Margin is computed, never stored (`ItemVariant::profit()`, `marginPercent()`).
+The Excel pricing matrix: one row per size, each with its own **cost** and **selling price**. Margin is computed, never stored (`ItemVariant::costPerSale()`, `profit()`, `marginPercent()`).
+
+**Include linked pieces & liquids in cost** (`items.include_recipe_cost`). When on, the cost the owner types is *their own* cost (labor, packaging) and each sale adds what the links cost at that moment: ₱29 typed + 1 bun at ₱1 = **₱30 per sale**. It's added at every sale and never copied into the cost box, so it can't be counted twice and follows price changes. New menu items start with it on. With it off, the typed cost must already include the links; the editor warns, and Inventory tags the item **not in cost**. The menu export keeps the typed cost (so a re-import doesn't add the links twice) while its profit and margin use the full cost.
 
 The editor shows the margin live, colored green ≥50%, amber ≥25%, red below. `SaveItemRequest` requires at least one size with a price for menu items, and rejects duplicate size names.
 
@@ -92,7 +103,9 @@ The Bulk tab shows container items as "3 bottles · 3,000 ml" and "₱145 / bott
 
 1. On hand goes up by `quantity × container size`, logged as a **Restock** stock movement (not an adjustment).
 2. When a price is given, the cost per unit becomes what this purchase cost (`paid ÷ added`), and that container's price is updated for next time.
-3. Optionally — Negosyo plan — the payment is logged as a **Stock purchase** expense, e.g. "Cooking oil · 1 tin (18,000 ml)", so the cash-out shows in Expenses.
+3. Optionally (Negosyo plan) the payment is logged in Expenses, e.g. "Cooking oil · 1 tin (18,000 ml)":
+   - as a **Stock purchase** when using the item already lowers profit elsewhere (`Item::isCostedWhenUsed()`): menu items that count themselves, bulk, pieces in a recipe, and all pieces when the shop counts them at closing. Stock purchases are listed but **not subtracted from profit**, because the stock is costed when it's used.
+   - as **Supplies** otherwise (a paper bag nobody links or counts), which does lower profit, since nothing else ever will.
 
 Pieces and ready-made menu items (bottled water) can be restocked in their own unit too; made-to-order food can't. `App\Services\Inventory\RestockService`.
 
@@ -102,9 +115,35 @@ Pieces and ready-made menu items (bottled water) can be restocked in their own u
 
 **Liquids can be in recipes too.** Each sale then deducts the recipe amount (60 burgers × 15 ml = 900 ml), so Today shows how much ketchup is left before anyone counts. At closing the audit still counts the truth and corrects it — see [Closing audit › Liquids in recipes](06-closing-audit.md#liquids-in-recipes). Some liquids are better left audit-only: cooking oil is reused and topped up, so a per-sale amount would be fiction.
 
-The editor totals the piece cost per size and offers **Use as cost** to copy it into each size's cost. An ingredient must belong to the same shop and be a piece or a bulk item (`Rule::exists` scoped by `business_id` and `kind`).
+The editor shows, per size, *your cost + linked = cost per sale*, with the **Include in cost** checkbox ([above](#menu-items--sizes)). An ingredient must belong to the same shop and be a piece or a bulk item (`Rule::exists` scoped by `business_id` and `kind`).
 
-On the Tindahan plan the section is hidden and any submitted recipe lines are dropped.
+On the Tindahan plan the section is hidden and submitted recipe lines are ignored, but **links saved earlier are kept and keep working**: saving the item never deletes them, and the editor says what each sale still uses. On a plan with links, clearing every row removes them.
+
+## Link history & approvals
+
+Every change to what one sale uses is a `recipe_changes` row (`App\Services\Inventory\RecipeChangeService`), with before/after snapshots that keep names and units as they were. The item editor shows the last 10 as **Link history**: "Remove 1 pc Beef patty · Maria · Sep 24, 8:25 AM · Saved".
+
+- **Owner saves** are recorded as `saved` when the links really changed.
+- **Cashier changes are requests** (`pending`). Nothing changes until the owner approves on Today or in the item's history. A newer request for the same item marks the older one `replaced`; a request identical to the current links isn't created.
+- **Approving is refused** when the links changed after the request (it would undo that change), or when a requested piece or size no longer exists. The owner rejects and the cashier asks again.
+
+## Cashier products & deliveries
+
+With `restock_stock` or `link_pieces` on ([Team](09-team-settings.md#cashier-permissions)), cashiers get **Products** in their menu. It never shows names, prices or costs to change, and never shows pesos.
+
+**Restock.** Pieces, liquids and items that count themselves, with what's on hand and a quantity + container box. The count goes up right away (a `Restock` movement by that cashier) and a `deliveries` row waits for the owner. No price and no expense are recorded by the cashier.
+
+**Deliveries to check** (Today, `App\Services\Inventory\DeliveryService`). The owner types what the supplier's receipt says and what was paid:
+
+| Receipt vs recorded | What happens |
+|---|---|
+| Same | Nothing else moves |
+| Receipt says **more** (50 bought, 40 recorded) | 10 pcs never reached the shelf: logged as a **Missing stock** expense at the purchase price (₱75), which lowers profit |
+| Receipt says **less** (30 bought, 40 recorded) | The count was too high: corrected by an `Adjustment` of −10 |
+
+The price paid sets the cost per unit (and the container's price), and can be logged as a Stock purchase or Supplies, by the rule in [Restock](#restock). A delivery is checked once. The owner's own restocks don't need checking.
+
+**Links.** Menu items with their current links and a *waiting for owner* tag; the editor sends a request ([above](#link-history--approvals)).
 
 ## Categories
 
@@ -145,8 +184,10 @@ Deleting removes the item with its sizes and its own recipe lines, in one transa
 
 `InventoryTest`: delete an item with no history · refuse to delete one that was sold, counted or linked · no cross-shop delete · the editor offers delete only when it's allowed · create with sizes and size-specific recipe links · update syncs sizes · menu items need a priced size · pieces and bulk need a unit cost · cross-shop piece refused · on-hand edit logs an adjustment · archive/restore · CSV import (including a broken row) · inline category · recipes hidden on Tindahan.
 
+`RecipeChangesTest`, `DeliveryCheckTest`, `StaffProductsTest`: owner saves recorded only when links change · approve/reject from Today · replaced requests · no-op requests · stale and archived-piece approvals refused · cross-shop and cashier approval blocked · deliveries on Today · matching, short, over-recorded and container deliveries · supplies without missing stock · checked once · cashier pages hide pesos and only change links through requests.
+
 ## What's left
 
-- Stock take for pieces (count many at once) — today it's per item.
+- Stock take for pieces outside closing — pieces can be counted at closing ([06](06-closing-audit.md#counting-pieces)), otherwise per item.
 - Supplier records and purchase orders.
 - `.xlsx` import; CSV only.

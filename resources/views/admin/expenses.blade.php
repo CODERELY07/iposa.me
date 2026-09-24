@@ -8,6 +8,7 @@
         ExpenseCategory::Supplies->value => 'bg-yellow-300',
         ExpenseCategory::StockPurchase->value => 'bg-rose-400',
         ExpenseCategory::Payables->value => 'bg-emerald-400',
+        ExpenseCategory::MissingStock->value => 'bg-loss-500',
         ExpenseCategory::Misc->value => 'bg-ink-400',
     ];
     $monthStart = $month->copy()->startOfMonth();
@@ -18,7 +19,7 @@
 <x-app-layout title="Expenses">
     <div x-data="{ tab: @js($openTab) }" class="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-8">
         <x-page-header :eyebrow="$month->format('F Y')" title="Expenses"
-            description="Log it the way you did in Excel: date, category, amount. It flows straight into your profit.">
+            description="Log it the way you did in Excel: date, category, amount. It flows straight into your profit, except Stock purchase: stock lowers profit when it's used, so it isn't counted twice. Use Supplies for things you don't track in inventory.">
             <x-slot:actions>
                 <form method="GET" action="{{ route('admin.expenses') }}">
                     <select name="month" class="field w-auto py-2" aria-label="Month" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">

@@ -7,7 +7,9 @@ Cafés, burger stands, milk tea shops and carinderias ring up orders, count bulk
 Net = Sales − Ingredients (COGS) − Bulk used − Expenses
 ```
 
-> **Status:** the app is built and deployed — sign-up through closing audit runs on real data, works offline, and is covered by 196 tests. What's not built is listed in [docs/ROADMAP.md](docs/ROADMAP.md).
+Stock you buy lowers profit when it is **used** (a sale's cost, the closing count), not when you pay for it, so nothing is counted twice.
+
+> **Status:** the app is built and deployed — sign-up through closing audit runs on real data, works offline, and is covered by 255 tests. What's not built is listed in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ---
 
@@ -16,10 +18,10 @@ Net = Sales − Ingredients (COGS) − Bulk used − Expenses
 | Area | Summary |
 |---|---|
 | **Register (POS)** | Color tiles by category, sizes as separate taps, Cash/GCash/Maya, 58mm receipts, **keeps selling offline** |
-| **Inventory** | Three kinds of stock: *menu items* (sold), *pieces* (buns, patties — deducted by recipe), *bulk & liquids* (oil, mayo — counted by eye) |
-| **Closing audit** | Staff type what's left (oil 5 → 4.5); the drop becomes the day's bulk cost |
+| **Inventory** | Three kinds of stock: *menu items* (sold), *pieces* (buns, patties — deducted by recipe), *bulk & liquids* (oil, mayo — counted by eye). Cashier restocks are checked against the receipt; cashier link changes wait for the owner |
+| **Closing audit** | Staff type what's left (oil 5 → 4.5); the drop becomes the day's bulk cost. Pieces can be counted too |
 | **Expenses** | Entries by date and category, plus equipment installments that hit the P&L exactly once |
-| **Today & reports** | Profit so far vs yesterday at this hour, the daily ledger, best sellers, CSV/zip export |
+| **Today & reports** | Profit so far vs yesterday at this hour, every peso of it one click away (each order, each ingredient, each counted item, each expense), the daily ledger, best sellers, CSV/zip export |
 | **Team & billing** | Cashier invites, per-shop permissions, manual GCash/bank subscriptions |
 | **Platform console** | For the operator: MRR, trial funnel, shops that went quiet, plans and prices, suspensions, manual email verification |
 
@@ -71,7 +73,7 @@ Seeded verified, password `password` (local development only — the login page 
 php artisan test --compact
 ```
 
-196 tests, 760 assertions. Format PHP before committing:
+255 tests, 1,086 assertions. Format PHP before committing:
 
 ```bash
 vendor/bin/pint --dirty

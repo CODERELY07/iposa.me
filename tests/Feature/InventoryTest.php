@@ -229,3 +229,45 @@ it('offers delete only for items with no history', function () {
         ->assertDontSee('Delete for good')
         ->assertSee('can only be archived', false);
 });
+
+it('keeps an item\'s links when it is saved on a plan without ingredient links', function () {
+    $this->menu['burger']->update(['include_recipe_cost' => true]);
+    $this->owner->business->update(['plan' => 'tindahan']);
+
+    $this->actingAs($this->owner)->put(route('admin.inventory.update', $this->menu['burger']), [
+        'kind' => 'menu',
+        'name' => 'Cheeseburger',
+        'variants' => [['id' => $this->menu['burgerRegular']->id, 'label' => 'Regular', 'cost' => 46, 'price' => 115]],
+        'recipe' => [['piece_item_id' => $this->menu['cup16']->id, 'qty' => 1]],
+    ])->assertRedirect();
+
+    $burger = $this->menu['burger']->refresh();
+    expect($burger->recipeLines->pluck('piece_item_id')->sort()->values()->all())->toBe([$this->menu['bun']->id, $this->menu['patty']->id])
+        ->and($burger->include_recipe_cost)->toBeTrue()
+        ->and((float) $this->menu['burgerRegular']->refresh()->price)->toBe(115.0);
+
+    $this->actingAs($this->owner)->get(route('admin.inventory.edit', $burger))->assertOk()->assertSee('These links are kept and keep working.');
+});
+
+it('removes every link when the owner clears them on a plan with links', function () {
+    $this->actingAs($this->owner)->put(route('admin.inventory.update', $this->menu['burger']), [
+        'kind' => 'menu',
+        'name' => 'Cheeseburger',
+        'variants' => [['id' => $this->menu['burgerRegular']->id, 'label' => 'Regular', 'cost' => 46, 'price' => 109]],
+    ])->assertRedirect();
+
+    expect($this->menu['burger']->recipeLines()->count())->toBe(0);
+});
+
+it('starts new menu items with linked costs included, and warns when they are not', function () {
+    $this->actingAs($this->owner)->get(route('admin.inventory.create'))
+        ->assertOk()
+        ->assertViewHas('formState', fn (array $state) => $state['includeRecipeCost'] === true);
+
+    $this->actingAs($this->owner)->get(route('admin.inventory.edit', $this->menu['burger']))
+        ->assertOk()
+        ->assertViewHas('formState', fn (array $state) => $state['includeRecipeCost'] === false)
+        ->assertSee("Sales will take these off the shelf but won't count what they cost.", false);
+
+    $this->actingAs($this->owner)->get(route('admin.inventory'))->assertOk()->assertSee('not in cost');
+});

@@ -72,6 +72,8 @@ Owners can do everything in their shop. Cashiers are limited per business, switc
 | `view-costs` | `view_costs` | off | Peso totals on the closing audit |
 | `void-orders` | `void_orders` | off | Void directly, or only request a void |
 | `log-expenses` | `log_expenses` | on | Quick expense form on My orders |
+| `restock-stock` | `restock_stock` | off | Products page: add deliveries to the count (checked by the owner) |
+| `link-pieces` | `link_pieces` | off | Products page: ask to change links (the owner approves). Also needs ingredient links on the plan; the switch is hidden without them |
 | `correct-audit` | — (owners only) | — | Re-submitting today's audit |
 
 Defined in `App\Providers\AppServiceProvider::defineCashierGates()`; used as `can:run-audit` middleware, `Gate::allows()` in controllers and `@can` in views.

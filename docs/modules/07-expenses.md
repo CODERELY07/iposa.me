@@ -45,11 +45,15 @@ One spreadsheet-like row: date, category, description, amount. `StoreExpenseRequ
 
 ## Categories & kind
 
-| Category | Default kind |
-|---|---|
-| Utilities, Rent, Wages | Fixed |
-| Supplies, Stock purchase, Misc | Variable |
-| Payables (equipment) | Fixed — system only |
+| Category | Default kind | Lowers profit? |
+|---|---|---|
+| Utilities, Rent, Wages | Fixed | Yes |
+| Supplies, Misc | Variable | Yes |
+| **Stock purchase** | Variable | **No**: listed, but the stock is costed when used (sale cost, closing count) |
+| Payables (equipment) | Fixed — system only | Yes |
+| **Missing stock** | Variable — system only | Yes: stock bought that never reached the shelf ([checked deliveries](04-inventory.md#cashier-products--deliveries)) |
+
+`ExpenseCategory::lowersProfit()` is the one place this is decided. Things you buy but never track in inventory (ice, napkins) belong in **Supplies**.
 
 `ExpenseKind` (fixed/variable) is what later makes a break-even chart possible; it's recorded from day one even though nothing reads it yet.
 

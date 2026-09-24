@@ -6,7 +6,8 @@ use App\Enums\ItemKind;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Staff\UpdateProductLinksRequest;
 use App\Models\Item;
-use App\Services\Inventory\ItemService;
+use App\Models\RecipeChange;
+use App\Services\Inventory\RecipeChangeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -21,7 +22,7 @@ class ProductController extends Controller
     {
         $user = $request->user();
         $canRestock = $user->can('restock-stock');
-        $canLink = $user->can('link-pieces') && $user->business->hasFeature('recipes');
+        $canLink = $user->can('link-pieces');
 
         abort_unless($canRestock || $canLink, 403);
 
@@ -40,6 +41,7 @@ class ProductController extends Controller
             'canLink' => $canLink,
             'stockItems' => $canRestock ? $items->filter(fn (Item $item) => $item->kind !== ItemKind::Menu || $item->tracksStock())->values() : collect(),
             'menuItems' => $canLink ? $items->where('kind', ItemKind::Menu)->values() : collect(),
+            'pendingItemIds' => $canLink ? RecipeChange::query()->where('status', RecipeChange::PENDING)->pluck('item_id')->flip() : collect(),
         ]);
     }
 
@@ -66,13 +68,19 @@ class ProductController extends Controller
                 'variant_index' => $line->item_variant_id !== null ? $item->variants->search(fn ($variant) => $variant->id === $line->item_variant_id) : null,
             ])->values()->all()),
             'pieceUnits' => $pieces->mapWithKeys(fn (Item $piece) => [$piece->id => $piece->unit ?: ($piece->kind === ItemKind::Piece ? 'pc' : '')])->all(),
+            'pendingChange' => RecipeChange::query()->where('item_id', $item->id)->where('status', RecipeChange::PENDING)->latest('id')->first(),
         ]);
     }
 
-    public function updateLinks(UpdateProductLinksRequest $request, Item $item, ItemService $items): RedirectResponse
+    /**
+     * Nothing changes yet: the owner approves or rejects the request.
+     */
+    public function updateLinks(UpdateProductLinksRequest $request, Item $item, RecipeChangeService $changes): RedirectResponse
     {
-        $items->saveRecipe($item, $request->validated('recipe') ?? []);
+        $change = $changes->request($item, $request->user(), $request->validated('recipe') ?? []);
 
-        return redirect()->route('staff.products')->with('status', "Links for {$item->name} saved.");
+        return redirect()->route('staff.products')->with('status', $change === null
+            ? "No changes to {$item->name}."
+            : "Sent to the owner. The links of {$item->name} change once they approve.");
     }
 }
