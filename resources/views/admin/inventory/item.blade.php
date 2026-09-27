@@ -547,7 +547,8 @@
                     @if ($expensesEnabled)
                         <label class="flex items-center gap-2 text-sm">
                             <input type="hidden" name="log_expense" value="0">
-                            <input type="checkbox" name="log_expense" value="1" @checked(old('log_expense', true)) class="size-4 rounded border-ink-300 text-brand-500 focus:ring-brand-400 dark:border-white/20 dark:bg-white/[0.06]">
+                            {{-- Off by default: the owner ticks it only when this purchase should also show in Expenses. --}}
+                            <input type="checkbox" name="log_expense" value="1" @checked(old('log_expense', false)) class="size-4 rounded border-ink-300 text-brand-500 focus:ring-brand-400 dark:border-white/20 dark:bg-white/[0.06]">
                             @if ($item->isCostedWhenUsed(auth()->user()->business))
                                 Log what I paid as a <span class="font-medium">Stock purchase</span>
                             @else

@@ -15,6 +15,7 @@ Your own screens as the operator of iPOSa: how the business is doing, which shop
 | [Plans](#plans) | ✅ Built (full CRUD) |
 | [Payments](#payments) | ✅ Built |
 | [Email verifications](#email-verifications) | ✅ Built |
+| [Backup database](#backup-database) | ✅ Built |
 
 ## Routes
 
@@ -36,6 +37,7 @@ Your own screens as the operator of iPOSa: how the business is doing, which shop
 | PATCH | `/super-admin/plans/{plan}/archive` · `/restore` | `super_admin.plans.archive` · `.restore` |
 | DELETE | `/super-admin/plans/{plan}` | `super_admin.plans.destroy` |
 | POST | `/super-admin/payments/{payment}/confirm` · `/reject` | `super_admin.payments.confirm` · `.reject` |
+| GET | `/super-admin/backup` | `super_admin.backup` |
 | GET | `/super-admin/verifications` | `super_admin.verifications` |
 | POST | `/super-admin/users/{user}/verify` | `super_admin.users.verify` |
 
@@ -143,6 +145,23 @@ Listed with **pending first**, filterable by status.
 - **Confirm** extends the subscription by one period, sets the shop active, and re-locks their price to the plan's current one ([09 › Plan & billing](09-team-settings.md#plan--billing)).
 - **Reject** records a note the owner sees on their billing card.
 
+## Backup database
+
+**Backup database** on the platform page downloads the whole database as one `.sql` file of `INSERT` statements — the kind you can paste straight into Supabase's SQL editor.
+
+| Decision | Why |
+|---|---|
+| **Data only, never schema** | Tables come from `php artisan migrate`, so a restore is "migrate, then paste this". An old file can never rebuild an old shape over a newer one. |
+| **No "switch the foreign keys off"** | `SET session_replication_role` needs privileges a managed database won't give. Instead the tables are written parents-first, and the one circular reference (a shop points at its owner, the owner at the shop) is settled by writing accounts without their shop and adding `UPDATE users SET business_id = …` at the end. |
+| **Id counters moved on** (Postgres) | `setval(pg_get_serial_sequence(…))` per table, or the first sale after a restore would collide with a restored row. |
+| **Wrapped in `BEGIN; … COMMIT;`** | A failed paste leaves nothing half-restored. |
+| **Streamed in chunks of 500 rows** | The file's size never depends on the server's memory. |
+| **Logins, cache and queued jobs left out** | `sessions`, `cache`, `cache_locks`, `jobs`, `job_batches`, `failed_jobs`, `password_reset_tokens` — restoring them would only log everyone out again. `migrations` is left out too. |
+
+Values are quoted through PDO, so apostrophes in a shop's name and anything that looks like SQL inside a field come back as text.
+
+`App\Exports\DatabaseBackup` · `SuperAdmin\BackupController`. **It contains every shop's data**, so treat the file like a password.
+
 ## Email verifications
 
 The fallback for when SMTP is unavailable — which, on a free host, is often ([01 › When email fails](01-authentication.md#when-email-fails)).
@@ -154,6 +173,8 @@ The count of waiting requests also appears on the overview, so it isn't missed.
 ---
 
 ## Tests
+
+`DatabaseBackupTest`: the operator downloads a `.sql` file and nobody else can · **every row comes back after the tables are emptied and the file is run again** · logins, cache and jobs are left out · parents before children, with the accounts linked at the end · apostrophes, nulls, decimals and SQL-looking text survive the round trip.
 
 `PlanManagementTest`: create a plan owners can switch to · unlimited staff · the key is generated and unique · the key never changes · a price rise leaves paying shops alone until renewal · the renewal applies the new price · archiving hides a plan but keeps its shops working · the last plan can't be archived · delete only when unused · the public pricing section follows the plans · validation · owners kept out.
 
