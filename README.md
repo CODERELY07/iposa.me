@@ -73,7 +73,7 @@ Seeded verified, password `password` (local development only — the login page 
 php artisan test --compact
 ```
 
-263 tests, 1,136 assertions. Format PHP before committing:
+269 tests, 1,186 assertions. Format PHP before committing:
 
 ```bash
 vendor/bin/pint --dirty

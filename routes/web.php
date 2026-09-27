@@ -28,6 +28,7 @@ use App\Http\Controllers\ServiceWorkerController;
 use App\Http\Controllers\Staff\MyOrdersController;
 use App\Http\Controllers\Staff\ProductController;
 use App\Http\Controllers\Staff\ProductRestockController;
+use App\Http\Controllers\SuperAdmin\BackupController;
 use App\Http\Controllers\SuperAdmin\PlanController;
 use App\Http\Controllers\SuperAdmin\PlatformDashboardController;
 use App\Http\Controllers\SuperAdmin\SubscriptionPaymentController;
@@ -145,6 +146,7 @@ Route::middleware(['auth', 'verified', 'role:super_admin'])->prefix('super-admin
     Route::patch('/plans/{plan}/archive', [PlanController::class, 'archive'])->name('plans.archive');
     Route::patch('/plans/{plan}/restore', [PlanController::class, 'restore'])->name('plans.restore');
     Route::delete('/plans/{plan}', [PlanController::class, 'destroy'])->name('plans.destroy');
+    Route::get('/backup', BackupController::class)->name('backup');
     Route::get('/verifications', [VerificationController::class, 'index'])->name('verifications');
     Route::post('/users/{user}/verify', [VerificationController::class, 'verify'])->name('users.verify');
     Route::post('/payments/{payment}/confirm', [SubscriptionPaymentController::class, 'confirm'])->name('payments.confirm');
