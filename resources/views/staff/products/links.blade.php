@@ -48,13 +48,18 @@
                                     <option :value="variantIndex" x-text="'Only ' + variant.label" :selected="String(line.variant_index) === String(variantIndex)"></option>
                                 </template>
                             </select>
+                            <select x-model="line.order_type" :name="`recipe[${index}][order_type]`" class="field w-36" aria-label="For dine-in or take-out">
+                                <option value="">Dine-in & take-out</option>
+                                <option value="dine_in">Dine-in only</option>
+                                <option value="take_out">Take-out only</option>
+                            </select>
                             <button type="button" @click="recipe.splice(index, 1)" class="btn-quiet size-9 !px-0" aria-label="Remove link"><x-icon name="x" class="size-4" /></button>
                         </div>
                     </template>
                     <p x-show="! recipe.length" class="text-sm text-ink-500">No links. Sales of {{ $item->name }} don't take anything off the shelf.</p>
                 </div>
 
-                <button type="button" @click="recipe.push({ piece_item_id: {{ $pieces->first()->id }}, qty: 1, variant_index: null })" class="btn-quiet mt-3 text-brand-600 dark:text-brand-300">
+                <button type="button" @click="recipe.push({ piece_item_id: {{ $pieces->first()->id }}, qty: 1, variant_index: null, order_type: '' })" class="btn-quiet mt-3 text-brand-600 dark:text-brand-300">
                     <x-icon name="plus" class="size-4" /> Link a piece or liquid
                 </button>
             @endif

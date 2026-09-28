@@ -111,11 +111,12 @@ function demoMenu(User $owner): array
  *
  * @param  list<array{0: ItemVariant, 1: int}>  $lines
  */
-function orderPayload(array $lines, string $method = 'cash', ?float $tendered = 1000, ?string $uuid = null): array
+function orderPayload(array $lines, string $method = 'cash', ?float $tendered = 1000, ?string $uuid = null, string $orderType = 'dine_in'): array
 {
     return [
         'uuid' => $uuid ?? (string) Str::uuid(),
         'payment_method' => $method,
+        'order_type' => $orderType,
         'tendered' => $method === 'cash' ? $tendered : null,
         'lines' => array_map(fn (array $line) => ['variant_id' => $line[0]->id, 'qty' => $line[1]], $lines),
     ];

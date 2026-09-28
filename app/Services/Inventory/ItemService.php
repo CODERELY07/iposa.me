@@ -21,7 +21,7 @@ class ItemService
      *     on_hand?: float|string|null, low_threshold?: float|string|null, unit_cost?: float|string|null, include_recipe_cost?: bool|null,
      *     containers?: list<array{id?: int|null, label: string, size: float|string, price?: float|string|null}>,
      *     variants?: list<array{id?: int|null, label: string, cost?: float|string|null, price: float|string}>,
-     *     recipe?: list<array{piece_item_id: int, qty: float|string, variant_index?: int|null}>
+     *     recipe?: list<array{piece_item_id: int, qty: float|string, variant_index?: int|null, order_type?: string|null}>
      * }  $data
      */
     public function save(Business $business, User $user, array $data, ?Item $item = null): Item
@@ -173,9 +173,10 @@ class ItemService
     }
 
     /**
-     * Replace recipe links. `variant_index` points at a submitted size (null = every size).
+     * Replace recipe links. `variant_index` points at a submitted size (null = every size),
+     * and `order_type` scopes the link to dine-in or take-out (null = both).
      *
-     * @param  list<array{piece_item_id: int, qty: float|string, variant_index?: int|null}>  $rows
+     * @param  list<array{piece_item_id: int, qty: float|string, variant_index?: int|null, order_type?: string|null}>  $rows
      * @param  list<int>  $variantIds
      */
     private function syncRecipe(Item $item, array $rows, array $variantIds): void
@@ -189,6 +190,7 @@ class ItemService
                 'piece_item_id' => $row['piece_item_id'],
                 'qty' => $row['qty'],
                 'item_variant_id' => $variantIndex !== null && $variantIndex !== '' ? ($variantIds[(int) $variantIndex] ?? null) : null,
+                'order_type' => ($row['order_type'] ?? null) ?: null,
             ]);
         }
     }

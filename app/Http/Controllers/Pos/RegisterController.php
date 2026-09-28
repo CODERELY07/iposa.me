@@ -88,7 +88,9 @@ class RegisterController extends Controller
      */
     private function salesLeft(Item $item): ?int
     {
-        $sharedRecipe = $item->recipeLines->whereNull('item_variant_id');
+        // Order-type-only links (e.g. take-out packaging) don't gate this: the cashier
+        // hasn't picked a type yet, so only ingredients every sale uses count here.
+        $sharedRecipe = $item->recipeLines->whereNull('item_variant_id')->whereNull('order_type');
 
         if ($sharedRecipe->isNotEmpty()) {
             $left = $sharedRecipe

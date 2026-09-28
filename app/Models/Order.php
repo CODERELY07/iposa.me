@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\OrderStatus;
+use App\Enums\OrderType;
 use App\Enums\PaymentMethod;
 use App\Models\Concerns\BelongsToBusiness;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'business_id', 'number', 'uuid', 'user_id', 'cashier_name', 'payment_method', 'subtotal', 'tendered', 'change',
+    'business_id', 'number', 'uuid', 'user_id', 'cashier_name', 'payment_method', 'order_type', 'subtotal', 'tendered', 'change',
     'status', 'paid_at', 'void_requested_by', 'voided_by', 'voided_at',
 ])]
 class Order extends Model
@@ -28,6 +29,7 @@ class Order extends Model
     {
         return [
             'payment_method' => PaymentMethod::class,
+            'order_type' => OrderType::class,
             'status' => OrderStatus::class,
             'subtotal' => 'decimal:2',
             'tendered' => 'decimal:2',

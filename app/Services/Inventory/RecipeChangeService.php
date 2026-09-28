@@ -19,7 +19,7 @@ class RecipeChangeService
     /**
      * The item's links right now, with names and units as they are today.
      *
-     * @return list<array{piece_item_id: int, piece: string, unit: string, qty: float, item_variant_id: ?int, variant: ?string}>
+     * @return list<array{piece_item_id: int, piece: string, unit: string, qty: float, item_variant_id: ?int, variant: ?string, order_type: ?string}>
      */
     public function snapshot(Item $item): array
     {
@@ -32,14 +32,15 @@ class RecipeChangeService
             'qty' => round((float) $line->qty, 3),
             'item_variant_id' => $line->item_variant_id,
             'variant' => $line->variant?->label,
+            'order_type' => $line->order_type?->value,
         ])->values()->all();
     }
 
     /**
      * Submitted rows (variant_index points at the item's sizes in order) as a snapshot.
      *
-     * @param  list<array{piece_item_id: int|string, qty: float|string, variant_index?: int|string|null}>  $rows
-     * @return list<array{piece_item_id: int, piece: string, unit: string, qty: float, item_variant_id: ?int, variant: ?string}>
+     * @param  list<array{piece_item_id: int|string, qty: float|string, variant_index?: int|string|null, order_type?: string|null}>  $rows
+     * @return list<array{piece_item_id: int, piece: string, unit: string, qty: float, item_variant_id: ?int, variant: ?string, order_type: ?string}>
      */
     public function snapshotFromRows(Item $item, array $rows): array
     {
@@ -58,6 +59,7 @@ class RecipeChangeService
                 'qty' => round((float) $row['qty'], 3),
                 'item_variant_id' => $variant?->id,
                 'variant' => $variant?->label,
+                'order_type' => ($row['order_type'] ?? null) ?: null,
             ];
         })->values()->all();
     }
@@ -167,6 +169,7 @@ class RecipeChangeService
                     'piece_item_id' => $line['piece_item_id'],
                     'qty' => $line['qty'],
                     'item_variant_id' => $line['item_variant_id'],
+                    'order_type' => $line['order_type'] ?? null,
                 ]);
             }
 

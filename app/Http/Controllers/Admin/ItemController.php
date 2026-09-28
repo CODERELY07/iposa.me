@@ -225,6 +225,7 @@ class ItemController extends Controller
                     'piece_item_id' => $line->piece_item_id,
                     'qty' => (float) $line->qty,
                     'variant_index' => $line->item_variant_id !== null ? $variants->search(fn ($variant) => $variant->id === $line->item_variant_id) : null,
+                    'order_type' => $line->order_type?->value,
                 ])->values()->all() : []),
             ],
             'recipeChanges' => $item->exists ? $item->recipeChanges()->limit(10)->get() : collect(),

@@ -66,6 +66,7 @@ class ProductController extends Controller
                 'piece_item_id' => $line->piece_item_id,
                 'qty' => (float) $line->qty,
                 'variant_index' => $line->item_variant_id !== null ? $item->variants->search(fn ($variant) => $variant->id === $line->item_variant_id) : null,
+                'order_type' => $line->order_type?->value,
             ])->values()->all()),
             'pieceUnits' => $pieces->mapWithKeys(fn (Item $piece) => [$piece->id => $piece->unit ?: ($piece->kind === ItemKind::Piece ? 'pc' : '')])->all(),
             'pendingChange' => RecipeChange::query()->where('item_id', $item->id)->where('status', RecipeChange::PENDING)->latest('id')->first(),

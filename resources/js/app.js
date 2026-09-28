@@ -365,6 +365,7 @@ Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl })
     search: '',
     cart: [],
     payment: paymentMethods[0]?.value ?? 'cash',
+    orderType: 'dine_in',
     tendered: '',
     cartOpen: false,
     checkoutOpen: false,
@@ -500,6 +501,7 @@ Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl })
         const payload = {
             uuid: this.uuid,
             payment_method: this.payment,
+            order_type: this.orderType,
             tendered: this.isCash ? parseFloat(this.tendered) : null,
             lines: this.cart.map((line) => ({ variant_id: line.variantId, qty: line.qty })),
         };

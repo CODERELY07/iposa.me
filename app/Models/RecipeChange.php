@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OrderType;
 use App\Models\Concerns\BelongsToBusiness;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Owner saves are recorded as "saved". A cashier's change is "pending" until the owner
  * approves or rejects it; a newer request for the same item marks the older one "replaced".
  *
- * `before` and `after` are snapshots: list<array{piece_item_id: int, piece: string, unit: string, qty: float, item_variant_id: ?int, variant: ?string}>
+ * `before` and `after` are snapshots: list<array{piece_item_id: int, piece: string, unit: string, qty: float, item_variant_id: ?int, variant: ?string, order_type: ?string}>
  */
 #[Fillable(['business_id', 'item_id', 'user_id', 'requested_by', 'status', 'before', 'after', 'decided_by', 'decided_by_name', 'decided_at'])]
 class RecipeChange extends Model
@@ -121,7 +122,7 @@ class RecipeChange extends Model
      */
     private static function lineKey(array $line): string
     {
-        return $line['piece_item_id'].'|'.($line['item_variant_id'] ?? 'all');
+        return $line['piece_item_id'].'|'.($line['item_variant_id'] ?? 'all').'|'.($line['order_type'] ?? 'all');
     }
 
     /**
@@ -137,6 +138,8 @@ class RecipeChange extends Model
      */
     private static function name(array $line): string
     {
-        return $line['piece'].($line['variant'] ? ' ('.$line['variant'].')' : '');
+        $tags = array_filter([$line['variant'] ?? null, isset($line['order_type']) ? OrderType::from($line['order_type'])->label() : null]);
+
+        return $line['piece'].($tags !== [] ? ' ('.implode(', ', $tags).')' : '');
     }
 }

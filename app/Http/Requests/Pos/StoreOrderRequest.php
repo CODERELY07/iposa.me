@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Pos;
 
+use App\Enums\OrderType;
 use App\Enums\PaymentMethod;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -31,6 +32,8 @@ class StoreOrderRequest extends FormRequest
         return [
             'uuid' => ['required', 'uuid'],
             'payment_method' => ['required', Rule::in($enabledMethods)],
+            // Missing means dine-in, so offline sales queued before this shipped keep working.
+            'order_type' => ['nullable', Rule::enum(OrderType::class)],
             'tendered' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
             'lines' => ['required', 'array', 'min:1', 'max:100'],
             'lines.*.variant_id' => ['required', 'integer'],

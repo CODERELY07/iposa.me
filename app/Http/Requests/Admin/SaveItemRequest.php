@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use App\Enums\ItemKind;
+use App\Enums\OrderType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -72,6 +73,7 @@ class SaveItemRequest extends FormRequest
             ],
             'recipe.*.qty' => ['required', 'numeric', 'gt:0', 'max:99999'],
             'recipe.*.variant_index' => ['nullable', 'integer', 'min:0', 'max:'.max(0, count((array) $this->input('variants', [])) - 1)],
+            'recipe.*.order_type' => ['nullable', Rule::enum(OrderType::class)],
         ];
     }
 

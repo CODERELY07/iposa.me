@@ -4,6 +4,7 @@ namespace App\Services\Pos;
 
 use App\Enums\ItemKind;
 use App\Enums\OrderStatus;
+use App\Enums\OrderType;
 use App\Enums\PaymentMethod;
 use App\Enums\StockMovementReason;
 use App\Models\Business;
@@ -25,7 +26,7 @@ class CheckoutService
      * Prices and costs always come from the database, never from the browser.
      * Sending the same uuid twice returns the first order (double taps, retries).
      *
-     * @param  array{uuid: string, payment_method: string, tendered?: float|string|null, lines: list<array{variant_id: int, qty: int}>}  $data
+     * @param  array{uuid: string, payment_method: string, order_type?: string|null, tendered?: float|string|null, lines: list<array{variant_id: int, qty: int}>}  $data
      *
      * @throws ValidationException
      */
@@ -67,6 +68,7 @@ class CheckoutService
 
             $subtotal = round($variants->sum(fn (ItemVariant $variant) => (float) $variant->price * $quantities[$variant->id]), 2);
             $method = PaymentMethod::from($data['payment_method']);
+            $orderType = isset($data['order_type']) ? OrderType::from($data['order_type']) : OrderType::DineIn;
             $tendered = isset($data['tendered']) && $data['tendered'] !== '' ? round((float) $data['tendered'], 2) : null;
 
             if ($method === PaymentMethod::Cash && ($tendered === null || $tendered < $subtotal)) {
@@ -84,6 +86,7 @@ class CheckoutService
                 'user_id' => $cashier->id,
                 'cashier_name' => $cashier->name,
                 'payment_method' => $method,
+                'order_type' => $orderType,
                 'subtotal' => $subtotal,
                 'tendered' => $method === PaymentMethod::Cash ? $tendered : null,
                 'change' => $method === PaymentMethod::Cash ? round($tendered - $subtotal, 2) : null,
@@ -107,7 +110,7 @@ class CheckoutService
                     'qty' => $qty,
                 ]);
 
-                $recipe = $variant->item->recipeLines->filter(fn (RecipeLine $line) => $line->appliesTo($variant));
+                $recipe = $variant->item->recipeLines->filter(fn (RecipeLine $line) => $line->appliesTo($variant) && $line->appliesToOrderType($orderType));
 
                 if ($recipe->isNotEmpty()) {
                     foreach ($recipe as $recipeLine) {

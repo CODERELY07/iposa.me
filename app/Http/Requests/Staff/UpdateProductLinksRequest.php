@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Staff;
 
 use App\Enums\ItemKind;
+use App\Enums\OrderType;
 use App\Models\Item;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -35,6 +36,7 @@ class UpdateProductLinksRequest extends FormRequest
             ],
             'recipe.*.qty' => ['required', 'numeric', 'gt:0', 'max:99999'],
             'recipe.*.variant_index' => ['nullable', 'integer', 'min:0', 'max:'.$lastSize],
+            'recipe.*.order_type' => ['nullable', Rule::enum(OrderType::class)],
         ];
     }
 

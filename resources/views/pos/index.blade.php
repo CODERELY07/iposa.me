@@ -212,6 +212,11 @@
                     <span class="num text-3xl font-semibold tracking-tight" x-text="formatPeso(subtotal)"></span>
                 </div>
 
+                <div class="grid grid-cols-2 gap-1 rounded-xl bg-ink-100 p-1 dark:bg-white/[0.05]">
+                    <button type="button" @click="orderType = 'dine_in'" :class="orderType === 'dine_in' ? 'tab-active' : ''" class="tab">Dine in</button>
+                    <button type="button" @click="orderType = 'take_out'" :class="orderType === 'take_out' ? 'tab-active' : ''" class="tab">Take out</button>
+                </div>
+
                 <div class="grid gap-1 rounded-xl bg-ink-100 p-1 dark:bg-white/[0.05]" style="grid-template-columns: repeat({{ max(1, count($paymentMethods)) }}, minmax(0, 1fr))">
                     <template x-for="method in paymentMethods" :key="method.value">
                         <button type="button" @click="payment = method.value" :class="payment === method.value ? 'tab-active' : ''" class="tab" x-text="method.label"></button>

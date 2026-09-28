@@ -59,11 +59,11 @@
                 groupRecipe(rows) {
                     const groups = [];
                     (rows || []).forEach((row) => {
-                        const key = row.piece_item_id + '|' + row.qty;
+                        const key = row.piece_item_id + '|' + row.qty + '|' + (row.order_type || '');
                         const isAll = row.variant_index === null || row.variant_index === '' || row.variant_index === undefined;
                         let group = groups.find((g) => g._key === key);
                         if (! group) {
-                            group = { _key: key, piece_item_id: row.piece_item_id, qty: row.qty, variant_indexes: isAll ? null : [] };
+                            group = { _key: key, piece_item_id: row.piece_item_id, qty: row.qty, order_type: row.order_type || '', variant_indexes: isAll ? null : [] };
                             groups.push(group);
                         }
                         if (isAll) {
@@ -82,10 +82,10 @@
                     const rows = [];
                     this.recipe.forEach((line) => {
                         if (line.variant_indexes === null || this.variants.length < 2) {
-                            rows.push({ piece_item_id: line.piece_item_id, qty: line.qty, variant_index: '' });
+                            rows.push({ piece_item_id: line.piece_item_id, qty: line.qty, variant_index: '', order_type: line.order_type || '' });
                         } else {
                             line.variant_indexes.forEach((variantIndex) => {
-                                rows.push({ piece_item_id: line.piece_item_id, qty: line.qty, variant_index: variantIndex });
+                                rows.push({ piece_item_id: line.piece_item_id, qty: line.qty, variant_index: variantIndex, order_type: line.order_type || '' });
                             });
                         }
                     });
@@ -300,7 +300,7 @@
                     @if ($recipesEnabled)
                         <section x-show="isMenu" class="surface p-6">
                             <h2 class="font-semibold">What one sale uses <span class="text-xs font-normal text-ink-500">(optional)</span></h2>
-                            <p class="text-xs text-ink-500">Each sale deducts these from stock: pieces (1 bun) and liquids (15 ml ketchup). For liquids, the closing audit then corrects the count to what is really left. Leave empty for items you count as themselves, like bottled water.</p>
+                            <p class="text-xs text-ink-500">Each sale deducts these from stock: pieces (1 bun) and liquids (15 ml ketchup). For liquids, the closing audit then corrects the count to what is really left. Leave empty for items you count as themselves, like bottled water. Mark a link dine-in or take-out only for things like wax paper vs. a plastic bag.</p>
 
                             @if ($pieces->isEmpty())
                                 <p class="mt-4 rounded-xl bg-ink-100 p-3 text-sm text-ink-600 dark:bg-white/[0.05] dark:text-ink-300">
@@ -321,6 +321,11 @@
                                                             @endforeach
                                                         </optgroup>
                                                     @endforeach
+                                                </select>
+                                                <select x-model="line.order_type" :disabled="! isMenu" class="field w-32" aria-label="For dine-in or take-out">
+                                                    <option value="">Dine-in & take-out</option>
+                                                    <option value="dine_in">Dine-in only</option>
+                                                    <option value="take_out">Take-out only</option>
                                                 </select>
                                                 <span class="num hidden w-20 text-right text-sm text-ink-500 sm:block" x-text="formatPeso((pieceCosts[line.piece_item_id] || 0) * (parseFloat(line.qty) || 0))"></span>
                                                 <button type="button" @click="recipe.splice(index, 1)" class="btn-quiet size-9 !px-0" aria-label="Remove ingredient"><x-icon name="x" class="size-4" /></button>
@@ -344,10 +349,11 @@
                                         <input type="hidden" :name="`recipe[${rowIndex}][piece_item_id]`" :value="row.piece_item_id" :disabled="! isMenu">
                                         <input type="hidden" :name="`recipe[${rowIndex}][qty]`" :value="row.qty" :disabled="! isMenu">
                                         <input type="hidden" :name="`recipe[${rowIndex}][variant_index]`" :value="row.variant_index" :disabled="! isMenu">
+                                        <input type="hidden" :name="`recipe[${rowIndex}][order_type]`" :value="row.order_type" :disabled="! isMenu">
                                     </span>
                                 </template>
 
-                                <button type="button" @click="recipe.push({ piece_item_id: {{ $pieces->first()->id }}, qty: 1, variant_indexes: null })" class="btn-quiet mt-3 text-brand-600 dark:text-brand-300">
+                                <button type="button" @click="recipe.push({ piece_item_id: {{ $pieces->first()->id }}, qty: 1, variant_indexes: null, order_type: '' })" class="btn-quiet mt-3 text-brand-600 dark:text-brand-300">
                                     <x-icon name="plus" class="size-4" /> Link a piece or liquid
                                 </button>
 
@@ -388,7 +394,7 @@
                     @else
                         <section x-show="isMenu" class="surface p-5 text-sm text-ink-500">
                             @if ($savedLinks->isNotEmpty())
-                                <span class="block text-ink-700 dark:text-ink-200">Each sale still uses: {{ $savedLinks->map(fn ($line) => \App\Models\Item::trimNumber((float) $line->qty, 3).' '.($line->piece?->unit ?: 'pc').' '.($line->piece?->name ?? '?').($line->variant ? ' ('.$line->variant->label.')' : ''))->join(', ') }}.</span>
+                                <span class="block text-ink-700 dark:text-ink-200">Each sale still uses: {{ $savedLinks->map(fn ($line) => \App\Models\Item::trimNumber((float) $line->qty, 3).' '.($line->piece?->unit ?: 'pc').' '.($line->piece?->name ?? '?').($line->variant ? ' ('.$line->variant->label.')' : '').($line->order_type ? ' ('.$line->order_type->label().')' : ''))->join(', ') }}.</span>
                                 These links are kept and keep working. Changing them needs ingredient links on your plan.
                             @endif
                             Ingredient links (sell a burger, buns go down) are on the Negosyo plan.
