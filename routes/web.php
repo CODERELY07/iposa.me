@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DayController;
+use App\Http\Controllers\Admin\DayResetController;
 use App\Http\Controllers\Admin\DeliveryCheckController;
 use App\Http\Controllers\Admin\ExportController;
 use App\Http\Controllers\Admin\ItemController;
@@ -103,6 +104,7 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
     Route::post('/recipe-fixes/{auditLine}/apply', [RecipeFixController::class, 'apply'])->name('recipe-fixes.apply');
     Route::post('/recipe-fixes/{auditLine}/dismiss', [RecipeFixController::class, 'dismiss'])->name('recipe-fixes.dismiss');
     Route::post('/deliveries/{delivery}/check', DeliveryCheckController::class)->name('deliveries.check');
+    Route::post('/reset-today', DayResetController::class)->name('reset-today');
 
     Route::middleware('plan:expenses')->group(function () {
         Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses');

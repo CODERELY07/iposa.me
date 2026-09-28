@@ -36,6 +36,11 @@ class DashboardController extends Controller
         $today = $week->last();
         $expenseCount = Expense::query()->whereDate('date', today())->whereNot('category', ExpenseCategory::StockPurchase)->count();
 
+        // Every one of today's orders (voided ones too) and expenses (stock purchases too):
+        // what "reset today" would actually remove, not just what the equation above shows.
+        $ordersToday = Order::query()->whereBetween('paid_at', [today(), today()->endOfDay()])->count();
+        $expensesToday = Expense::query()->whereDate('date', today())->count();
+
         $yesterdaySoFar = $ledger->salesAndCogsBetween($business, today()->subDay(), now()->subDay());
         $yesterdayExpenses = (float) Expense::query()->whereDate('date', today()->subDay())->whereNot('category', ExpenseCategory::StockPurchase)->sum('amount');
         $profitSoFar = round($today['sales'] - $today['cogs'] - $today['bulk'] - $today['expenses'], 2);
@@ -58,6 +63,8 @@ class DashboardController extends Controller
             'reopenRequests' => Audit::query()->whereDate('date', today())->where('reopen_status', Audit::REOPEN_PENDING)->get(),
             'recipeFixes' => $recipeFixes->suggestions($business),
             'expensesEnabled' => $business->hasFeature('expenses'),
+            'ordersToday' => $ordersToday,
+            'expensesToday' => $expensesToday,
         ]);
     }
 

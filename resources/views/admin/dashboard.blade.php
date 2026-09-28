@@ -247,5 +247,24 @@
                 </ol>
             </section>
         @endunless
+
+        {{-- Danger zone: undo the whole day when something went wrong --}}
+        @if ($ordersToday > 0 || $expensesToday > 0 || $auditDone)
+            <section class="surface flex flex-col gap-4 border border-loss-500/20 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div class="min-w-0">
+                    <p class="text-sm font-semibold text-loss-600 dark:text-loss-400">Something not right today?</p>
+                    <p class="mt-1 text-xs text-ink-500">Permanently deletes today's orders, puts back the stock they used, and removes today's closing audit and expenses. Yesterday and every day before it are never touched. This can't be undone.</p>
+                </div>
+                <form method="POST" action="{{ route('admin.reset-today') }}" class="shrink-0"
+                    data-confirm-title="Reset today for good?"
+                    data-confirm="{{ $ordersToday }} {{ \Illuminate\Support\Str::plural('order', $ordersToday) }}, {{ $expensesToday }} {{ \Illuminate\Support\Str::plural('expense', $expensesToday) }}{{ $auditDone ? ', and tonight’s closing audit' : '' }} are deleted, and stock is put back as it was this morning. This cannot be undone."
+                    data-confirm-phrase="{{ $business->business_name }}"
+                    data-confirm-action="Reset today" data-confirm-danger>
+                    @csrf
+                    <input type="hidden" name="confirmation" value="{{ $business->business_name }}">
+                    <button type="submit" class="btn-quiet text-loss-600 dark:text-loss-400" data-loading-text="Resetting…">Reset today</button>
+                </form>
+            </section>
+        @endif
     </div>
 </x-app-layout>
