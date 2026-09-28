@@ -111,13 +111,18 @@
                                             @endif
                                         </td>
                                         <td class="px-5 py-3 text-xs text-ink-500">
-                                            @if ($loop->first)
-                                                @if ($item->recipeLines->isNotEmpty())
-                                                    <span class="inline-flex items-center gap-1.5"><x-icon name="link" class="size-3.5" /> {{ $item->recipeLines->map(fn ($line) => ((float) $line->qty != 1 ? $formatQty($line->qty).' × ' : '').($line->piece?->name ?? '?').($line->variant ? ' ('.$line->variant->label.')' : ''))->join(', ') }}</span>
+                                            @if ($item->recipeLines->isNotEmpty())
+                                                @php($variantLines = $item->recipeLines->filter(fn ($line) => $line->appliesTo($variant)))
+                                                @if ($variantLines->isNotEmpty())
+                                                    <span class="inline-flex items-center gap-1.5"><x-icon name="link" class="size-3.5" /> {{ $variantLines->map(fn ($line) => ((float) $line->qty != 1 ? $formatQty($line->qty).' × ' : '').($line->piece?->name ?? '?').($line->order_type ? ' ('.$line->order_type->label().')' : ''))->join(', ') }}</span>
                                                     @unless ($item->include_recipe_cost)
                                                         <span class="pill bg-loss-500/10 text-loss-700 dark:text-loss-300" title="Sales take these off the shelf but don't count their cost. Tick “Include in cost”, or include them in the cost you type.">not in cost</span>
                                                     @endunless
-                                                @elseif ($item->tracksStock())
+                                                @else
+                                                    <span class="text-ink-400">No links for this size</span>
+                                                @endif
+                                            @elseif ($loop->first)
+                                                @if ($item->tracksStock())
                                                     <span class="num">{{ $formatQty($item->on_hand) }} in stock · counted as itself</span>
                                                 @else
                                                     <span class="text-ink-400">Not tracked</span>

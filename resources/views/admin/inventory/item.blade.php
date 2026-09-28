@@ -325,13 +325,13 @@
                                     Nothing to link yet. <a href="{{ route('admin.inventory.create', ['kind' => 'piece']) }}" class="font-medium text-brand-600 hover:underline dark:text-brand-300">Add buns, patties, cups or sauces</a> first, then link them here.
                                 </p>
                             @else
-                                <div class="mt-5 space-y-2">
+                                <div class="mt-5 space-y-3">
                                     <template x-for="(line, index) in recipe" :key="index">
-                                        <div class="rounded-xl p-2" :class="variants.length > 1 ? 'bg-ink-50 dark:bg-white/[0.03]' : ''">
-                                            <div class="flex flex-wrap items-center gap-2">
-                                                <input x-model="line.qty" :disabled="! isMenu" type="number" min="0.001" step="any" class="field num w-20 text-center" aria-label="Quantity">
-                                                <span class="w-8 text-sm text-ink-400" x-text="pieceUnits[line.piece_item_id] || '×'"></span>
-                                                <select x-model="line.piece_item_id" :disabled="! isMenu" class="field min-w-[10rem] flex-1" aria-label="Piece">
+                                        <div class="rounded-xl border border-ink-100 p-3 dark:border-white/[0.06]" :class="variants.length > 1 ? 'bg-ink-50 dark:bg-white/[0.03]' : ''">
+                                            {{-- What, and how much --}}
+                                            <div class="flex items-center gap-2">
+                                                <input x-model="line.qty" :disabled="! isMenu" type="number" min="0.001" step="any" class="field num w-16 shrink-0 text-center" aria-label="Quantity">
+                                                <select x-model="line.piece_item_id" :disabled="! isMenu" class="field min-w-0 flex-1" aria-label="Piece">
                                                     @foreach ($pieces->groupBy(fn ($piece) => $piece->kind->value) as $kindKey => $group)
                                                         <optgroup label="{{ $kindKey === 'bulk' ? 'Liquids & bulk' : 'Pieces' }}">
                                                             @foreach ($group as $piece)
@@ -340,24 +340,33 @@
                                                         </optgroup>
                                                     @endforeach
                                                 </select>
-                                                <select x-model="line.order_type" :disabled="! isMenu" class="field w-32" aria-label="For dine-in or take-out">
+                                                <button type="button" @click="recipe.splice(index, 1)" class="btn-quiet size-9 shrink-0 !px-0" aria-label="Remove ingredient"><x-icon name="x" class="size-4" /></button>
+                                            </div>
+
+                                            {{-- How it applies, and what it costs --}}
+                                            <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-1">
+                                                <span class="shrink-0 truncate text-xs text-ink-400" style="max-width: 8rem" :title="pieceUnits[line.piece_item_id]" x-text="'per ' + (pieceUnits[line.piece_item_id] || 'unit')"></span>
+                                                <select x-model="line.order_type" :disabled="! isMenu" class="field h-9 w-40 shrink-0 py-1 text-sm" aria-label="For dine-in or take-out">
                                                     <option value="">Dine-in & take-out</option>
                                                     <option value="dine_in">Dine-in only</option>
                                                     <option value="take_out">Take-out only</option>
                                                 </select>
-                                                <span class="num hidden w-20 text-right text-sm text-ink-500 sm:block" x-text="formatPeso((pieceCosts[line.piece_item_id] || 0) * (parseFloat(line.qty) || 0))"></span>
-                                                <a :href="pieceUrls[line.piece_item_id]" target="_blank" rel="noopener" class="btn-quiet size-9 !px-0" aria-label="Open this ingredient's own page" title="Edit this ingredient's stock, cost or unit"><x-icon name="arrow-up-right" class="size-4" /></a>
-                                                <button type="button" @click="recipe.splice(index, 1)" class="btn-quiet size-9 !px-0" aria-label="Remove ingredient"><x-icon name="x" class="size-4" /></button>
+                                                <span class="num ml-auto text-sm text-ink-500" x-text="formatPeso((pieceCosts[line.piece_item_id] || 0) * (parseFloat(line.qty) || 0))"></span>
+                                                <a :href="pieceUrls[line.piece_item_id]" target="_blank" rel="noopener" class="btn-quiet size-8 shrink-0 !px-0" aria-label="Open this ingredient's own page" title="Edit this ingredient's stock, cost or unit"><x-icon name="arrow-up-right" class="size-3.5" /></a>
                                             </div>
-                                            <p class="mt-1 pl-1 text-xs" :class="isPieceLow(line.piece_item_id) ? 'text-loss-600 dark:text-loss-400' : 'text-ink-400'" x-text="stockLabel(line.piece_item_id)"></p>
-                                            <div x-show="variants.length > 1" class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-1 text-xs text-ink-600 dark:text-ink-300">
-                                                <span class="font-medium text-ink-400">Sizes:</span>
-                                                <template x-for="(variant, variantIndex) in variants" :key="variantIndex">
-                                                    <label class="flex cursor-pointer items-center gap-1">
-                                                        <input type="checkbox" :disabled="! isMenu" :checked="isRecipeSizeChecked(line, variantIndex)" @change="toggleRecipeSize(line, variantIndex)" class="size-3.5 rounded border-ink-300 text-brand-600 focus:ring-brand-500">
-                                                        <span x-text="variant.label || 'Size ' + (variantIndex + 1)"></span>
-                                                    </label>
-                                                </template>
+
+                                            <p class="mt-2 pl-1 text-xs" :class="isPieceLow(line.piece_item_id) ? 'text-loss-600 dark:text-loss-400' : 'text-ink-400'" x-text="stockLabel(line.piece_item_id)"></p>
+
+                                            <div x-show="variants.length > 1" class="mt-2 border-t border-ink-200/70 pt-2 dark:border-white/[0.06]">
+                                                <p class="pl-1 text-xs font-medium text-ink-400">Sizes this applies to:</p>
+                                                <div class="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 pl-1 text-xs text-ink-600 sm:grid-cols-3 dark:text-ink-300">
+                                                    <template x-for="(variant, variantIndex) in variants" :key="variantIndex">
+                                                        <label class="flex cursor-pointer items-center gap-1.5">
+                                                            <input type="checkbox" :disabled="! isMenu" :checked="isRecipeSizeChecked(line, variantIndex)" @change="toggleRecipeSize(line, variantIndex)" class="size-3.5 shrink-0 rounded border-ink-300 text-brand-600 focus:ring-brand-500">
+                                                            <span class="truncate" x-text="variant.label || 'Size ' + (variantIndex + 1)"></span>
+                                                        </label>
+                                                    </template>
+                                                </div>
                                             </div>
                                         </div>
                                     </template>
