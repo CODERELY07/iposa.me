@@ -4,7 +4,7 @@
     $chartMax = max(1, $week->max('sales'));
     $daysLeft = $business->daysUntilDue();
     $setupDone = collect($setupSteps)->every(fn (array $step) => $step['done']);
-    $waitingCount = $deliveries->count() + $recipeRequests->count() + $recipeFixes->count();
+    $waitingCount = $deliveries->count() + $recipeRequests->count() + $recipeFixes->count() + $reopenRequests->count();
     $equation = [
         ['label' => 'Sales', 'amount' => $today['sales'], 'negative' => false, 'hint' => $today['orders'].' '.\Illuminate\Support\Str::plural('order', $today['orders']), 'href' => route('admin.day', 'sales')],
         ['label' => 'Ingredients', 'amount' => $today['cogs'], 'negative' => true, 'hint' => 'cost of what sold', 'href' => route('admin.day', 'ingredients')],
@@ -76,7 +76,7 @@
                             <x-icon name="check" class="size-5 text-brand-600 dark:text-brand-300" />
                             <div class="min-w-0 flex-1">
                                 <a href="#waiting" class="text-sm font-medium hover:underline">{{ $waitingCount }} {{ \Illuminate\Support\Str::plural('thing', $waitingCount) }} to check</a>
-                                <p class="text-xs text-ink-500">{{ collect([$deliveries->isNotEmpty() ? $deliveries->count().' '.\Illuminate\Support\Str::plural('delivery', $deliveries->count()) : null, $recipeRequests->isNotEmpty() ? $recipeRequests->count().' link '.\Illuminate\Support\Str::plural('request', $recipeRequests->count()) : null, $recipeFixes->isNotEmpty() ? $recipeFixes->count().' recipe '.\Illuminate\Support\Str::plural('suggestion', $recipeFixes->count()) : null])->filter()->join(', ') }}</p>
+                                <p class="text-xs text-ink-500">{{ collect([$deliveries->isNotEmpty() ? $deliveries->count().' '.\Illuminate\Support\Str::plural('delivery', $deliveries->count()) : null, $recipeRequests->isNotEmpty() ? $recipeRequests->count().' link '.\Illuminate\Support\Str::plural('request', $recipeRequests->count()) : null, $recipeFixes->isNotEmpty() ? $recipeFixes->count().' recipe '.\Illuminate\Support\Str::plural('suggestion', $recipeFixes->count()) : null, $reopenRequests->isNotEmpty() ? $reopenRequests->count().' reopen '.\Illuminate\Support\Str::plural('request', $reopenRequests->count()) : null])->filter()->join(', ') }}</p>
                             </div>
                         </li>
                     @endif

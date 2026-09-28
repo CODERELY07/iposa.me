@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AssetController;
+use App\Http\Controllers\Admin\AuditReopenController;
 use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -52,6 +53,7 @@ Route::middleware(['auth', 'verified', 'role:staff|admin', 'business'])->group(f
     Route::middleware('can:run-audit')->group(function () {
         Route::get('/audit', [AuditController::class, 'index'])->name('audit');
         Route::post('/audit', [AuditController::class, 'store'])->name('audit.store');
+        Route::post('/audit/reopen', [AuditController::class, 'requestReopen'])->name('audit.reopen.request');
     });
 
     Route::post('/expenses', [ExpenseController::class, 'store'])
@@ -94,6 +96,8 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
 
     Route::post('/recipe-changes/{recipeChange}/approve', [RecipeChangeController::class, 'approve'])->name('recipe-changes.approve');
     Route::post('/recipe-changes/{recipeChange}/reject', [RecipeChangeController::class, 'reject'])->name('recipe-changes.reject');
+    Route::post('/audits/{audit}/reopen/approve', [AuditReopenController::class, 'approve'])->name('audits.reopen.approve');
+    Route::post('/audits/{audit}/reopen/reject', [AuditReopenController::class, 'reject'])->name('audits.reopen.reject');
     Route::post('/recipe-fixes/{auditLine}/apply', [RecipeFixController::class, 'apply'])->name('recipe-fixes.apply');
     Route::post('/recipe-fixes/{auditLine}/dismiss', [RecipeFixController::class, 'dismiss'])->name('recipe-fixes.dismiss');
     Route::post('/deliveries/{delivery}/check', DeliveryCheckController::class)->name('deliveries.check');

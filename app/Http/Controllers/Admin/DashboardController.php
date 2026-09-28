@@ -55,6 +55,7 @@ class DashboardController extends Controller
             'recipeVariance' => $variance->latest($business),
             'deliveries' => Delivery::query()->where('status', Delivery::PENDING)->with(['item' => fn ($query) => $query->withoutGlobalScopes()])->oldest('id')->get(),
             'recipeRequests' => RecipeChange::query()->where('status', RecipeChange::PENDING)->with('item')->oldest('id')->get(),
+            'reopenRequests' => Audit::query()->whereDate('date', today())->where('reopen_status', Audit::REOPEN_PENDING)->get(),
             'recipeFixes' => $recipeFixes->suggestions($business),
             'expensesEnabled' => $business->hasFeature('expenses'),
         ]);

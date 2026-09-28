@@ -81,7 +81,20 @@ class ClosingAuditService
             ]);
 
             if ($isCorrection) {
-                $audit->update(['submitted_at' => $submittedAt, 'user_id' => $user->id, 'counted_by' => $user->name]);
+                // A staff correction spends the owner's approval; asking again needs asking again.
+                $audit->update([
+                    'submitted_at' => $submittedAt,
+                    'user_id' => $user->id,
+                    'counted_by' => $user->name,
+                    'corrections_count' => $audit->corrections_count + 1,
+                    'reopen_status' => null,
+                    'reopen_requested_by' => null,
+                    'reopen_requested_by_name' => null,
+                    'reopen_requested_at' => null,
+                    'reopen_decided_by' => null,
+                    'reopen_decided_by_name' => null,
+                    'reopen_decided_at' => null,
+                ]);
             }
 
             $changes = [];
@@ -138,6 +151,51 @@ class ClosingAuditService
 
             return $audit->refresh()->load('lines');
         });
+    }
+
+    /**
+     * A cashier asks the owner to reopen tonight's already-closed count.
+     *
+     * @throws ValidationException
+     */
+    public function requestReopen(Audit $audit, User $requester): Audit
+    {
+        if ($audit->isReopenPending()) {
+            throw ValidationException::withMessages(['audit' => 'Already asked. Wait for the owner to answer.']);
+        }
+
+        $audit->update([
+            'reopen_status' => Audit::REOPEN_PENDING,
+            'reopen_requested_by' => $requester->id,
+            'reopen_requested_by_name' => $requester->name,
+            'reopen_requested_at' => now(),
+            'reopen_decided_by' => null,
+            'reopen_decided_by_name' => null,
+            'reopen_decided_at' => null,
+        ]);
+
+        return $audit;
+    }
+
+    /**
+     * The owner's answer to a reopen request: approving lets the cashier correct once.
+     *
+     * @throws ValidationException
+     */
+    public function decideReopen(Audit $audit, User $owner, bool $approve): Audit
+    {
+        if (! $audit->isReopenPending()) {
+            throw ValidationException::withMessages(['audit' => 'This request was already handled.']);
+        }
+
+        $audit->update([
+            'reopen_status' => $approve ? Audit::REOPEN_APPROVED : Audit::REOPEN_DENIED,
+            'reopen_decided_by' => $owner->id,
+            'reopen_decided_by_name' => $owner->name,
+            'reopen_decided_at' => now(),
+        ]);
+
+        return $audit;
     }
 
     /**

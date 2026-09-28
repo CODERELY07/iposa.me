@@ -1,3 +1,5 @@
+@use('App\Models\Audit')
+
 @php
     $alreadyClosed = $todaysAudit !== null;
     $usedLabel = $countsPieces ? 'Used or missing today' : 'Bulk used today';
@@ -5,6 +7,7 @@
         'items' => $bulkItems,
         'storeUrl' => route('audit.store', absolute: false),
         'alreadyClosed' => $alreadyClosed,
+        'correctionsCount' => $todaysAudit?->corrections_count ?? 0,
     ];
 @endphp
 
@@ -33,10 +36,27 @@
                     <p class="mt-2 max-w-xs text-sm text-ink-500 dark:text-ink-400">
                         Counted by {{ $todaysAudit?->counted_by }} at {{ $todaysAudit?->submitted_at?->format('g:i A') }}.
                     </p>
+                    @if ($todaysAudit?->corrections_count)
+                        <p class="mt-1 text-xs text-ink-400">Corrected {{ $todaysAudit->corrections_count }} {{ \Illuminate\Support\Str::plural('time', $todaysAudit->corrections_count) }} tonight.</p>
+                    @endif
+
                     @if ($canCorrect)
+                        @if ($todaysAudit?->isReopenApproved() && ! auth()->user()->isAdmin())
+                            <p class="mt-3 max-w-xs text-xs text-brand-600 dark:text-brand-300">The owner approved your request. This correction is one-time.</p>
+                        @endif
                         <button type="button" @click="editing = true" class="btn-ghost mt-8">Correct tonight's counts</button>
+                    @elseif ($todaysAudit?->isReopenPending())
+                        <p class="mt-6 max-w-xs text-sm text-ink-500 dark:text-ink-400">Waiting for the owner to approve your request to reopen tonight's count.</p>
+                        <a href="{{ route('dashboard') }}" class="btn-ghost mt-4">Back to the register</a>
                     @else
-                        <a href="{{ route('dashboard') }}" class="btn-ghost mt-8">Back to the register</a>
+                        @if ($todaysAudit?->reopen_status === Audit::REOPEN_DENIED)
+                            <p class="mt-6 max-w-xs text-sm text-loss-600 dark:text-loss-400">The owner didn't approve your last request.</p>
+                        @endif
+                        <form method="POST" action="{{ route('audit.reopen.request') }}" class="mt-4">
+                            @csrf
+                            <button type="submit" class="btn-primary" data-loading-text="Asking…">Ask the owner to reopen</button>
+                        </form>
+                        <a href="{{ route('dashboard') }}" class="btn-ghost mt-3">Back to the register</a>
                     @endif
                 </div>
             </template>
@@ -185,7 +205,7 @@
                         @else
                             <p class="min-w-0 text-xs text-ink-500"><span class="num" x-text="items.length - touchedCount"></span> items left to check</p>
                         @endif
-                        <button type="button" @click="submit()" :disabled="touchedCount < items.length || saving" :aria-busy="saving.toString()"
+                        <button type="button" @click="submit()" :disabled="touchedCount < 1 || saving" :aria-busy="saving.toString()"
                             :class="saving ? '!opacity-100' : ''" class="btn-primary ml-auto rounded-2xl px-6 py-3.5">
                             <template x-if="! saving"><span x-text="error ? 'Try again' : @js($alreadyClosed ? 'Save corrections' : 'Close the day')"></span></template>
                             <template x-if="saving">

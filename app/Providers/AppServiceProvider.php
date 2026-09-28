@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\Audit;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
@@ -51,6 +52,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('link-pieces', fn (User $user): bool => ($user->isAdmin() || ($user->isStaff() && (bool) $user->business?->cashierCan('link_pieces')))
             && (bool) $user->business?->hasFeature('recipes'));
 
-        Gate::define('correct-audit', fn (User $user): bool => $user->isAdmin());
+        // A cashier gets this only for one correction, once the owner approves their reopen request.
+        Gate::define('correct-audit', fn (User $user): bool => $user->isAdmin()
+            || ($user->isStaff() && Audit::query()->whereDate('date', now())->where('reopen_status', Audit::REOPEN_APPROVED)->exists()));
     }
 }

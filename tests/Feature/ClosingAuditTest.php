@@ -77,3 +77,59 @@ it('hides the audit from cashiers when the owner turns it off', function () {
 
     $this->actingAs($this->cashier)->get(route('audit'))->assertForbidden();
 });
+
+it('lets the owner correct today\'s audit as many times as it wants, and counts each one', function () {
+    $this->actingAs($this->owner)->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 4.5, $this->mayo->id => 2]));
+    $this->actingAs($this->owner)->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 4, $this->mayo->id => 2]))->assertOk();
+    $this->actingAs($this->owner)->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 3, $this->mayo->id => 2]))->assertOk();
+
+    expect(Audit::withoutGlobalScopes()->sole()->corrections_count)->toBe(2);
+});
+
+it('lets a cashier ask to reopen, and the owner\'s approval is spent after one correction', function () {
+    $this->actingAs($this->cashier)->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 4.5, $this->mayo->id => 2]));
+
+    // Denied without asking.
+    $this->actingAs($this->cashier)
+        ->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 1, $this->mayo->id => 2]))
+        ->assertForbidden();
+
+    $this->actingAs($this->cashier)->post(route('audit.reopen.request'))->assertRedirect();
+    $audit = Audit::withoutGlobalScopes()->sole();
+    expect($audit->reopen_status)->toBe(Audit::REOPEN_PENDING)
+        ->and($audit->reopen_requested_by_name)->toBe($this->cashier->name);
+
+    // Still forbidden while pending.
+    $this->actingAs($this->cashier)
+        ->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 1, $this->mayo->id => 2]))
+        ->assertForbidden();
+
+    $this->actingAs($this->owner)->post(route('admin.audits.reopen.approve', $audit))->assertRedirect();
+    expect($audit->refresh()->reopen_status)->toBe(Audit::REOPEN_APPROVED);
+
+    $this->actingAs($this->cashier)
+        ->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 1, $this->mayo->id => 2]))
+        ->assertOk();
+
+    // Spent: the approval doesn't carry over to a second correction.
+    $audit->refresh();
+    expect($audit->reopen_status)->toBeNull()->and($audit->corrections_count)->toBe(1);
+
+    $this->actingAs($this->cashier)
+        ->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 0.5, $this->mayo->id => 2]))
+        ->assertForbidden();
+});
+
+it('lets the owner deny a reopen request', function () {
+    $this->actingAs($this->cashier)->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 4.5, $this->mayo->id => 2]));
+    $this->actingAs($this->cashier)->post(route('audit.reopen.request'));
+
+    $audit = Audit::withoutGlobalScopes()->sole();
+    $this->actingAs($this->owner)->post(route('admin.audits.reopen.reject', $audit))->assertRedirect();
+
+    expect($audit->refresh()->reopen_status)->toBe(Audit::REOPEN_DENIED);
+
+    $this->actingAs($this->cashier)
+        ->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 1, $this->mayo->id => 2]))
+        ->assertForbidden();
+});

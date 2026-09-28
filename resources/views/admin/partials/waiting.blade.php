@@ -75,6 +75,33 @@
         </div>
     @endif
 
+    @if ($reopenRequests->isNotEmpty())
+        <div class="mt-6">
+            <h2 class="font-semibold">Reopen tonight's count</h2>
+            <p class="text-xs text-ink-500">A cashier wants another pass at tonight's closing audit.</p>
+            <ul class="mt-3 space-y-3">
+                @foreach ($reopenRequests as $reopenRequest)
+                    <li class="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-ink-200 p-4 dark:border-white/[0.07]">
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium">{{ $reopenRequest->reopen_requested_by_name }} asked to correct tonight's count</p>
+                            <p class="mt-1 text-xs text-ink-500">{{ $reopenRequest->reopen_requested_at?->format('M j, g:i A') }} · closed by {{ $reopenRequest->counted_by }} at {{ $reopenRequest->submitted_at->format('g:i A') }}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <form method="POST" action="{{ route('admin.audits.reopen.approve', $reopenRequest) }}">
+                                @csrf
+                                <button type="submit" class="btn-ghost px-3 py-1.5 text-xs" data-loading-text="…">Approve</button>
+                            </form>
+                            <form method="POST" action="{{ route('admin.audits.reopen.reject', $reopenRequest) }}">
+                                @csrf
+                                <button type="submit" class="btn-quiet px-3 py-1.5 text-xs" data-loading-text="…">Deny</button>
+                            </form>
+                        </div>
+                    </li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     @if ($recipeFixes->isNotEmpty())
         <div class="mt-6">
             <h2 class="font-semibold">Recipes that use too much</h2>

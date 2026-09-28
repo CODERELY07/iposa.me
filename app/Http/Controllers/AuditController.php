@@ -8,6 +8,7 @@ use App\Models\Item;
 use App\Models\RecipeLine;
 use App\Services\Audit\ClosingAuditService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
@@ -87,5 +88,24 @@ class AuditController extends Controller
                 'duration_seconds' => $audit->duration_seconds,
             ],
         ]);
+    }
+
+    /**
+     * A cashier without correct-audit asks the owner to reopen tonight's closed count.
+     */
+    public function requestReopen(Request $request, ClosingAuditService $audits): RedirectResponse
+    {
+        $business = $request->user()->business;
+        $audit = $audits->forDate($business, now());
+
+        abort_if($audit === null, 404);
+
+        if (Gate::allows('correct-audit')) {
+            return back();
+        }
+
+        $audits->requestReopen($audit, $request->user());
+
+        return back()->with('status', "Sent. The owner will get your request to reopen tonight's count.");
     }
 }

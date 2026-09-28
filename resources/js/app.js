@@ -566,7 +566,7 @@ Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl })
 /**
  * Closing audit: staff type what they see on the shelf, in decimals. Saved by the server.
  */
-Alpine.data('closingAudit', ({ items, storeUrl, alreadyClosed }) => ({
+Alpine.data('closingAudit', ({ items, storeUrl, alreadyClosed, correctionsCount }) => ({
     items: items.map((item) => ({
         ...item,
         counted: item.counted ?? item.expected,
@@ -585,7 +585,21 @@ Alpine.data('closingAudit', ({ items, storeUrl, alreadyClosed }) => ({
     editing: !alreadyClosed,
 
     async submit() {
-        if (this.saving || this.touchedCount < this.items.length) {
+        if (this.saving || this.touchedCount < 1) {
+            return;
+        }
+
+        const remaining = this.items.length - this.touchedCount;
+        const correctionNote = alreadyClosed ? ` This will be correction #${correctionsCount + 1} tonight.` : '';
+        const confirmed = await Alpine.store('confirm').ask({
+            title: alreadyClosed ? 'Save these corrections?' : 'Close the day?',
+            message: (remaining > 0
+                ? `${remaining} item${remaining === 1 ? '' : 's'} ${remaining === 1 ? "wasn't" : "weren't"} counted and will be saved as unchanged. This can't be undone tonight.`
+                : `This saves tonight's counts and can't be undone tonight.`) + correctionNote,
+            action: alreadyClosed ? 'Save corrections' : 'Close the day',
+        });
+
+        if (confirmed === false) {
             return;
         }
 
