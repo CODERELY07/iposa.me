@@ -33,14 +33,19 @@ class ItemController extends Controller
         $search = trim((string) $request->query('q'));
         $showArchived = $request->boolean('archived');
         $tab = in_array($request->query('tab'), ['menu', 'pieces', 'bulk'], true) ? $request->query('tab') : 'menu';
+        $category = trim((string) $request->query('category'));
+        $lowStockOnly = $request->boolean('low_stock');
 
         $items = Item::query()
             ->when(! $showArchived, fn ($query) => $query->whereNull('archived_at'))
             ->when($showArchived, fn ($query) => $query->whereNotNull('archived_at'))
             ->when($search !== '', fn ($query) => $query->whereLike('name', '%'.$search.'%'))
+            ->when($category === 'none', fn ($query) => $query->whereNull('category_id'))
+            ->when($category !== '' && $category !== 'none', fn ($query) => $query->where('category_id', $category))
             ->with(['category', 'variants', 'recipeLines.piece', 'recipeLines.variant', 'containers'])
             ->orderBy('name')
-            ->get();
+            ->get()
+            ->when($lowStockOnly, fn (Collection $items) => $items->filter(fn (Item $item) => $item->isLowStock($business)));
 
         $usedToday = StockMovement::query()
             ->where('reason', StockMovementReason::Sale)
@@ -55,6 +60,9 @@ class ItemController extends Controller
             'tab' => $tab,
             'search' => $search,
             'showArchived' => $showArchived,
+            'category' => $category,
+            'lowStockOnly' => $lowStockOnly,
+            'categories' => Category::query()->orderBy('sort')->orderBy('name')->get(),
             'menuItems' => $items->where('kind', ItemKind::Menu)->values(),
             'pieceItems' => $items->where('kind', ItemKind::Piece)->values(),
             'bulkItems' => $items->where('kind', ItemKind::Bulk)->values(),

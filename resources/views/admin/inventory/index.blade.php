@@ -60,10 +60,40 @@
                 <form method="GET" action="{{ route('admin.inventory') }}" class="relative sm:w-64">
                     <input type="hidden" name="tab" :value="tab">
                     @if ($showArchived)<input type="hidden" name="archived" value="1">@endif
+                    @if ($category !== '')<input type="hidden" name="category" value="{{ $category }}">@endif
+                    @if ($lowStockOnly)<input type="hidden" name="low_stock" value="1">@endif
                     <x-icon name="search" class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-400" />
                     <input type="search" name="q" value="{{ $search }}" placeholder="Find an item" class="field pl-9" aria-label="Find an item">
                 </form>
             </div>
+        </div>
+
+        {{-- Filters --}}
+        <div class="flex flex-wrap items-center gap-3">
+            <form method="GET" action="{{ route('admin.inventory') }}" @change="$el.requestSubmit()" class="flex flex-wrap items-center gap-3">
+                <input type="hidden" name="tab" :value="tab">
+                @if ($showArchived)<input type="hidden" name="archived" value="1">@endif
+                @if ($search !== '')<input type="hidden" name="q" value="{{ $search }}">@endif
+
+                <select name="category" class="field h-9 w-auto py-1 text-sm" aria-label="Filter by category">
+                    <option value="">All categories</option>
+                    <option value="none" @selected($category === 'none')>No category</option>
+                    @foreach ($categories as $categoryOption)
+                        <option value="{{ $categoryOption->id }}" @selected((string) $categoryOption->id === $category)>{{ $categoryOption->name }}</option>
+                    @endforeach
+                </select>
+
+                <label class="flex cursor-pointer items-center gap-2 text-sm text-ink-600 dark:text-ink-300">
+                    <input type="checkbox" name="low_stock" value="1" @checked($lowStockOnly) class="size-4 rounded border-ink-300 text-brand-600 focus:ring-brand-500">
+                    Low stock only
+                </label>
+
+                @if ($category !== '' || $lowStockOnly)
+                    <a href="{{ route('admin.inventory', array_filter(['tab' => $tab, 'archived' => $showArchived ? 1 : null, 'q' => $search ?: null])) }}" class="text-xs font-medium text-ink-500 hover:text-ink-900 dark:hover:text-white">
+                        Clear filters
+                    </a>
+                @endif
+            </form>
         </div>
 
         {{-- Menu items --}}

@@ -261,6 +261,35 @@ it('does nothing when unlinking a piece that is not linked to anything', functio
         ->assertSessionHas('status', "Napkin wasn't linked to any recipe.");
 });
 
+it('filters the inventory list by category', function () {
+    $drinks = Category::withoutGlobalScopes()->create(['business_id' => $this->owner->business_id, 'name' => 'Drinks']);
+    $this->menu['tea']->update(['category_id' => $drinks->id]);
+
+    $this->actingAs($this->owner)->get(route('admin.inventory', ['tab' => 'menu', 'category' => $drinks->id]))
+        ->assertOk()
+        ->assertSee('Iced Tea')
+        ->assertDontSee('Cheeseburger');
+});
+
+it('filters the inventory list to items with no category', function () {
+    $drinks = Category::withoutGlobalScopes()->create(['business_id' => $this->owner->business_id, 'name' => 'Drinks']);
+    $this->menu['tea']->update(['category_id' => $drinks->id]);
+
+    $this->actingAs($this->owner)->get(route('admin.inventory', ['tab' => 'menu', 'category' => 'none']))
+        ->assertOk()
+        ->assertSee('Cheeseburger')
+        ->assertDontSee('Iced Tea');
+});
+
+it('filters pieces to only those at or below their low-stock alert', function () {
+    $this->menu['bun']->update(['on_hand' => 5]);
+
+    $this->actingAs($this->owner)->get(route('admin.inventory', ['tab' => 'pieces', 'low_stock' => 1]))
+        ->assertOk()
+        ->assertSee('Burger bun')
+        ->assertDontSee('Beef patty');
+});
+
 it('keeps an item\'s links when it is saved on a plan without ingredient links', function () {
     $this->menu['burger']->update(['include_recipe_cost' => true]);
     $this->owner->business->update(['plan' => 'tindahan']);
