@@ -14,6 +14,7 @@ use App\Models\OrderLine;
 use App\Models\RecipeLine;
 use App\Models\StockMovement;
 use App\Services\Inventory\ItemService;
+use App\Services\Inventory\RecipeChangeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -145,6 +146,21 @@ class ItemController extends Controller
     }
 
     /**
+     * Unlink a piece or liquid from every recipe that uses it, in one go. Once nothing
+     * points at it any more, it can be deleted for good instead of only archived.
+     */
+    public function unlinkRecipes(Request $request, Item $item, RecipeChangeService $changes): RedirectResponse
+    {
+        $count = $changes->unlinkFromAllRecipes($item, $request->user());
+
+        return redirect()
+            ->route('admin.inventory.edit', $item)
+            ->with('status', $count > 0
+                ? "{$item->name} is unlinked from {$count} ".str('menu item')->plural($count).'.'
+                : "{$item->name} wasn't linked to any recipe.");
+    }
+
+    /**
      * Why an item can't be deleted, in the owner's words. Empty means it can.
      *
      * @return list<string>
@@ -230,6 +246,10 @@ class ItemController extends Controller
             ],
             'recipeChanges' => $item->exists ? $item->recipeChanges()->limit(10)->get() : collect(),
             'savedLinks' => $item->exists && $item->relationLoaded('recipeLines') ? $item->recipeLines->load('piece', 'variant') : collect(),
+            // Other menu items that link this piece or liquid, so it can be unlinked from all of them at once.
+            'usedInRecipes' => $item->exists
+                ? RecipeLine::query()->where('piece_item_id', $item->id)->with('item')->get()->pluck('item')->filter()->unique('id')->values()
+                : collect(),
             'pieceCosts' => $pieces->mapWithKeys(fn (Item $piece) => [$piece->id => (float) $piece->unit_cost])->all(),
             'pieceUnits' => $pieces->mapWithKeys(fn (Item $piece) => [$piece->id => $piece->unit ?: ($piece->kind === ItemKind::Piece ? 'pc' : '')])->all(),
             // So the owner can see the stock a link actually points to, right where they're linking it.

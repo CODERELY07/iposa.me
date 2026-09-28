@@ -4,6 +4,7 @@ use App\Enums\ItemKind;
 use App\Enums\StockMovementReason;
 use App\Models\Category;
 use App\Models\Item;
+use App\Models\RecipeChange;
 use App\Models\StockMovement;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
@@ -228,6 +229,36 @@ it('offers delete only for items with no history', function () {
         ->assertOk()
         ->assertDontSee('Delete for good')
         ->assertSee('can only be archived', false);
+});
+
+it('unlinks a piece from every recipe at once, letting it be deleted afterward', function () {
+    $this->actingAs($this->owner)->get(route('admin.inventory.edit', $this->menu['bun']))
+        ->assertSee('Linked into 1 menu item')
+        ->assertDontSee('Delete for good');
+
+    $this->actingAs($this->owner)->post(route('admin.inventory.unlink-recipes', $this->menu['bun']))
+        ->assertRedirect(route('admin.inventory.edit', $this->menu['bun']))
+        ->assertSessionHas('status', fn (string $status) => str_contains($status, 'unlinked from 1 menu item'));
+
+    expect($this->menu['burger']->recipeLines()->where('piece_item_id', $this->menu['bun']->id)->exists())->toBeFalse()
+        ->and(RecipeChange::withoutGlobalScopes()->where('item_id', $this->menu['burger']->id)->sole()->summary())->toBe(['Remove 1 pc Burger bun']);
+
+    $this->actingAs($this->owner)->get(route('admin.inventory.edit', $this->menu['bun']))
+        ->assertDontSee('Linked into')
+        ->assertSee('Delete for good');
+
+    $this->actingAs($this->owner)->delete(route('admin.inventory.destroy', $this->menu['bun']))->assertRedirect();
+    expect(Item::withoutGlobalScopes()->whereKey($this->menu['bun']->id)->exists())->toBeFalse();
+});
+
+it('does nothing when unlinking a piece that is not linked to anything', function () {
+    $spare = Item::withoutGlobalScopes()->create([
+        'business_id' => $this->owner->business_id, 'kind' => 'piece', 'name' => 'Napkin', 'unit' => 'pc', 'on_hand' => 10, 'unit_cost' => 0.5,
+    ]);
+
+    $this->actingAs($this->owner)->post(route('admin.inventory.unlink-recipes', $spare))
+        ->assertRedirect(route('admin.inventory.edit', $spare))
+        ->assertSessionHas('status', "Napkin wasn't linked to any recipe.");
 });
 
 it('keeps an item\'s links when it is saved on a plan without ingredient links', function () {

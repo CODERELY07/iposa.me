@@ -199,6 +199,34 @@ class RecipeChangeService
         ]);
     }
 
+    /**
+     * Remove a piece from every menu item that links it, in one go: each menu
+     * item's own link history still records the removal, as if the owner had
+     * removed that one line by hand.
+     *
+     * @return int how many menu items were unlinked
+     */
+    public function unlinkFromAllRecipes(Item $piece, User $owner): int
+    {
+        return DB::transaction(function () use ($piece, $owner): int {
+            $itemIds = RecipeLine::withoutGlobalScopes()->where('piece_item_id', $piece->id)->distinct()->pluck('item_id');
+
+            foreach ($itemIds as $itemId) {
+                $menuItem = Item::withoutGlobalScopes()->whereKey($itemId)->first();
+
+                if ($menuItem === null) {
+                    continue;
+                }
+
+                $before = $this->snapshot($menuItem);
+                RecipeLine::withoutGlobalScopes()->where('item_id', $itemId)->where('piece_item_id', $piece->id)->delete();
+                $this->recordSaved($menuItem, $owner, $before);
+            }
+
+            return $itemIds->count();
+        });
+    }
+
     private static function unitOf(?Item $piece): string
     {
         return $piece === null ? '' : ($piece->unit ?: ($piece->kind === ItemKind::Piece ? 'pc' : ''));

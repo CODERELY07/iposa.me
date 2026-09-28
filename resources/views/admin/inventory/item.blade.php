@@ -717,6 +717,22 @@
             </section>
         @endif
 
+        @if ($isEditing && $item->kind?->value !== 'menu' && $usedInRecipes->isNotEmpty())
+            <section class="surface mt-8 p-6">
+                <h2 class="font-semibold">Linked into {{ $usedInRecipes->count() }} {{ \Illuminate\Support\Str::plural('menu item', $usedInRecipes->count()) }}</h2>
+                <p class="text-xs text-ink-500">{{ $item->name }} comes off the shelf when any of these sell: {{ $usedInRecipes->pluck('name')->join(', ') }}. Unlink it from all of them at once, or edit one menu item's links individually from its own page.</p>
+                <form method="POST" action="{{ route('admin.inventory.unlink-recipes', $item) }}" class="mt-4"
+                    data-confirm-title="Unlink {{ $item->name }} from every recipe?"
+                    data-confirm="Removes it from {{ $usedInRecipes->count() }} {{ \Illuminate\Support\Str::plural('menu item', $usedInRecipes->count()) }}: {{ $usedInRecipes->pluck('name')->join(', ') }}. Each one keeps selling, just without taking this off the shelf any more."
+                    data-confirm-action="Unlink from all" data-confirm-danger>
+                    @csrf
+                    <button type="submit" class="btn-quiet text-loss-600 dark:text-loss-400" data-loading-text="Unlinking…">
+                        <x-icon name="link" class="size-4" /> Unlink from all recipes
+                    </button>
+                </form>
+            </section>
+        @endif
+
         @if ($isEditing)
             <div class="mt-8 flex flex-wrap items-center justify-end gap-2 border-t border-ink-200 pt-6 dark:border-white/[0.06]">
                 @if ($canDelete)
