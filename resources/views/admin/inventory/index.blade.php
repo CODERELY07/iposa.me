@@ -6,6 +6,10 @@
         ['key' => 'bulk', 'label' => 'Bulk & liquids', 'count' => $bulkItems->count()],
     ];
     $newKind = ['menu' => 'menu', 'pieces' => 'piece', 'bulk' => 'bulk'][$tab];
+    $categoryFilterOptions = collect([
+        ['value' => '', 'label' => 'All categories'],
+        ['value' => 'none', 'label' => 'No category'],
+    ])->concat($categories->map(fn ($categoryOption) => ['value' => (string) $categoryOption->id, 'label' => $categoryOption->name]));
 @endphp
 
 <x-app-layout title="Inventory">
@@ -70,18 +74,15 @@
 
         {{-- Filters --}}
         <div class="flex flex-wrap items-center gap-3">
-            <form method="GET" action="{{ route('admin.inventory') }}" @change="$el.requestSubmit()" class="flex flex-wrap items-center gap-3">
+            <form method="GET" action="{{ route('admin.inventory') }}" @change="$el.requestSubmit()" class="flex flex-wrap items-center gap-3"
+                x-data="{ categoryFilter: @js($category), categoryFilterQuery: '', categoryFilterOpen: false }">
                 <input type="hidden" name="tab" :value="tab">
                 @if ($showArchived)<input type="hidden" name="archived" value="1">@endif
                 @if ($search !== '')<input type="hidden" name="q" value="{{ $search }}">@endif
 
-                <select name="category" class="field h-9 w-auto py-1 text-sm" aria-label="Filter by category">
-                    <option value="">All categories</option>
-                    <option value="none" @selected($category === 'none')>No category</option>
-                    @foreach ($categories as $categoryOption)
-                        <option value="{{ $categoryOption->id }}" @selected((string) $categoryOption->id === $category)>{{ $categoryOption->name }}</option>
-                    @endforeach
-                </select>
+                <x-combo-select :options="$categoryFilterOptions" model="categoryFilter" query="categoryFilterQuery" open="categoryFilterOpen"
+                    name="category" placeholder="Search categories…" aria-label="Filter by category" class="w-48"
+                    on-select="$nextTick(() => $el.closest('form').requestSubmit())" />
 
                 <label class="flex cursor-pointer items-center gap-2 text-sm text-ink-600 dark:text-ink-300">
                     <input type="checkbox" name="low_stock" value="1" @checked($lowStockOnly) class="size-4 rounded border-ink-300 text-brand-600 focus:ring-brand-500">

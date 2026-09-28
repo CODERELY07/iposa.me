@@ -1,3 +1,10 @@
+@php
+    $pieceOptions = $pieces->map(fn ($piece) => [
+        'value' => $piece->id,
+        'label' => $piece->name.($piece->unit ? ' ('.$piece->unit.')' : ''),
+    ])->values();
+@endphp
+
 <x-app-layout :title="'Links · '.$item->name">
     <div class="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-8">
         <a href="{{ route('staff.products') }}" class="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-900 dark:hover:text-white">
@@ -33,15 +40,8 @@
                         <div class="flex flex-wrap items-center gap-2">
                             <input x-model="line.qty" :name="`recipe[${index}][qty]`" type="number" min="0.001" step="any" class="field num w-20 text-center" aria-label="Quantity">
                             <span class="w-8 text-sm text-ink-400" x-text="pieceUnits[line.piece_item_id] || '×'"></span>
-                            <select x-model="line.piece_item_id" :name="`recipe[${index}][piece_item_id]`" class="field min-w-[10rem] flex-1" aria-label="Piece">
-                                @foreach ($pieces->groupBy(fn ($piece) => $piece->kind->value) as $kindKey => $group)
-                                    <optgroup label="{{ $kindKey === 'bulk' ? 'Liquids & bulk' : 'Pieces' }}">
-                                        @foreach ($group as $piece)
-                                            <option value="{{ $piece->id }}">{{ $piece->name }}{{ $piece->unit ? ' ('.$piece->unit.')' : '' }}</option>
-                                        @endforeach
-                                    </optgroup>
-                                @endforeach
-                            </select>
+                            <x-combo-select :options="$pieceOptions" model="line.piece_item_id" query="line._pieceQuery" open="line._pieceOpen"
+                                dynamic-name="`recipe[${index}][piece_item_id]`" placeholder="Search pieces & liquids…" aria-label="Piece" class="min-w-[10rem] flex-1" />
                             <select x-show="variants.length > 1" x-model="line.variant_index" :name="`recipe[${index}][variant_index]`" :disabled="variants.length < 2" class="field w-36" aria-label="Which size">
                                 <option value="">All sizes</option>
                                 <template x-for="(variant, variantIndex) in variants" :key="variantIndex">

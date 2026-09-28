@@ -13,6 +13,8 @@
         'kind' => $formState['kind'],
         'name' => $formState['name'],
         'categoryId' => (string) old('category_id', $item->category_id ?? ''),
+        'categoryQuery' => '',
+        'categoryOpen' => false,
         'categories' => $categories->map(fn ($category) => ['id' => $category->id, 'name' => $category->name, 'color' => $category->color])->values(),
         'variants' => array_values($formState['variants']),
         'recipe' => array_values($formState['recipe']),
@@ -32,6 +34,10 @@
         'tones' => $tones,
         'categoryUrl' => route('admin.categories.store', absolute: false),
     ];
+    $pieceOptions = $pieces->map(fn ($piece) => [
+        'value' => $piece->id,
+        'label' => $piece->name.($piece->unit ? ' ('.$piece->unit.')' : ''),
+    ])->values();
     $fieldError = fn (string $field) => $errors->first($field);
 @endphp
 
@@ -236,12 +242,8 @@
                             <div>
                                 <label for="category" class="field-label">Category</label>
                                 <div x-show="! addingCategory" class="flex gap-2">
-                                    <select id="category" name="category_id" x-model="categoryId" class="field">
-                                        <option value="">No category</option>
-                                        <template x-for="category in categories" :key="category.id">
-                                            <option :value="String(category.id)" x-text="category.name" :selected="String(category.id) === categoryId"></option>
-                                        </template>
-                                    </select>
+                                    <x-combo-select id="category" model="categoryId" query="categoryQuery" open="categoryOpen" name="category_id" placeholder="Search categories…" class="flex-1"
+                                        options-expr="[{ value: '', label: 'No category' }].concat(categories.map(c => ({ value: String(c.id), label: c.name })))" />
                                     <button type="button" @click="addingCategory = true; $nextTick(() => $refs.newCategory.focus())" class="btn-ghost shrink-0 !px-3" title="New category" aria-label="New category"><x-icon name="plus" class="size-4" /></button>
                                 </div>
                                 <div x-show="addingCategory" x-cloak class="flex gap-2">
@@ -331,15 +333,8 @@
                                             {{-- What, and how much --}}
                                             <div class="flex items-center gap-2">
                                                 <input x-model="line.qty" :disabled="! isMenu" type="number" min="0.001" step="any" class="field num w-16 shrink-0 text-center" aria-label="Quantity">
-                                                <select x-model="line.piece_item_id" :disabled="! isMenu" class="field min-w-0 flex-1" aria-label="Piece">
-                                                    @foreach ($pieces->groupBy(fn ($piece) => $piece->kind->value) as $kindKey => $group)
-                                                        <optgroup label="{{ $kindKey === 'bulk' ? 'Liquids & bulk' : 'Pieces' }}">
-                                                            @foreach ($group as $piece)
-                                                                <option value="{{ $piece->id }}">{{ $piece->name }}{{ $piece->unit ? ' ('.$piece->unit.')' : '' }}</option>
-                                                            @endforeach
-                                                        </optgroup>
-                                                    @endforeach
-                                                </select>
+                                                <x-combo-select :options="$pieceOptions" model="line.piece_item_id" query="line._pieceQuery" open="line._pieceOpen"
+                                                    placeholder="Search pieces & liquids…" disabled="! isMenu" aria-label="Piece" class="min-w-0 flex-1" />
                                                 <button type="button" @click="recipe.splice(index, 1)" class="btn-quiet size-9 shrink-0 !px-0" aria-label="Remove ingredient"><x-icon name="x" class="size-4" /></button>
                                             </div>
 
