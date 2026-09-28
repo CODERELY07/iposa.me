@@ -49,8 +49,70 @@
                 originalStock: null,
                 init() {
                     this.originalStock = { onHand: this.onHand, lowThreshold: this.lowThreshold };
+                    this.recipe = this.groupRecipe(this.recipe);
                     this.$watch('kind', () => this.containerModeChanged());
                     this.containerModeChanged();
+                },
+                // Server/old-input rows are one per size (variant_index: int|null). Group same piece+qty rows
+                // into one editable line with the sizes it applies to, so the UI can offer checkboxes instead
+                // of a whole duplicate row per size.
+                groupRecipe(rows) {
+                    const groups = [];
+                    (rows || []).forEach((row) => {
+                        const key = row.piece_item_id + '|' + row.qty;
+                        const isAll = row.variant_index === null || row.variant_index === '' || row.variant_index === undefined;
+                        let group = groups.find((g) => g._key === key);
+                        if (! group) {
+                            group = { _key: key, piece_item_id: row.piece_item_id, qty: row.qty, variant_indexes: isAll ? null : [] };
+                            groups.push(group);
+                        }
+                        if (isAll) {
+                            group.variant_indexes = null;
+                        } else if (group.variant_indexes !== null) {
+                            group.variant_indexes.push(parseInt(row.variant_index));
+                        }
+                    });
+                    groups.forEach((g) => {
+                        if (g.variant_indexes && g.variant_indexes.length === this.variants.length) g.variant_indexes = null;
+                    });
+                    return groups.map(({ _key, ...rest }) => rest);
+                },
+                // Expands each editable line back into one row per selected size, matching what the backend expects.
+                submissionRecipe() {
+                    const rows = [];
+                    this.recipe.forEach((line) => {
+                        if (line.variant_indexes === null || this.variants.length < 2) {
+                            rows.push({ piece_item_id: line.piece_item_id, qty: line.qty, variant_index: '' });
+                        } else {
+                            line.variant_indexes.forEach((variantIndex) => {
+                                rows.push({ piece_item_id: line.piece_item_id, qty: line.qty, variant_index: variantIndex });
+                            });
+                        }
+                    });
+                    return rows;
+                },
+                isRecipeSizeChecked(line, variantIndex) {
+                    return line.variant_indexes === null || line.variant_indexes.includes(variantIndex);
+                },
+                toggleRecipeSize(line, variantIndex) {
+                    const arr = line.variant_indexes === null ? this.variants.map((_, i) => i) : [...line.variant_indexes];
+                    const pos = arr.indexOf(variantIndex);
+                    if (pos === -1) {
+                        arr.push(variantIndex);
+                    } else if (arr.length > 1) {
+                        arr.splice(pos, 1);
+                    }
+                    line.variant_indexes = arr.length === this.variants.length ? null : arr.sort((a, b) => a - b);
+                },
+                removeVariant(index) {
+                    this.variants.splice(index, 1);
+                    this.recipe.forEach((line) => {
+                        if (line.variant_indexes === null) return;
+                        line.variant_indexes = line.variant_indexes.filter((i) => i !== index).map((i) => (i > index ? i - 1 : i));
+                        if (line.variant_indexes.length === 0 || line.variant_indexes.length === this.variants.length) {
+                            line.variant_indexes = null;
+                        }
+                    });
                 },
                 get isMenu() { return this.kind === 'menu' },
                 get containerMode() { return this.kind === 'bulk' && this.useContainers },
@@ -102,7 +164,7 @@
                 },
                 recipeCostFor(variantIndex) {
                     return this.recipe
-                        .filter((line) => line.variant_index === null || line.variant_index === '' || String(line.variant_index) === String(variantIndex))
+                        .filter((line) => this.isRecipeSizeChecked(line, variantIndex))
                         .reduce((total, line) => total + (this.pieceCosts[line.piece_item_id] || 0) * (parseFloat(line.qty) || 0), 0);
                 },
                 async createCategory() {
@@ -225,7 +287,7 @@
                                     <p class="num text-right text-sm font-semibold"
                                         :class="margin(index) === null ? 'text-ink-400' : (margin(index) >= 50 ? 'text-gain-600 dark:text-gain-400' : (margin(index) >= 25 ? 'text-brand-600 dark:text-brand-300' : 'text-loss-600 dark:text-loss-400'))"
                                         x-text="margin(index) === null ? '—' : margin(index).toFixed(1) + '%'"></p>
-                                    <button type="button" x-show="variants.length > 1" @click="variants.splice(index, 1); recipe.forEach((line) => { if (line.variant_index === index) line.variant_index = null; else if (line.variant_index > index) line.variant_index-- })" class="btn-quiet size-9 justify-self-end !px-0" aria-label="Remove size"><x-icon name="x" class="size-4" /></button>
+                                    <button type="button" x-show="variants.length > 1" @click="removeVariant(index)" class="btn-quiet size-9 justify-self-end !px-0" aria-label="Remove size"><x-icon name="x" class="size-4" /></button>
                                 </div>
                             </template>
                         </div>
@@ -247,31 +309,45 @@
                             @else
                                 <div class="mt-5 space-y-2">
                                     <template x-for="(line, index) in recipe" :key="index">
-                                        <div class="flex flex-wrap items-center gap-2">
-                                            <input x-model="line.qty" :name="`recipe[${index}][qty]`" :disabled="! isMenu" type="number" min="0.001" step="any" class="field num w-20 text-center" aria-label="Quantity">
-                                            <span class="w-8 text-sm text-ink-400" x-text="pieceUnits[line.piece_item_id] || '×'"></span>
-                                            <select x-model="line.piece_item_id" :name="`recipe[${index}][piece_item_id]`" :disabled="! isMenu" class="field min-w-[10rem] flex-1" aria-label="Piece">
-                                                @foreach ($pieces->groupBy(fn ($piece) => $piece->kind->value) as $kindKey => $group)
-                                                    <optgroup label="{{ $kindKey === 'bulk' ? 'Liquids & bulk' : 'Pieces' }}">
-                                                        @foreach ($group as $piece)
-                                                            <option value="{{ $piece->id }}">{{ $piece->name }}{{ $piece->unit ? ' ('.$piece->unit.')' : '' }}</option>
-                                                        @endforeach
-                                                    </optgroup>
-                                                @endforeach
-                                            </select>
-                                            <select x-show="variants.length > 1" x-model="line.variant_index" :name="`recipe[${index}][variant_index]`" :disabled="! isMenu || variants.length < 2" class="field w-36" aria-label="Which size">
-                                                <option value="">All sizes</option>
+                                        <div class="rounded-xl p-2" :class="variants.length > 1 ? 'bg-ink-50 dark:bg-white/[0.03]' : ''">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <input x-model="line.qty" :disabled="! isMenu" type="number" min="0.001" step="any" class="field num w-20 text-center" aria-label="Quantity">
+                                                <span class="w-8 text-sm text-ink-400" x-text="pieceUnits[line.piece_item_id] || '×'"></span>
+                                                <select x-model="line.piece_item_id" :disabled="! isMenu" class="field min-w-[10rem] flex-1" aria-label="Piece">
+                                                    @foreach ($pieces->groupBy(fn ($piece) => $piece->kind->value) as $kindKey => $group)
+                                                        <optgroup label="{{ $kindKey === 'bulk' ? 'Liquids & bulk' : 'Pieces' }}">
+                                                            @foreach ($group as $piece)
+                                                                <option value="{{ $piece->id }}">{{ $piece->name }}{{ $piece->unit ? ' ('.$piece->unit.')' : '' }}</option>
+                                                            @endforeach
+                                                        </optgroup>
+                                                    @endforeach
+                                                </select>
+                                                <span class="num hidden w-20 text-right text-sm text-ink-500 sm:block" x-text="formatPeso((pieceCosts[line.piece_item_id] || 0) * (parseFloat(line.qty) || 0))"></span>
+                                                <button type="button" @click="recipe.splice(index, 1)" class="btn-quiet size-9 !px-0" aria-label="Remove ingredient"><x-icon name="x" class="size-4" /></button>
+                                            </div>
+                                            <div x-show="variants.length > 1" class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-1 text-xs text-ink-600 dark:text-ink-300">
+                                                <span class="font-medium text-ink-400">Sizes:</span>
                                                 <template x-for="(variant, variantIndex) in variants" :key="variantIndex">
-                                                    <option :value="variantIndex" x-text="'Only ' + (variant.label || 'size ' + (variantIndex + 1))" :selected="String(line.variant_index) === String(variantIndex)"></option>
+                                                    <label class="flex cursor-pointer items-center gap-1">
+                                                        <input type="checkbox" :disabled="! isMenu" :checked="isRecipeSizeChecked(line, variantIndex)" @change="toggleRecipeSize(line, variantIndex)" class="size-3.5 rounded border-ink-300 text-brand-600 focus:ring-brand-500">
+                                                        <span x-text="variant.label || 'Size ' + (variantIndex + 1)"></span>
+                                                    </label>
                                                 </template>
-                                            </select>
-                                            <span class="num hidden w-20 text-right text-sm text-ink-500 sm:block" x-text="formatPeso((pieceCosts[line.piece_item_id] || 0) * (parseFloat(line.qty) || 0))"></span>
-                                            <button type="button" @click="recipe.splice(index, 1)" class="btn-quiet size-9 !px-0" aria-label="Remove ingredient"><x-icon name="x" class="size-4" /></button>
+                                            </div>
                                         </div>
                                     </template>
                                 </div>
 
-                                <button type="button" @click="recipe.push({ piece_item_id: {{ $pieces->first()->id }}, qty: 1, variant_index: null })" class="btn-quiet mt-3 text-brand-600 dark:text-brand-300">
+                                {{-- The backend still expects one row per (piece, size); expand each editable line here. --}}
+                                <template x-for="(row, rowIndex) in submissionRecipe()" :key="rowIndex">
+                                    <span>
+                                        <input type="hidden" :name="`recipe[${rowIndex}][piece_item_id]`" :value="row.piece_item_id" :disabled="! isMenu">
+                                        <input type="hidden" :name="`recipe[${rowIndex}][qty]`" :value="row.qty" :disabled="! isMenu">
+                                        <input type="hidden" :name="`recipe[${rowIndex}][variant_index]`" :value="row.variant_index" :disabled="! isMenu">
+                                    </span>
+                                </template>
+
+                                <button type="button" @click="recipe.push({ piece_item_id: {{ $pieces->first()->id }}, qty: 1, variant_indexes: null })" class="btn-quiet mt-3 text-brand-600 dark:text-brand-300">
                                     <x-icon name="plus" class="size-4" /> Link a piece or liquid
                                 </button>
 
