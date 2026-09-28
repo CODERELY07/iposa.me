@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AssetController;
+use App\Http\Controllers\Admin\AuditCostSettingsController;
 use App\Http\Controllers\Admin\AuditReopenController;
 use App\Http\Controllers\Admin\BillingController;
 use App\Http\Controllers\Admin\CategoryController;
@@ -131,6 +132,8 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
     Route::get('/settings', [SettingsController::class, 'edit'])->name('settings');
     Route::patch('/settings/business', [SettingsController::class, 'updateBusiness'])->name('settings.business');
     Route::patch('/settings/register', [SettingsController::class, 'updateRegister'])->name('settings.register');
+    Route::get('/audit-cost-settings', [AuditCostSettingsController::class, 'edit'])->name('audit-cost-settings');
+    Route::put('/audit-cost-settings', [AuditCostSettingsController::class, 'update'])->name('audit-cost-settings.update');
     Route::patch('/billing/plan', [BillingController::class, 'changePlan'])->name('billing.plan');
     Route::post('/billing/payments', [BillingController::class, 'submitPayment'])->name('billing.payments.store');
 });

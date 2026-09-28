@@ -58,10 +58,13 @@ class Audit extends Model
     }
 
     /**
-     * Peso value of bulk used, from the costs copied at count time.
+     * Peso value of bulk used, from the costs copied at count time. Skips items
+     * whose extra usage the owner turned off from counting against profit.
      */
     public function usageCost(): float
     {
-        return round($this->lines->sum(fn (AuditLine $line) => ((float) $line->used - (float) $line->recipe_surplus_costed) * (float) $line->unit_cost), 2);
+        return round($this->lines
+            ->filter(fn (AuditLine $line) => $line->item?->include_audit_cost ?? true)
+            ->sum(fn (AuditLine $line) => ((float) $line->used - (float) $line->recipe_surplus_costed) * (float) $line->unit_cost), 2);
     }
 }

@@ -149,7 +149,7 @@ class ClosingAuditService
                 $audit->forceFill(['last_movement_id' => (int) StockMovement::withoutGlobalScopes()->where('business_id', $business->id)->max('id')])->save();
             }
 
-            return $audit->refresh()->load('lines');
+            return $audit->refresh()->load('lines.item');
         });
     }
 

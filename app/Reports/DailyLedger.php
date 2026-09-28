@@ -34,6 +34,7 @@ class DailyLedger
         $sales = $this->salesByDay($business, $from, $to);
         $cogs = $this->cogsByDay($business, $from, $to);
         $bulk = $this->bulkByDay($business, $from, $to);
+        $auditedDays = $this->auditedDays($business, $from, $to);
         $expenses = $this->expensesByDay($business, $from, $to);
 
         $rows = collect();
@@ -46,7 +47,9 @@ class DailyLedger
                 'sales' => round((float) ($sales[$key]->sales ?? 0), 2),
                 'cogs' => round((float) ($cogs[$key]->cogs ?? 0), 2),
                 'bulk' => round((float) ($bulk[$key]->bulk ?? 0), 2),
-                'audited' => isset($bulk[$key]),
+                // Whether the day was closed at all, regardless of whether any counted
+                // item's extra usage was turned on to count against profit.
+                'audited' => $auditedDays->has($key),
                 'expenses' => round((float) ($expenses[$key]->expenses ?? 0), 2),
                 'payables' => round((float) ($expenses[$key]->payables ?? 0), 2),
                 'missing' => round((float) ($expenses[$key]->missing ?? 0), 2),
@@ -156,14 +159,32 @@ class DailyLedger
     }
 
     /**
+     * Days with a submitted closing audit, regardless of whether any item counted
+     * that night has its extra usage set to count against profit.
+     *
+     * @return Collection<string, string>
+     */
+    private function auditedDays(Business $business, CarbonImmutable $from, CarbonImmutable $to): Collection
+    {
+        return DB::table('audits')
+            ->where('business_id', $business->id)
+            ->whereBetween('date', [$from->toDateString(), $to->toDateString().' 23:59:59'])
+            ->pluck('date')
+            ->map(fn ($date) => substr((string) $date, 0, 10))
+            ->flip();
+    }
+
+    /**
      * @return Collection<string, object>
      */
     private function bulkByDay(Business $business, CarbonImmutable $from, CarbonImmutable $to): Collection
     {
         return DB::table('audit_lines')
             ->join('audits', 'audits.id', '=', 'audit_lines.audit_id')
+            ->join('items', 'items.id', '=', 'audit_lines.item_id')
             ->where('audits.business_id', $business->id)
             ->whereBetween('audits.date', [$from->toDateString(), $to->toDateString().' 23:59:59'])
+            ->where('items.include_audit_cost', true)
             // Used beyond the recipes, minus what the recipes over-charged in sales.
             ->selectRaw('date(audits.date) as day, sum((audit_lines.used - audit_lines.recipe_surplus_costed) * audit_lines.unit_cost) as bulk')
             ->groupByRaw('date(audits.date)')

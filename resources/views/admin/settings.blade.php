@@ -106,6 +106,9 @@
                         <span class="text-xs text-ink-500">Buns, patties and cups are counted with the liquids. Missing pieces show up the same night and are costed in your profit. Adds a few minutes to closing.</span>
                     </span>
                 </label>
+                <p class="sm:col-span-2">
+                    <a href="{{ route('admin.audit-cost-settings') }}" class="text-sm font-medium text-brand-600 hover:underline dark:text-brand-300">Choose which items' extra usage counts against profit →</a>
+                </p>
                 <div class="sm:col-span-2 sm:text-right">
                     <button type="submit" class="btn-primary" data-loading-text="Saving…">Save</button>
                 </div>

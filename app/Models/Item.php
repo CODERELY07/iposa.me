@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['business_id', 'category_id', 'kind', 'name', 'unit', 'on_hand', 'low_threshold', 'unit_cost', 'include_recipe_cost', 'archived_at'])]
+#[Fillable(['business_id', 'category_id', 'kind', 'name', 'unit', 'on_hand', 'low_threshold', 'unit_cost', 'include_recipe_cost', 'include_audit_cost', 'archived_at'])]
 class Item extends Model
 {
     /** @use HasFactory<ItemFactory> */
@@ -46,6 +46,7 @@ class Item extends Model
             'low_threshold' => 'decimal:3',
             'unit_cost' => 'decimal:6',
             'include_recipe_cost' => 'boolean',
+            'include_audit_cost' => 'boolean',
             'archived_at' => 'datetime',
         ];
     }

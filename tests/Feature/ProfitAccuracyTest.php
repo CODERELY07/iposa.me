@@ -57,6 +57,27 @@ it('gives nothing back for recipes whose cost the sales never charged', function
         ->and(($this->today)()['bulk'])->toBe(0.0);
 });
 
+it('excludes an item\'s extra usage from profit once its audit cost is turned off', function () {
+    $this->ketchup->update(['include_audit_cost' => false]);
+
+    ($this->count)(2900);
+
+    expect(($this->today)()['bulk'])->toBe(0.0)
+        ->and(($this->today)()['audited'])->toBeTrue();
+});
+
+it('still counts an item\'s extra usage against profit by default', function () {
+    ($this->count)(2900);
+
+    expect(($this->today)()['bulk'])->toBe(5.0);
+});
+
+it('leaves an excluded item out of the usage cost shown right after closing', function () {
+    $this->ketchup->update(['include_audit_cost' => false]);
+
+    ($this->count)(2900)->assertJsonPath('audit.usage_cost', 0);
+});
+
 it('treats a surplus beyond what the recipes took as a restock', function () {
     ($this->sell)(10);
     ($this->count)(3200, 'recipe');
