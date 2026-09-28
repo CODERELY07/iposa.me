@@ -189,7 +189,7 @@ class ItemController extends Controller
             ->whereIn('kind', [ItemKind::Piece, ItemKind::Bulk])
             ->orderByRaw('case when kind = ? then 0 else 1 end', [ItemKind::Piece->value])
             ->orderBy('name')
-            ->get(['id', 'kind', 'name', 'unit', 'unit_cost']);
+            ->get(['id', 'kind', 'name', 'unit', 'unit_cost', 'on_hand', 'low_threshold']);
 
         $variants = $item->relationLoaded('variants') ? $item->variants : collect();
         $containers = $item->relationLoaded('containers') ? $item->containers : collect();
@@ -232,6 +232,13 @@ class ItemController extends Controller
             'savedLinks' => $item->exists && $item->relationLoaded('recipeLines') ? $item->recipeLines->load('piece', 'variant') : collect(),
             'pieceCosts' => $pieces->mapWithKeys(fn (Item $piece) => [$piece->id => (float) $piece->unit_cost])->all(),
             'pieceUnits' => $pieces->mapWithKeys(fn (Item $piece) => [$piece->id => $piece->unit ?: ($piece->kind === ItemKind::Piece ? 'pc' : '')])->all(),
+            // So the owner can see the stock a link actually points to, right where they're linking it.
+            'pieceStock' => $pieces->mapWithKeys(fn (Item $piece) => [$piece->id => $piece->tracksStock() ? [
+                'onHand' => (float) $piece->on_hand,
+                'low' => $piece->isLowStock($business),
+            ] : null])->all(),
+            // A shortcut straight to that piece's own page, to check or fix its stock, cost or unit.
+            'pieceUrls' => $pieces->mapWithKeys(fn (Item $piece) => [$piece->id => route('admin.inventory.edit', ['item' => $piece->id])])->all(),
         ];
     }
 

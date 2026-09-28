@@ -19,6 +19,8 @@
         'includeRecipeCost' => $recipesEnabled && $formState['includeRecipeCost'],
         'pieceCosts' => $pieceCosts,
         'pieceUnits' => $pieceUnits,
+        'pieceStock' => $pieceStock,
+        'pieceUrls' => $pieceUrls,
         'unit' => $formState['unit'],
         'containers' => $formState['containers'],
         'measures' => $measures,
@@ -166,6 +168,22 @@
                     return this.recipe
                         .filter((line) => this.isRecipeSizeChecked(line, variantIndex))
                         .reduce((total, line) => total + (this.pieceCosts[line.piece_item_id] || 0) * (parseFloat(line.qty) || 0), 0);
+                },
+                // What's actually on the shelf for a linked piece, so a wrong pick or an
+                // empty shelf shows up while setting up the link, not after the first sale fails.
+                stockLabel(pieceId) {
+                    const unit = this.pieceUnits[pieceId] || 'unit';
+                    const cost = this.pieceCosts[pieceId] || 0;
+                    const costPart = cost > 0 ? ' · ' + this.formatUnitCost(cost) + '/' + unit : '';
+                    const stock = this.pieceStock[pieceId];
+
+                    if (! stock) return 'not counted' + costPart;
+                    if (stock.onHand <= 0) return 'out of stock' + costPart;
+
+                    return this.trim(stock.onHand) + ' ' + unit + ' on hand' + costPart;
+                },
+                isPieceLow(pieceId) {
+                    return this.pieceStock[pieceId]?.low ?? false;
                 },
                 async createCategory() {
                     if (! this.newCategory.trim()) return;
@@ -328,8 +346,10 @@
                                                     <option value="take_out">Take-out only</option>
                                                 </select>
                                                 <span class="num hidden w-20 text-right text-sm text-ink-500 sm:block" x-text="formatPeso((pieceCosts[line.piece_item_id] || 0) * (parseFloat(line.qty) || 0))"></span>
+                                                <a :href="pieceUrls[line.piece_item_id]" target="_blank" rel="noopener" class="btn-quiet size-9 !px-0" aria-label="Open this ingredient's own page" title="Edit this ingredient's stock, cost or unit"><x-icon name="arrow-up-right" class="size-4" /></a>
                                                 <button type="button" @click="recipe.splice(index, 1)" class="btn-quiet size-9 !px-0" aria-label="Remove ingredient"><x-icon name="x" class="size-4" /></button>
                                             </div>
+                                            <p class="mt-1 pl-1 text-xs" :class="isPieceLow(line.piece_item_id) ? 'text-loss-600 dark:text-loss-400' : 'text-ink-400'" x-text="stockLabel(line.piece_item_id)"></p>
                                             <div x-show="variants.length > 1" class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-1 text-xs text-ink-600 dark:text-ink-300">
                                                 <span class="font-medium text-ink-400">Sizes:</span>
                                                 <template x-for="(variant, variantIndex) in variants" :key="variantIndex">
