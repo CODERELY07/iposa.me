@@ -15,6 +15,7 @@ Net = Sales − Ingredients (COGS) − Bulk used − Expenses
 | [Daily ledger](#daily-ledger) | ✅ Built |
 | [Profit & ledger page](#profit--ledger-page) | ✅ Built |
 | [Best sellers](#best-sellers) | ✅ Built |
+| [PDF business report](#pdf-business-report) | ✅ Built |
 | [CSV & zip exports](#csv--zip-exports) | ✅ Built |
 
 ## Routes
@@ -24,6 +25,7 @@ Net = Sales − Ingredients (COGS) − Bulk used − Expenses
 | GET | `/admin` | `admin.dashboard` | `role:admin`, `business` |
 | GET | `/admin/day/{section}?date=` | `admin.day` | `role:admin`, `business` — `section`: sales, ingredients, bulk, expenses |
 | GET | `/admin/reports` | `admin.reports` | + `plan:reports` |
+| GET | `/admin/reports/pdf?period=&from=&to=` | `admin.reports.pdf` | + `plan:reports` |
 | GET | `/admin/exports/{dataset}` | `admin.exports.download` | `role:admin`, `business` (never plan- or billing-gated) |
 
 ---
@@ -75,6 +77,21 @@ Week, this month, or a custom range (capped at one year, no future dates — `be
 
 Grouped by the *sold* name and size from `order_lines`, ranked by quantity, with revenue and margin %. Because it reads the snapshot, renaming an item later doesn't rewrite last month's chart.
 
+## PDF business report
+
+**Download PDF report** on the Profit & ledger page makes an A4 PDF of the range on screen (`Admin\ReportPdfController`, `App\Reports\PeriodReport`, view `reports/pdf.blade.php`, rendered by `barryvdh/laravel-dompdf`). The range rules are shared with the page (`ReportRangeRequest`: last 7 days, this month, or any range up to a year, no future dates).
+
+| Section | Charts | Tables |
+|---|---|---|
+| **Summary** | Profit and loss bars (share of sales); sales vs profit per day (per week past 45 days), losses below zero | Sales, net profit and margin, average order, food cost %; the P&L with % of sales; notes for days without a closing count and unchecked deliveries |
+| **Daily ledger** | — | Every day: orders, sales, ingredients, bulk, expenses, net, margin; totals |
+| **Sales** | Payment methods, average sales per weekday, sales per hour | Same, with order counts and shares |
+| **Menu performance** | Profit share per item | Best and lowest margins; every item and size with sold, sales, cost, profit, margin |
+| **Costs and stock** | — | Stock taken by sales (and how much of it the item's cost includes), closing counts per item, cashier deliveries, stock on hand with value and low-stock flags |
+| **Expenses and team** | Expenses per category | Categories (in profit or not), every entry (first 200; the CSV has all), sales per cashier with average order and voids |
+
+Every total comes from `DailyLedger`, so the PDF matches Today, the P&L page and the CSV to the centavo (`ReportPdfTest`). Charts are bars sized in percent or, for the trend, an SVG drawn by `App\Reports\TrendChart` (Sales `#3f76c4`, Profit `#d97706`, Loss `#b42318`, validated for colour-blind separation), because dompdf renders tables and SVG reliably. The footer carries "Page N of M".
+
 ## CSV & zip exports
 
 `GET /admin/exports/{dataset}` with optional `from`/`to` (default: this month, limited to the last 2 years).
@@ -94,6 +111,8 @@ Files are streamed (no memory spike), start with a UTF-8 BOM so Excel shows ₱ 
 ---
 
 ## Tests
+
+`ReportPdfTest`: downloads a real PDF from the page's range · totals equal the ledger and every breakdown adds up · closing counts, deliveries and stock · long ranges by week · a shop with no sales · loss bars below zero · other shops, cashiers and Tindahan blocked · no future ranges.
 
 `DayBreakdownTest`: every order listed, voided ones not counted · ingredients per size and stock taken · the closing count · expenses without stock purchases · each total equals the ledger · past days, no future, other shop, cashier blocked · Today links to all four.
 

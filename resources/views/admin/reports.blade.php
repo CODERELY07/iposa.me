@@ -16,6 +16,7 @@
     $bestDay = $ledger->where('orders', '>', 0)->sortByDesc('net')->first();
     $periodLabel = $from->isSameDay($to) ? $from->format('M j, Y') : $from->format('M j').' – '.$to->format('M j, Y');
     $exportRange = ['from' => $from->toDateString(), 'to' => $to->toDateString()];
+    $pdfRange = ['period' => 'custom'] + $exportRange;
 @endphp
 
 <x-app-layout title="Profit & ledger">
@@ -27,7 +28,8 @@
                     <a href="{{ route('admin.reports', ['period' => 'week']) }}" @class(['tab', 'tab-active' => $period === 'week'])>Last 7 days</a>
                     <a href="{{ route('admin.reports', ['period' => 'month']) }}" @class(['tab', 'tab-active' => $period === 'month'])>This month</a>
                 </div>
-                <a href="{{ route('admin.exports.download', ['dataset' => 'ledger'] + $exportRange) }}" download class="btn-primary"><x-icon name="download" class="size-4" /> Export ledger</a>
+                <a href="{{ route('admin.reports.pdf', $pdfRange) }}" class="btn-primary" data-no-loader><x-icon name="download" class="size-4" /> Download PDF report</a>
+                <a href="{{ route('admin.exports.download', ['dataset' => 'ledger'] + $exportRange) }}" download class="btn-ghost"><x-icon name="download" class="size-4" /> Ledger CSV</a>
             </x-slot:actions>
         </x-page-header>
 

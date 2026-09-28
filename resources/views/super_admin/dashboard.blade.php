@@ -19,6 +19,7 @@
                     <a href="{{ route('super_admin.plans', ['status' => 'pending']) }}" class="btn-primary">{{ $metrics['pendingPayments'] }} {{ \Illuminate\Support\Str::plural('payment', $metrics['pendingPayments']) }} to confirm</a>
                 @endif
                 <a href="{{ route('super_admin.businesses.index') }}" class="btn-ghost"><x-icon name="building" class="size-4" /> All businesses</a>
+                <a href="{{ route('super_admin.backup') }}" class="btn-ghost" data-no-loader><x-icon name="download" class="size-4" /> Backup database</a>
             </x-slot:actions>
         </x-page-header>
 
@@ -145,5 +146,19 @@
                 </div>
             @endif
         </section>
+        <section class="surface flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+            <div class="min-w-0 flex-1">
+                <p class="text-sm font-semibold">Backup database</p>
+                <p class="mt-1 text-sm text-ink-500">
+                    Downloads every shop's data as one <span class="num">.sql</span> file of INSERT statements.
+                    To restore it: run the migrations on the empty database first, then paste the file into the SQL editor and run it.
+                    Logins, cached values and queued jobs are left out on purpose.
+                </p>
+            </div>
+            <a href="{{ route('super_admin.backup') }}" class="btn-primary shrink-0" data-no-loader>
+                <x-icon name="download" class="size-4" /> Download backup
+            </a>
+        </section>
+
     </div>
 </x-app-layout>

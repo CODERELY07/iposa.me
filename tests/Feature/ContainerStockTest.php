@@ -312,3 +312,15 @@ it('keeps a count above expected as a restock for liquids that are in no recipe'
     expect((float) $line->restocked)->toBe(500.0)
         ->and((float) $line->recipe_surplus)->toBe(0.0);
 });
+
+it('leaves the "log as an expense" box unticked on the restock form', function () {
+    $oil = makeOil($this);
+
+    $html = $this->actingAs($this->owner)->get(route('admin.inventory.edit', $oil))->assertOk()->getContent();
+
+    $checkbox = collect(explode('<input ', $html))
+        ->first(fn (string $chunk) => str_contains($chunk, 'name="log_expense" value="1"'));
+
+    expect($checkbox)->not->toBeNull()
+        ->and($checkbox)->not->toContain('checked');
+});

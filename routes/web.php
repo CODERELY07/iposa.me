@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\ItemRestockController;
 use App\Http\Controllers\Admin\RecipeChangeController;
 use App\Http\Controllers\Admin\RecipeFixController;
 use App\Http\Controllers\Admin\ReportController;
+use App\Http\Controllers\Admin\ReportPdfController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\TeamController;
 use App\Http\Controllers\Admin\VoidRequestController;
@@ -28,6 +29,7 @@ use App\Http\Controllers\ServiceWorkerController;
 use App\Http\Controllers\Staff\MyOrdersController;
 use App\Http\Controllers\Staff\ProductController;
 use App\Http\Controllers\Staff\ProductRestockController;
+use App\Http\Controllers\SuperAdmin\BackupController;
 use App\Http\Controllers\SuperAdmin\PlanController;
 use App\Http\Controllers\SuperAdmin\PlatformDashboardController;
 use App\Http\Controllers\SuperAdmin\SubscriptionPaymentController;
@@ -111,6 +113,7 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
     });
 
     Route::get('/reports', ReportController::class)->middleware('plan:reports')->name('reports');
+    Route::get('/reports/pdf', ReportPdfController::class)->middleware('plan:reports')->name('reports.pdf');
     Route::get('/exports/{dataset}', ExportController::class)
         ->whereIn('dataset', ExportController::DATASETS)
         ->name('exports.download');
@@ -147,6 +150,7 @@ Route::middleware(['auth', 'verified', 'role:super_admin'])->prefix('super-admin
     Route::patch('/plans/{plan}/archive', [PlanController::class, 'archive'])->name('plans.archive');
     Route::patch('/plans/{plan}/restore', [PlanController::class, 'restore'])->name('plans.restore');
     Route::delete('/plans/{plan}', [PlanController::class, 'destroy'])->name('plans.destroy');
+    Route::get('/backup', BackupController::class)->name('backup');
     Route::get('/verifications', [VerificationController::class, 'index'])->name('verifications');
     Route::post('/users/{user}/verify', [VerificationController::class, 'verify'])->name('users.verify');
     Route::post('/payments/{payment}/confirm', [SubscriptionPaymentController::class, 'confirm'])->name('payments.confirm');

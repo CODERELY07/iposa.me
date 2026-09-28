@@ -37,7 +37,7 @@ COPY --from=assets /app/public/build ./public/build
 RUN composer dump-autoload --optimize --classmap-authoritative --no-dev \
     && php artisan package:discover --ansi \
     && rm -f public/hot \
-    && mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+    && mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs storage/fonts bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache
 
 COPY docker/php.ini /usr/local/etc/php/conf.d/zz-iposa.ini
