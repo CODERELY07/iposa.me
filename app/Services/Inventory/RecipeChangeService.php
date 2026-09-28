@@ -227,6 +227,24 @@ class RecipeChangeService
         });
     }
 
+    /**
+     * Remove a piece from just one menu item's recipe, recorded in that
+     * item's own link history as if the owner had removed the line by hand.
+     */
+    public function unlinkFromRecipe(Item $piece, Item $menuItem, User $owner): bool
+    {
+        return DB::transaction(function () use ($piece, $menuItem, $owner): bool {
+            $before = $this->snapshot($menuItem);
+            $removed = RecipeLine::withoutGlobalScopes()->where('item_id', $menuItem->id)->where('piece_item_id', $piece->id)->delete();
+
+            if ($removed > 0) {
+                $this->recordSaved($menuItem, $owner, $before);
+            }
+
+            return $removed > 0;
+        });
+    }
+
     private static function unitOf(?Item $piece): string
     {
         return $piece === null ? '' : ($piece->unit ?: ($piece->kind === ItemKind::Piece ? 'pc' : ''));

@@ -251,6 +251,34 @@ it('unlinks a piece from every recipe at once, letting it be deleted afterward',
     expect(Item::withoutGlobalScopes()->whereKey($this->menu['bun']->id)->exists())->toBeFalse();
 });
 
+it('unlinks a piece from just one menu item, leaving the others linked', function () {
+    $doubleBurger = Item::withoutGlobalScopes()->create(['business_id' => $this->owner->business_id, 'kind' => 'menu', 'name' => 'Double Cheeseburger']);
+    $doubleBurger->variants()->create(['label' => 'Regular', 'price' => 149, 'cost' => 70]);
+    $doubleBurger->recipeLines()->create(['piece_item_id' => $this->menu['bun']->id, 'qty' => 1]);
+
+    $this->actingAs($this->owner)->get(route('admin.inventory.edit', $this->menu['bun']))
+        ->assertSee('Linked into 2 menu items')
+        ->assertSee('Cheeseburger')
+        ->assertSee('Double Cheeseburger');
+
+    $this->actingAs($this->owner)->post(route('admin.inventory.unlink-recipe', [$this->menu['bun'], $doubleBurger]))
+        ->assertRedirect(route('admin.inventory.edit', $this->menu['bun']))
+        ->assertSessionHas('status', 'Burger bun is unlinked from Double Cheeseburger.');
+
+    expect($doubleBurger->recipeLines()->where('piece_item_id', $this->menu['bun']->id)->exists())->toBeFalse()
+        ->and($this->menu['burger']->recipeLines()->where('piece_item_id', $this->menu['bun']->id)->exists())->toBeTrue()
+        ->and(RecipeChange::withoutGlobalScopes()->where('item_id', $doubleBurger->id)->sole()->summary())->toBe(['Remove 1 pc Burger bun']);
+
+    $this->actingAs($this->owner)->get(route('admin.inventory.edit', $this->menu['bun']))
+        ->assertSee('Linked into 1 menu item');
+});
+
+it('does nothing when unlinking a piece from a menu item it is not linked to', function () {
+    $this->actingAs($this->owner)->post(route('admin.inventory.unlink-recipe', [$this->menu['bun'], $this->menu['tea']]))
+        ->assertRedirect(route('admin.inventory.edit', $this->menu['bun']))
+        ->assertSessionHas('status', "Burger bun wasn't linked to Iced Tea.");
+});
+
 it('does nothing when unlinking a piece that is not linked to anything', function () {
     $spare = Item::withoutGlobalScopes()->create([
         'business_id' => $this->owner->business_id, 'kind' => 'piece', 'name' => 'Napkin', 'unit' => 'pc', 'on_hand' => 10, 'unit_cost' => 0.5,

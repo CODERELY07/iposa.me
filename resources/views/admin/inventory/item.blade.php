@@ -715,7 +715,23 @@
         @if ($isEditing && $item->kind?->value !== 'menu' && $usedInRecipes->isNotEmpty())
             <section class="surface mt-8 p-6">
                 <h2 class="font-semibold">Linked into {{ $usedInRecipes->count() }} {{ \Illuminate\Support\Str::plural('menu item', $usedInRecipes->count()) }}</h2>
-                <p class="text-xs text-ink-500">{{ $item->name }} comes off the shelf when any of these sell: {{ $usedInRecipes->pluck('name')->join(', ') }}. Unlink it from all of them at once, or edit one menu item's links individually from its own page.</p>
+                <p class="text-xs text-ink-500">{{ $item->name }} comes off the shelf when any of these sell. Visit one to edit its links, unlink it from just that one, or unlink from all of them at once.</p>
+                <ul class="mt-4 divide-y divide-ink-200 dark:divide-white/[0.06]">
+                    @foreach ($usedInRecipes as $menuItem)
+                        <li class="flex items-center justify-between gap-3 py-2">
+                            <a href="{{ route('admin.inventory.edit', $menuItem) }}" class="text-sm font-medium text-ink-900 hover:underline dark:text-white">{{ $menuItem->name }}</a>
+                            <form method="POST" action="{{ route('admin.inventory.unlink-recipe', [$item, $menuItem]) }}"
+                                data-confirm-title="Unlink {{ $item->name }} from {{ $menuItem->name }}?"
+                                data-confirm="{{ $menuItem->name }} keeps selling, just without taking {{ $item->name }} off the shelf any more."
+                                data-confirm-action="Unlink" data-confirm-danger>
+                                @csrf
+                                <button type="submit" class="btn-quiet px-3 py-1.5 text-xs text-loss-600 dark:text-loss-400" data-loading-text="Unlinking…">
+                                    <x-icon name="link" class="size-4" /> Unlink
+                                </button>
+                            </form>
+                        </li>
+                    @endforeach
+                </ul>
                 <form method="POST" action="{{ route('admin.inventory.unlink-recipes', $item) }}" class="mt-4"
                     data-confirm-title="Unlink {{ $item->name }} from every recipe?"
                     data-confirm="Removes it from {{ $usedInRecipes->count() }} {{ \Illuminate\Support\Str::plural('menu item', $usedInRecipes->count()) }}: {{ $usedInRecipes->pluck('name')->join(', ') }}. Each one keeps selling, just without taking this off the shelf any more."

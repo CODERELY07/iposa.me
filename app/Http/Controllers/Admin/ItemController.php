@@ -169,6 +169,20 @@ class ItemController extends Controller
     }
 
     /**
+     * Unlink a piece or liquid from just one menu item, leaving the rest of its recipes untouched.
+     */
+    public function unlinkRecipe(Request $request, Item $item, Item $menuItem, RecipeChangeService $changes): RedirectResponse
+    {
+        $unlinked = $changes->unlinkFromRecipe($item, $menuItem, $request->user());
+
+        return redirect()
+            ->route('admin.inventory.edit', $item)
+            ->with('status', $unlinked
+                ? "{$item->name} is unlinked from {$menuItem->name}."
+                : "{$item->name} wasn't linked to {$menuItem->name}.");
+    }
+
+    /**
      * Why an item can't be deleted, in the owner's words. Empty means it can.
      *
      * @return list<string>
