@@ -16,6 +16,9 @@
             .row { display: flex; justify-content: space-between; gap: 8px; }
             .row span:last-child { text-align: right; white-space: nowrap; }
             .total { font-size: 15px; font-weight: 700; }
+            .order-number { margin: 10px 0; }
+            .order-number .label { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: #555; }
+            .order-number .big { font-size: 44px; font-weight: 800; line-height: 1.1; }
             .void { border: 2px solid #b91c1c; color: #b91c1c; text-align: center; font-weight: 700; padding: 4px; margin: 6px 0; letter-spacing: .2em; }
             .actions { margin: 16px auto 0; max-width: 280px; display: flex; gap: 8px; }
             .actions button { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid #ccc; background: #fff; font: inherit; cursor: pointer; }
@@ -33,8 +36,14 @@
 
             <div class="rule"></div>
 
-            <div class="row"><span>Order #{{ $order->number }}</span><span>{{ $order->paid_at->format('M j, Y g:i A') }}</span></div>
-            <div class="muted">Cashier: {{ $order->cashier_name }}</div>
+            <div class="center order-number">
+                <div class="label">Order number</div>
+                <div class="big">#{{ $order->number }}</div>
+            </div>
+
+            <div class="rule"></div>
+
+            <div class="row muted"><span>{{ $order->paid_at->format('M j, Y g:i A') }}</span><span>Cashier: {{ $order->cashier_name }}</span></div>
 
             @if ($order->isVoided())
                 <div class="void">VOIDED</div>
