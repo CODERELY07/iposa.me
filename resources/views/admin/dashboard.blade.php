@@ -7,8 +7,7 @@
     $waitingCount = $deliveries->count() + $recipeRequests->count() + $recipeFixes->count() + $reopenRequests->count();
     $equation = [
         ['label' => 'Sales', 'amount' => $today['sales'], 'negative' => false, 'hint' => $today['orders'].' '.\Illuminate\Support\Str::plural('order', $today['orders']), 'href' => route('admin.day', 'sales')],
-        ['label' => 'Ingredients', 'amount' => $today['cogs'], 'negative' => true, 'hint' => 'cost of what sold', 'href' => route('admin.day', 'ingredients')],
-        ['label' => $business->auditsPieces() ? 'Used at closing' : 'Bulk used', 'amount' => $today['audited'] ? $today['bulk'] : null, 'negative' => true, 'hint' => $today['audited'] ? 'from tonight’s audit' : 'after closing audit', 'href' => route('admin.day', 'bulk')],
+        ['label' => 'Restock costs', 'amount' => $today['stock_purchases'], 'negative' => true, 'hint' => $today['stockPurchaseCount'].' '.\Illuminate\Support\Str::plural('restock', $today['stockPurchaseCount']).' logged today', 'href' => route('admin.day', 'expenses')],
         ['label' => 'Expenses', 'amount' => $today['expenses'], 'negative' => true, 'hint' => $today['expenseCount'].' '.\Illuminate\Support\Str::plural('entry', $today['expenseCount']).' today', 'href' => route('admin.day', 'expenses')],
     ];
 @endphp
@@ -39,7 +38,7 @@
                 </p>
 
                 {{-- The equation: every peso is traceable --}}
-                <div class="mt-8 grid gap-px overflow-hidden rounded-xl border border-ink-200 bg-ink-200 sm:grid-cols-4 dark:border-white/[0.07] dark:bg-white/[0.07]">
+                <div class="mt-8 grid gap-px overflow-hidden rounded-xl border border-ink-200 bg-ink-200 sm:grid-cols-3 dark:border-white/[0.07] dark:bg-white/[0.07]">
                     @foreach ($equation as $part)
                         <a href="{{ $part['href'] ?? '#' }}" @class(['group bg-white p-4 transition dark:bg-ink-900', 'hover:bg-ink-50 dark:hover:bg-ink-800/60' => $part['href'], 'pointer-events-none' => ! $part['href']])>
                             <p class="flex items-center justify-between text-xs text-ink-500">

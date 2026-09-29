@@ -34,7 +34,7 @@ it('shows a cashier\'s delivery on the owner\'s dashboard', function () {
         ->assertSee('Received by '.$this->cashier->name);
 });
 
-it('settles a matching delivery: the price sets the cost and the purchase is not subtracted from profit', function () {
+it('settles a matching delivery: the price sets the cost and is logged as a restock cost', function () {
     ($this->receive)($this->menu['bun'], 40);
 
     ($this->check)(['receipt_quantity' => 40, 'paid' => 320, 'log_expense' => 1])->assertRedirect();
@@ -48,6 +48,7 @@ it('settles a matching delivery: the price sets the cost and the purchase is not
         ->and((float) $expense->amount)->toBe(320.0)
         ->and(($this->today)()['expenses'])->toBe(0.0)
         ->and(($this->today)()['stock_purchases'])->toBe(320.0)
+        ->and(($this->today)()['net'])->toBe(-320.0)
         ->and(Delivery::withoutGlobalScopes()->sole()->status)->toBe(Delivery::CHECKED);
 });
 
@@ -63,7 +64,9 @@ it('logs stock that never reached the shelf as missing, at the receipt price', f
         ->and((float) $this->menu['bun']->refresh()->on_hand)->toBe(140.0)
         ->and((float) $this->menu['bun']->unit_cost)->toBe(7.5)
         ->and(($this->today)()['missing'])->toBe(75.0)
-        ->and(($this->today)()['net'])->toBe(-75.0);
+        // Net is cash basis: the ₱375 paid is a restock cost, on top of the ₱75 missing-stock expense.
+        ->and(($this->today)()['stock_purchases'])->toBe(375.0)
+        ->and(($this->today)()['net'])->toBe(-450.0);
 });
 
 it('counts a shortage as missing even when the purchase is not logged', function () {

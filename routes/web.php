@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AssetController;
 use App\Http\Controllers\Admin\AuditCostSettingsController;
 use App\Http\Controllers\Admin\AuditReopenController;
 use App\Http\Controllers\Admin\BillingController;
+use App\Http\Controllers\Admin\CapitalContributionController;
 use App\Http\Controllers\Admin\CashFloatController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -130,6 +131,10 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
 
     Route::get('/reports', ReportController::class)->middleware('plan:reports')->name('reports');
     Route::get('/reports/pdf', ReportPdfController::class)->middleware('plan:reports')->name('reports.pdf');
+    Route::middleware('plan:reports')->group(function () {
+        Route::post('/capital', [CapitalContributionController::class, 'store'])->name('capital.store');
+        Route::delete('/capital/{capitalContribution}', [CapitalContributionController::class, 'destroy'])->name('capital.destroy');
+    });
     Route::get('/exports/{dataset}', ExportController::class)
         ->whereIn('dataset', ExportController::DATASETS)
         ->name('exports.download');

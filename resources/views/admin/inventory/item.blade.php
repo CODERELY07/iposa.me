@@ -686,9 +686,9 @@
                         </label>
                         <p class="-mt-2 pl-6 text-xs text-ink-500">
                             @if ($item->isCostedWhenUsed(auth()->user()->business))
-                                Stock purchases are listed in Expenses but don't lower profit: {{ $item->name }} is counted when it's used.
+                                Counted as a Restock cost today, its own line on the profit and loss — separate from {{ $item->name }}'s ingredient cost, which is still tracked per sale for margin reporting.
                             @else
-                                {{ $item->name }} isn't linked to a sale or counted at closing, so what you pay for it lowers profit now.
+                                {{ $item->name }} isn't linked to a sale or counted at closing, so what you pay for it is logged as an Expense today.
                             @endif
                         </p>
                     @endif

@@ -103,9 +103,9 @@ The Bulk tab shows container items as "3 bottles · 3,000 ml" and "₱145 / bott
 
 1. On hand goes up by `quantity × container size`, logged as a **Restock** stock movement (not an adjustment).
 2. When a price is given, the cost per unit becomes what this purchase cost (`paid ÷ added`), and that container's price is updated for next time.
-3. Optionally (Negosyo plan) the payment is logged in Expenses, e.g. "Cooking oil · 1 tin (18,000 ml)". **The box is unticked by default**, so a restock only reaches Expenses when the owner asks for it:
-   - as a **Stock purchase** when using the item already lowers profit elsewhere (`Item::isCostedWhenUsed()`): menu items that count themselves, bulk, pieces in a recipe, and all pieces when the shop counts them at closing. Stock purchases are listed but **not subtracted from profit**, because the stock is costed when it's used.
-   - as **Supplies** otherwise (a paper bag nobody links or counts), which does lower profit, since nothing else ever will.
+3. Optionally (Negosyo plan) the payment is logged in Expenses, e.g. "Cooking oil · 1 tin (18,000 ml)". **The box is unticked by default**, so a restock only reaches Expenses — and only then counts against [Net profit](08-reports.md), which is cash basis — when the owner asks for it:
+   - as a **Stock purchase** when using the item already lowers profit elsewhere (`Item::isCostedWhenUsed()`): menu items that count themselves, bulk, pieces in a recipe, and all pieces when the shop counts them at closing. Shown as its own **Restock costs** line on the P&L, separate from ingredient cost (COGS), which is still tracked per sale for margin reporting but no longer feeds Net.
+   - as **Supplies** otherwise (a paper bag nobody links or counts), landing in **Operating expenses** instead.
 
 Pieces and ready-made menu items (bottled water) can be restocked in their own unit too; made-to-order food can't. `App\Services\Inventory\RestockService`.
 

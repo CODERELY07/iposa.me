@@ -26,6 +26,8 @@ beforeEach(function () {
 it('adds every column of the ledger to the centavo', function () {
     $row = app(DailyLedger::class)->forRange($this->business, today()->subDay(), today()->subDay())->first();
 
+    // Net is cash basis: sales − expenses − stock purchases. cogs/bulk are kept
+    // for the Ingredients and Bulk pages, but no longer feed Net.
     expect($row)->toMatchArray([
         'orders' => 2,
         'sales' => 327.0,
@@ -33,8 +35,21 @@ it('adds every column of the ledger to the centavo', function () {
         'bulk' => 72.5,
         'audited' => true,
         'expenses' => 300.0,
-        'net' => -183.5,
+        'net' => 27.0,
     ]);
+});
+
+it('subtracts a restock in full the day it\'s paid for, not as it sells', function () {
+    Expense::withoutGlobalScopes()->create([
+        'business_id' => $this->business->id, 'date' => today()->subDay(), 'category' => 'stock_purchase',
+        'description' => 'Buns', 'kind' => 'variable', 'amount' => 500, 'logged_by' => 'Maria',
+    ]);
+
+    $ledger = app(DailyLedger::class);
+    $totals = $ledger->totals($ledger->forRange($this->business, today()->subDay(), today()->subDay()));
+
+    // 327 sales − 300 expenses − 500 restock, paid in full that day.
+    expect($totals['net'])->toBe(-473.0);
 });
 
 it('fills days without activity with zeros', function () {
@@ -55,8 +70,8 @@ it('shows the profit & ledger page for a custom range', function () {
     $this->actingAs($this->owner)
         ->get(route('admin.reports', ['period' => 'custom', 'from' => today()->subDay()->toDateString(), 'to' => today()->toDateString()]))
         ->assertOk()
-        ->assertViewHas('totals', fn (array $totals) => $totals['sales'] === 327.0 && $totals['net'] === -183.5)
-        ->assertSee('(183.50)', false);
+        ->assertViewHas('totals', fn (array $totals) => $totals['sales'] === 327.0 && $totals['net'] === 27.0)
+        ->assertSee('27.00', false);
 });
 
 it('rejects a report range in the future', function () {
@@ -70,7 +85,7 @@ it('shows today on the dashboard with the equation', function () {
 
     $this->actingAs($this->owner)->get(route('admin.dashboard'))
         ->assertOk()
-        ->assertViewHas('profitSoFar', 94.0)
+        ->assertViewHas('profitSoFar', 120.0)
         ->assertSee('Closing audit not done');
 });
 
@@ -79,8 +94,8 @@ it('exports the ledger as CSV', function () {
 
     $response->assertOk();
     $csv = $response->streamedContent();
-    expect($csv)->toContain('Date,Orders,Sales')
-        ->and($csv)->toContain(today()->subDay()->toDateString().',2,327,138,72.5,300,-183.5');
+    expect($csv)->toContain('Date,Orders,Sales,"Restock costs",Expenses,Net,"Margin %"')
+        ->and($csv)->toContain(today()->subDay()->toDateString().',2,327,0,300,27,8.3');
 });
 
 it('exports the menu in the same columns the importer reads', function () {

@@ -45,15 +45,17 @@ One spreadsheet-like row: date, category, description, amount. `StoreExpenseRequ
 
 ## Categories & kind
 
-| Category | Default kind | Lowers profit? |
-|---|---|---|
-| Utilities, Rent, Wages | Fixed | Yes |
-| Supplies, Misc | Variable | Yes |
-| **Stock purchase** | Variable | **No**: listed, but the stock is costed when used (sale cost, closing count) |
-| Payables (equipment) | Fixed — system only | Yes |
-| **Missing stock** | Variable — system only | Yes: stock bought that never reached the shelf ([checked deliveries](04-inventory.md#cashier-products--deliveries)) |
+Every category counts against [Net profit](08-reports.md) (cash basis), but lands on a different P&L line:
 
-`ExpenseCategory::lowersProfit()` is the one place this is decided. Things you buy but never track in inventory (ice, napkins) belong in **Supplies**.
+| Category | Default kind | Counted as |
+|---|---|---|
+| Utilities, Rent, Wages | Fixed | Operating expenses |
+| Supplies, Misc | Variable | Operating expenses |
+| **Stock purchase** | Variable | **Restock costs** — its own P&L line, separate from ingredient cost (COGS), which is still tracked per sale for margin reporting but no longer feeds Net |
+| Payables (equipment) | Fixed — system only | Operating expenses |
+| **Missing stock** | Variable — system only | Operating expenses — stock bought that never reached the shelf ([checked deliveries](04-inventory.md#cashier-products--deliveries)) |
+
+`ExpenseCategory::lowersProfit()` is the one place Operating-expenses-vs-Restock-costs is decided. Things you buy but never track in inventory (ice, napkins) belong in **Supplies**.
 
 `ExpenseKind` (fixed/variable) is what later makes a break-even chart possible; it's recorded from day one even though nothing reads it yet.
 

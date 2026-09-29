@@ -78,12 +78,14 @@ it('lists the day\'s expenses and keeps stock purchases out of the total', funct
     }
 
     $data = $this->actingAs($this->owner)->get(route('admin.day', 'expenses'))
-        ->assertOk()->assertSee('Ice')->assertSee('not in profit')
+        ->assertOk()->assertSee('Ice')->assertSee('restock costs')
         ->viewData('data');
 
     expect($data['total'])->toBe(120.0)
         ->and($data['total'])->toBe(($this->ledger)()['expenses'])
-        ->and($data['stockPurchases'])->toBe(900.0);
+        ->and($data['stockPurchases'])->toBe(900.0)
+        // Both count against Net now, on their own P&L lines: 0 sales − 120 expenses − 900 restock.
+        ->and(($this->ledger)()['net'])->toBe(-1020.0);
 });
 
 it('opens any past day, never the future, and only for the owner\'s shop', function () {
@@ -111,7 +113,5 @@ it('links each part of today\'s profit to its page', function () {
     $this->actingAs($this->owner)->get(route('admin.dashboard'))
         ->assertOk()
         ->assertSee(route('admin.day', 'sales'))
-        ->assertSee(route('admin.day', 'ingredients'))
-        ->assertSee(route('admin.day', 'bulk'))
         ->assertSee(route('admin.day', 'expenses'));
 });

@@ -5,8 +5,14 @@ The answer the owner actually wants: **did I make money today, and where did it 
 Every screen below reads the same class, `App\Reports\DailyLedger`, so Today, the P&L, best sellers and the CSV exports can never disagree.
 
 ```
-Net = Sales − Ingredients (COGS) − Bulk used − Expenses
+Net = Sales − Restock costs − Operating expenses
 ```
+
+Cash basis, on purpose: a restock counts against profit the day it's paid for, not
+the day it sells. Ingredient cost (COGS) and bulk usage are still computed — they
+drive the Ingredients and Bulk drill-down pages and the recipe-surplus math — but
+no longer feed Net. A restock only counts if it was logged as an expense (the "log
+this as an expense" box on the restock form).
 
 | Feature | Status |
 |---|---|
@@ -33,7 +39,7 @@ Net = Sales − Ingredients (COGS) − Bulk used − Expenses
 ## Today (dashboard)
 
 - **Profit so far**, with the change against *yesterday at this same hour* — a fair comparison at 10am, not against a whole day.
-- The equation spelled out: sales − ingredients − bulk − expenses. Bulk shows "pending" until the [closing audit](06-closing-audit.md) is done.
+- The equation spelled out: sales − restock costs − expenses.
 - Orders today, the last 7 days as a small bar chart, today's best sellers.
 - **Running low**, with "runs out in about N days" from the last 7 days of use.
 - **Void requests** waiting for approval ([Register › Voids](05-pos.md#voids)).
@@ -43,14 +49,14 @@ Net = Sales − Ingredients (COGS) − Bulk used − Expenses
 
 ## Day details
 
-Each of the four numbers under *True profit so far* opens its own page (`Admin\DayController`, `App\Reports\DayBreakdown`), with the four numbers as tabs, the day's profit, and ← / → / a date picker for any past day (never the future):
+Four drill-down pages (`Admin\DayController`, `App\Reports\DayBreakdown`), reachable from Today's Sales/Expenses tiles or directly, with tabs for all four, the day's profit, and ← / → / a date picker for any past day (never the future). Only **Sales** and **Expenses** feed Net now; **Ingredients** and **Bulk used** are informational drill-downs for margin analysis, kept for that even though they're no longer part of the P&L:
 
-| Page | Shows | Adds up to |
+| Page | Shows | Feeds Net? |
 |---|---|---|
-| **Sales** | Totals per payment method; every order: number (opens the receipt), time, items, cashier, payment, total, cost, profit after ingredients. Voided orders are struck through and not counted | Sales |
-| **Ingredients** | Each size sold: qty, cost each (the day's average), sales, cost. Then what sales took off the shelf, per piece or liquid, and whether its cost was added by the app (Include in cost), must be in the typed cost, or is the item itself | Ingredients |
-| **Bulk used** | The closing count per item: expected, counted, used or missing, recipe over-charge given back, unrecorded restocks, cost. "No closing count yet" with a link otherwise | Bulk used |
-| **Expenses** | Every entry with category and who logged it; stock purchases greyed as *not in profit* | Expenses |
+| **Sales** | Totals per payment method; every order: number (opens the receipt), time, items, cashier, payment, total, cost, profit after ingredients. Voided orders are struck through and not counted | Yes — Sales |
+| **Ingredients** | Each size sold: qty, cost each (the day's average), sales, cost. Then what sales took off the shelf, per piece or liquid, and whether its cost was added by the app (Include in cost), must be in the typed cost, or is the item itself | No — informational only |
+| **Bulk used** | The closing count per item: expected, counted, used or missing, recipe over-charge given back, unrecorded restocks, cost. "No closing count yet" with a link otherwise | No — informational only |
+| **Expenses** | Every entry with category and who logged it; restock costs shown as their own line | Yes — Restock costs + Expenses |
 
 Each total reads the same rows as the ledger and is rounded once, so it matches Today to the centavo (tested).
 
@@ -63,15 +69,15 @@ Details that matter:
 - Voided orders are excluded everywhere.
 - COGS uses `order_lines.unit_cost`, the cost copied at sale time.
 - Bulk uses `(audit_lines.used − recipe_surplus_costed) × unit_cost`, the cost copied at count time, minus what recipes over-charged.
-- `expenses` leaves out **stock purchases**, which are reported separately as `stock_purchases` (stock is costed when used). `missing` is the Missing stock slice, shown as its own line on the P&L.
-- `payables` is the equipment slice of expenses, shown separately so the owner can see why a profitable day still felt tight.
+- `expenses` leaves out **stock purchases**, which are reported separately as `stock_purchases` and *do* feed Net (cash basis). `missing` (Missing stock) and `payables` (equipment installments) are both slices *within* `expenses`, broken out for their own line on the P&L, not on top of it.
+- `net = sales − expenses − stock_purchases`. `cogs` and `bulk` are still computed (they drive the Ingredients/Bulk pages and the recipe-surplus math) but don't feed `net`.
 - Grouping is `date(paid_at)`, which behaves the same on SQLite, MySQL and Postgres.
 
-`totals()` sums a set of rows; `salesAndCogsBetween()` powers the hour-for-hour comparison on Today.
+`totals()` sums a set of rows; `salesBetween()` powers the hour-for-hour comparison on Today.
 
 ## Profit & ledger page
 
-Week, this month, or a custom range (capped at one year, no future dates — `before_or_equal:today`). Shows the totals band (with Missing stock as its own line and Stock bought listed but not subtracted), a note when deliveries are still unchecked, the day-by-day table newest first, and best sellers for the range. Negosyo only (`plan:reports`). The ledger CSV has an extra *Stock bought (not in net)* column.
+Week, this month, or a custom range (capped at one year, no future dates — `before_or_equal:today`). Shows the P&L waterfall (Gross revenue, Restock costs, Operating expenses, Net profit), a note when deliveries are still unchecked, the day-by-day table newest first, best sellers for the range, and a **Startup capital** section (`App\Models\CapitalContribution`) — equity the owner put in, shown as an all-time total regardless of the date range, never counted against Net. Negosyo only (`plan:reports`).
 
 ## Best sellers
 
@@ -83,8 +89,8 @@ Grouped by the *sold* name and size from `order_lines`, ranked by quantity, with
 
 | Section | Charts | Tables |
 |---|---|---|
-| **Summary** | Profit and loss bars (share of sales); sales vs profit per day (per week past 45 days), losses below zero | Sales, net profit and margin, average order, food cost %; the P&L with % of sales; notes for days without a closing count and unchecked deliveries |
-| **Daily ledger** | — | Every day: orders, sales, ingredients, bulk, expenses, net, margin; totals |
+| **Summary** | Profit and loss bars (share of sales); sales vs profit per day (per week past 45 days), losses below zero | Sales, net profit and margin, average order, restock cost %; the P&L with % of sales; a note for unchecked deliveries |
+| **Daily ledger** | — | Every day: orders, sales, restock costs, expenses, net, margin; totals |
 | **Sales** | Payment methods, average sales per weekday, sales per hour | Same, with order counts and shares |
 | **Menu performance** | Profit share per item | Best and lowest margins; every item and size with sold, sales, cost, profit, margin |
 | **Costs and stock** | — | Stock taken by sales (and how much of it the item's cost includes), closing counts per item, cashier deliveries, stock on hand with value and low-stock flags |

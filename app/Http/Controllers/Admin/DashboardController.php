@@ -35,20 +35,21 @@ class DashboardController extends Controller
         $week = $ledger->forRange($business, today()->subDays(6), today());
         $today = $week->last();
         $expenseCount = Expense::query()->whereDate('date', today())->whereNot('category', ExpenseCategory::StockPurchase)->count();
+        $stockPurchaseCount = Expense::query()->whereDate('date', today())->where('category', ExpenseCategory::StockPurchase)->count();
 
-        // Every one of today's orders (voided ones too) and expenses (stock purchases too):
+        // Every one of today's orders (voided ones too) and expenses:
         // what "reset today" would actually remove, not just what the equation above shows.
         $ordersToday = Order::query()->whereBetween('paid_at', [today(), today()->endOfDay()])->count();
         $expensesToday = Expense::query()->whereDate('date', today())->count();
 
-        $yesterdaySoFar = $ledger->salesAndCogsBetween($business, today()->subDay(), now()->subDay());
-        $yesterdayExpenses = (float) Expense::query()->whereDate('date', today()->subDay())->whereNot('category', ExpenseCategory::StockPurchase)->sum('amount');
-        $profitSoFar = round($today['sales'] - $today['cogs'] - $today['bulk'] - $today['expenses'], 2);
-        $yesterdayProfitAtThisHour = round($yesterdaySoFar['sales'] - $yesterdaySoFar['cogs'] - $yesterdayExpenses, 2);
+        $yesterdaySalesSoFar = $ledger->salesBetween($business, today()->subDay(), now()->subDay());
+        $yesterdayExpenses = (float) Expense::query()->whereDate('date', today()->subDay())->sum('amount');
+        $profitSoFar = round($today['sales'] - $today['expenses'] - $today['stock_purchases'], 2);
+        $yesterdayProfitAtThisHour = round($yesterdaySalesSoFar - $yesterdayExpenses, 2);
 
         return view('admin.dashboard', [
             'business' => $business,
-            'today' => $today + ['expenseCount' => $expenseCount],
+            'today' => $today + ['expenseCount' => $expenseCount, 'stockPurchaseCount' => $stockPurchaseCount],
             'profitSoFar' => $profitSoFar,
             'profitDelta' => round($profitSoFar - $yesterdayProfitAtThisHour, 2),
             'week' => $week->values(),

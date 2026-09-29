@@ -14,10 +14,13 @@ use Illuminate\Support\Facades\DB;
 /**
  * One row per day: the same columns as the owner's spreadsheet.
  *
- *   Net = Sales − Ingredients (COGS) − Bulk used − Expenses
+ *   Net = Sales − Restock costs − Operating expenses
  *
- * Stock purchases are listed but never subtracted: bought stock lowers profit
- * when it is used (COGS and the closing count), not when it is paid for.
+ * Cash basis, on purpose: stock counts against profit the day it's paid for, not
+ * the day it sells. A restock only counts here if it was logged as an expense
+ * (the "log this as an expense" box on the restock form) — same as every other
+ * cash figure in this app. `cogs` and `bulk` are kept for the Ingredients and
+ * Bulk drill-down pages and the recipe-surplus math, but no longer feed Net.
  *
  * Every report and dashboard reads from here, so the numbers always match.
  */
@@ -55,7 +58,7 @@ class DailyLedger
                 'missing' => round((float) ($expenses[$key]->missing ?? 0), 2),
                 'stock_purchases' => round((float) ($expenses[$key]->stock_purchases ?? 0), 2),
             ];
-            $row['net'] = round($row['sales'] - $row['cogs'] - $row['bulk'] - $row['expenses'], 2);
+            $row['net'] = round($row['sales'] - $row['expenses'] - $row['stock_purchases'], 2);
 
             $rows->put($key, $row);
         }
@@ -85,21 +88,15 @@ class DailyLedger
     }
 
     /**
-     * Sales and ingredient cost between two exact moments (e.g. "yesterday until this hour").
-     *
-     * @return array{sales: float, cogs: float}
+     * Sales between two exact moments (e.g. "yesterday until this hour").
      */
-    public function salesAndCogsBetween(Business $business, CarbonInterface $from, CarbonInterface $to): array
+    public function salesBetween(Business $business, CarbonInterface $from, CarbonInterface $to): float
     {
-        $row = DB::table('orders')
-            ->leftJoin('order_lines', 'order_lines.order_id', '=', 'orders.id')
-            ->where('orders.business_id', $business->id)
-            ->whereIn('orders.status', $this->countedStatuses())
-            ->whereBetween('orders.paid_at', [$from, $to])
-            ->selectRaw('coalesce(sum(order_lines.qty * order_lines.price), 0) as sales, coalesce(sum(order_lines.qty * order_lines.unit_cost), 0) as cogs')
-            ->first();
-
-        return ['sales' => round((float) $row->sales, 2), 'cogs' => round((float) $row->cogs, 2)];
+        return round((float) DB::table('orders')
+            ->where('business_id', $business->id)
+            ->whereIn('status', $this->countedStatuses())
+            ->whereBetween('paid_at', [$from, $to])
+            ->sum('subtotal'), 2);
     }
 
     /**

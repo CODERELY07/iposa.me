@@ -43,7 +43,9 @@ it('gives back exactly what the recipes over-charged when the count says they us
         ->and((float) $line->recipe_surplus_costed)->toBe(30.0)
         ->and($today['cogs'])->toBe(407.5)
         ->and($today['bulk'])->toBe(-1.5)
-        ->and($today['net'])->toBe(594.0);
+        // Net is cash basis and doesn't move from this: no expenses were logged,
+        // so it's just the 10 burgers' sales (₱1,000) with nothing subtracted.
+        ->and($today['net'])->toBe(1000.0);
 });
 
 it('gives nothing back for recipes whose cost the sales never charged', function () {
@@ -170,7 +172,7 @@ it('keeps recipe suggestions inside their shop', function () {
     expect(($this->line)()->recipe_fix)->toBeNull();
 });
 
-it('does not subtract stock purchases from profit, but does subtract supplies', function () {
+it('subtracts both stock purchases and supplies from profit, in separate buckets', function () {
     $log = fn (ExpenseCategory $category, float $amount) => Expense::withoutGlobalScopes()->create([
         'business_id' => $this->business->id, 'date' => today(), 'category' => $category,
         'kind' => $category->defaultKind(), 'description' => $category->label(), 'amount' => $amount, 'logged_by' => 'Owner',
@@ -181,7 +183,7 @@ it('does not subtract stock purchases from profit, but does subtract supplies', 
 
     expect(($this->today)()['expenses'])->toBe(80.0)
         ->and(($this->today)()['stock_purchases'])->toBe(500.0)
-        ->and(($this->today)()['net'])->toBe(-80.0);
+        ->and(($this->today)()['net'])->toBe(-580.0);
 });
 
 it('logs the owner\'s restock as a stock purchase only for items whose use is costed', function () {

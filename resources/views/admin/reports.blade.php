@@ -1,15 +1,11 @@
 @php
     $sales = $totals['sales'];
-    $operatingExpenses = round($totals['expenses'] - $totals['payables'] - $totals['missing'], 2);
     $net = $totals['net'];
     $base = max($sales, 0.01);
     $waterfall = [
         ['label' => 'Gross revenue', 'amount' => $sales, 'kind' => 'total', 'note' => number_format($totals['orders']).' '.\Illuminate\Support\Str::plural('order', $totals['orders']).' from the register'],
-        ['label' => 'Ingredients (COGS)', 'amount' => -$totals['cogs'], 'kind' => 'cost', 'note' => 'Cost of each size sold'],
-        ['label' => 'Bulk & liquids', 'amount' => -$totals['bulk'], 'kind' => 'cost', 'note' => 'From closing audits, beyond what recipes took'],
-        ['label' => 'Missing stock', 'amount' => -$totals['missing'], 'kind' => 'cost', 'note' => 'Bought but never reached the shelf'],
-        ['label' => 'Operating expenses', 'amount' => -$operatingExpenses, 'kind' => 'cost', 'note' => 'Rent, wages, utilities, supplies'],
-        ['label' => 'Equipment payables', 'amount' => -$totals['payables'], 'kind' => 'cost', 'note' => 'Installments paid in this period'],
+        ['label' => 'Restock costs', 'amount' => -$totals['stock_purchases'], 'kind' => 'cost', 'note' => 'Stock bought this period, paid in full'],
+        ['label' => 'Operating expenses', 'amount' => -$totals['expenses'], 'kind' => 'cost', 'note' => 'Rent, wages, utilities, supplies, equipment payables'],
         ['label' => 'Net profit', 'amount' => $net, 'kind' => 'result', 'note' => $sales > 0 ? number_format($net / $sales * 100, 1).'% of revenue' : 'No sales yet'],
     ];
     $running = 0;
@@ -22,7 +18,7 @@
 <x-app-layout title="Profit & ledger">
     <div class="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-8">
         <x-page-header eyebrow="Profit & loss" :title="$periodLabel"
-            description="Same columns as your spreadsheet. Nothing typed twice: sales come from the register, ingredient costs from your prices, bulk from closing audits.">
+            description="Same columns as your spreadsheet. Cash basis: a restock counts against profit the day you pay for it, not the day it sells.">
             <x-slot:actions>
                 <div class="inline-flex gap-1 rounded-xl bg-ink-100 p-1 dark:bg-white/[0.05]">
                     <a href="{{ route('admin.reports', ['period' => 'week']) }}" @class(['tab', 'tab-active' => $period === 'week'])>Last 7 days</a>
@@ -52,7 +48,8 @@
                 <div>
                     <p class="eyebrow">Net profit · {{ $periodLabel }}</p>
                     <p @class(['num mt-2 text-4xl font-semibold tracking-tight', 'text-loss-600 dark:text-loss-400' => $net < 0])>{{ $net < 0 ? '−' : '' }}₱{{ number_format(abs($net), 2) }}</p>
-                    <p class="mt-2 text-sm text-ink-500">Revenue minus every cost, including equipment installments. Stock you bought counts when it's used, not when you pay for it.</p>
+                    <p class="mt-2 text-sm text-ink-500">Revenue minus restock costs and every operating expense, including equipment installments. A restock only counts if it was logged as an expense.</p>
+
                     @if ($uncheckedDeliveries > 0)
                         <a href="{{ route('admin.dashboard') }}#waiting" class="mt-3 flex gap-2 rounded-xl bg-brand-400/10 px-3 py-2 text-xs text-brand-800 hover:underline dark:text-brand-200">
                             <x-icon name="alert" class="mt-0.5 size-3.5 shrink-0" />
@@ -62,8 +59,8 @@
                     <dl class="mt-6 space-y-2 border-t border-ink-100 pt-4 text-sm dark:border-white/[0.06]">
                         <div class="flex justify-between"><dt class="text-ink-500">Avg per day</dt><dd class="num">₱{{ number_format($net / max(1, $dayCount), 2) }}</dd></div>
                         <div class="flex justify-between"><dt class="text-ink-500">Best day</dt><dd class="num">{{ $bestDay ? $bestDay['date']->format('D j').' · ₱'.number_format($bestDay['net'], 0) : '—' }}</dd></div>
-                        <div class="flex justify-between"><dt class="text-ink-500">Stock bought</dt><dd class="num">₱{{ number_format($totals['stock_purchases'], 2) }}</dd></div>
-                        <div class="flex justify-between"><dt class="text-ink-500">Food cost %</dt><dd class="num">{{ $sales > 0 ? number_format(($totals['cogs'] + $totals['bulk']) / $sales * 100, 1).'%' : '—' }}</dd></div>
+                        <div class="flex justify-between"><dt class="text-ink-500">Restock costs</dt><dd class="num">₱{{ number_format($totals['stock_purchases'], 2) }}</dd></div>
+                        <div class="flex justify-between"><dt class="text-ink-500">Restock cost %</dt><dd class="num">{{ $sales > 0 ? number_format($totals['stock_purchases'] / $sales * 100, 1).'%' : '—' }}</dd></div>
                     </dl>
                 </div>
 
@@ -102,7 +99,7 @@
                 <div class="flex items-center justify-between border-b border-ink-200 px-5 py-4 dark:border-white/[0.07]">
                     <div>
                         <h2 class="font-semibold">Daily ledger</h2>
-                        <p class="text-xs text-ink-500">Newest first. Days without a closing audit show bulk as —.</p>
+                        <p class="text-xs text-ink-500">Newest first. Net = Sales − Restock costs − Expenses.</p>
                     </div>
                     <a href="{{ route('admin.exports.download', ['dataset' => 'orders'] + $exportRange) }}" download class="btn-ghost py-2 text-xs"><x-icon name="download" class="size-4" /> Orders CSV</a>
                 </div>
@@ -113,8 +110,7 @@
                                 <th class="px-5 py-3 font-semibold">Date</th>
                                 <th class="px-3 py-3 text-right font-semibold">Orders</th>
                                 <th class="px-3 py-3 text-right font-semibold">Sales</th>
-                                <th class="px-3 py-3 text-right font-semibold">Ingredients</th>
-                                <th class="px-3 py-3 text-right font-semibold">Bulk</th>
+                                <th class="px-3 py-3 text-right font-semibold">Restock</th>
                                 <th class="px-3 py-3 text-right font-semibold">Expenses</th>
                                 <th class="px-3 py-3 text-right font-semibold">Net</th>
                                 <th class="px-5 py-3 text-right font-semibold">Margin</th>
@@ -129,8 +125,7 @@
                                     </td>
                                     <td class="num px-3 py-2.5 text-right text-ink-500">{{ $row['orders'] ?: '—' }}</td>
                                     <td class="num px-3 py-2.5 text-right">{{ number_format($row['sales'], 2) }}</td>
-                                    <td class="num px-3 py-2.5 text-right text-ink-500">{{ number_format($row['cogs'], 2) }}</td>
-                                    <td class="num px-3 py-2.5 text-right text-ink-500">{{ $row['audited'] ? number_format($row['bulk'], 2) : '—' }}</td>
+                                    <td class="num px-3 py-2.5 text-right text-ink-500">{{ $row['stock_purchases'] ? number_format($row['stock_purchases'], 2) : '—' }}</td>
                                     <td class="num px-3 py-2.5 text-right text-ink-500">{{ $row['expenses'] ? number_format($row['expenses'], 2) : '—' }}</td>
                                     <td @class(['num px-3 py-2.5 text-right font-semibold', 'text-loss-600 dark:text-loss-400' => $row['net'] < 0])>{{ $row['net'] < 0 ? '('.number_format(abs($row['net']), 2).')' : number_format($row['net'], 2) }}</td>
                                     <td class="num px-5 py-2.5 text-right text-ink-500">{{ $row['sales'] > 0 ? number_format($row['net'] / $row['sales'] * 100, 1).'%' : '—' }}</td>
@@ -142,8 +137,7 @@
                                 <td class="px-5 py-3">Total</td>
                                 <td class="num px-3 py-3 text-right">{{ number_format($totals['orders']) }}</td>
                                 <td class="num px-3 py-3 text-right">{{ number_format($totals['sales'], 2) }}</td>
-                                <td class="num px-3 py-3 text-right">{{ number_format($totals['cogs'], 2) }}</td>
-                                <td class="num px-3 py-3 text-right">{{ number_format($totals['bulk'], 2) }}</td>
+                                <td class="num px-3 py-3 text-right">{{ number_format($totals['stock_purchases'], 2) }}</td>
                                 <td class="num px-3 py-3 text-right">{{ number_format($totals['expenses'], 2) }}</td>
                                 <td @class(['num px-3 py-3 text-right', 'text-loss-600 dark:text-loss-400' => $net < 0])>{{ $net < 0 ? '('.number_format(abs($net), 2).')' : number_format($net, 2) }}</td>
                                 <td class="num px-5 py-3 text-right">{{ $sales > 0 ? number_format($net / $sales * 100, 1).'%' : '—' }}</td>
@@ -177,5 +171,63 @@
                 @endif
             </section>
         </div>
+
+        {{-- Startup capital: equity, never counted against profit --}}
+        <section class="surface p-6">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 class="font-semibold">Startup capital</h2>
+                    <p class="text-xs text-ink-500">What you (or a partner) put into the business. Equity, not an expense — restocking and daily spending never touch it. All-time, not scoped to the dates above.</p>
+                </div>
+                <div class="text-right">
+                    <p class="eyebrow">Total</p>
+                    <p class="num text-2xl font-semibold">₱{{ number_format($totalCapital, 2) }}</p>
+                </div>
+            </div>
+
+            @if ($capital->isNotEmpty())
+                <ul class="mt-4 divide-y divide-ink-100 dark:divide-white/[0.06]">
+                    @foreach ($capital as $contribution)
+                        <li class="flex items-center justify-between gap-3 py-2.5 text-sm">
+                            <div>
+                                <span class="num text-ink-500">{{ $contribution->date->format('M j, Y') }}</span>
+                                @if ($contribution->note)
+                                    <span class="ml-2">{{ $contribution->note }}</span>
+                                @endif
+                                <span class="ml-2 text-xs text-ink-400">· {{ $contribution->logged_by }}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="num font-medium">₱{{ number_format((float) $contribution->amount, 2) }}</span>
+                                <form method="POST" action="{{ route('admin.capital.destroy', $contribution) }}" data-confirm-title="Remove this contribution?" data-confirm="It only removes the record — it never affected your profit." data-confirm-action="Remove" data-confirm-danger>
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn-quiet size-8 !px-0" aria-label="Remove" data-loading-text=""><x-icon name="trash" class="size-4" /></button>
+                                </form>
+                            </div>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+
+            <form method="POST" action="{{ route('admin.capital.store') }}" class="mt-4 grid gap-3 sm:grid-cols-[140px_140px_1fr_auto] sm:items-end">
+                @csrf
+                <div>
+                    <label class="field-label" for="capital_date">Date</label>
+                    <input id="capital_date" name="date" type="date" value="{{ old('date', today()->toDateString()) }}" max="{{ today()->toDateString() }}" required class="field num">
+                </div>
+                <div>
+                    <label class="field-label" for="capital_amount">Amount</label>
+                    <div class="relative">
+                        <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-400">₱</span>
+                        <input id="capital_amount" name="amount" type="number" step="0.01" min="0.01" value="{{ old('amount') }}" required class="field num pl-7" placeholder="0.00">
+                    </div>
+                </div>
+                <div>
+                    <label class="field-label" for="capital_note">Note (optional)</label>
+                    <input id="capital_note" name="note" type="text" value="{{ old('note') }}" maxlength="160" class="field" placeholder="e.g. Initial investment">
+                </div>
+                <button type="submit" class="btn-primary" data-loading-text="Saving…"><x-icon name="plus" class="size-4" /> Add</button>
+            </form>
+        </section>
     </div>
 </x-app-layout>

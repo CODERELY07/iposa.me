@@ -22,7 +22,7 @@
         <p class="mt-1 text-sm text-ink-500">
             {{ $isToday ? 'Profit so far' : 'Profit' }}:
             <span @class(['num font-semibold text-ink-900 dark:text-white', '!text-loss-600 dark:!text-loss-400' => $net < 0])>{{ $net < 0 ? '−' : '' }}₱{{ number_format(abs($net), 2) }}</span>
-            <span class="text-ink-400">= sales − ingredients − {{ strtolower($tabs['bulk']['label']) }} − expenses</span>
+            <span class="text-ink-400">= sales − restock costs − expenses</span>
         </p>
     </div>
     <form method="GET" action="{{ route('admin.day', $section) }}" class="flex items-center gap-2">
