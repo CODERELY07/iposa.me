@@ -502,7 +502,26 @@
                                     <label class="field-label" for="unit_cost">Cost per unit</label>
                                     <div class="relative">
                                         <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-400">₱</span>
-                                        <input id="unit_cost" name="unit_cost" type="number" step="any" min="0" value="{{ old('unit_cost', $item->unit_cost !== null ? (float) $item->unit_cost : null) }}" class="field num pl-7" placeholder="0.00">
+                                        <input id="unit_cost" name="unit_cost" type="number" step="any" min="0" x-ref="unitCost" value="{{ old('unit_cost', $item->unit_cost !== null ? (float) $item->unit_cost : null) }}" class="field num pl-7" placeholder="0.00">
+                                    </div>
+                                    <div class="mt-2 flex flex-wrap items-end gap-2" x-data="{ qty: null, amount: null }">
+                                        <div>
+                                            <label class="text-xs text-ink-500" for="unit_cost_calc_qty">Bought how many?</label>
+                                            <input id="unit_cost_calc_qty" type="number" step="any" min="0" x-model.number="qty" class="field num mt-0.5 w-24 px-2 py-1 text-sm" placeholder="qty">
+                                        </div>
+                                        <span class="pb-2 text-xs text-ink-400">for ₱</span>
+                                        <div>
+                                            <label class="text-xs text-ink-500" for="unit_cost_calc_amount">Total paid</label>
+                                            <input id="unit_cost_calc_amount" type="number" step="any" min="0" x-model.number="amount" class="field num mt-0.5 w-28 px-2 py-1 text-sm" placeholder="amount">
+                                        </div>
+                                        <button type="button" class="btn-quiet px-3 py-1.5 text-xs" :disabled="! (qty > 0 && amount >= 0)"
+                                            @click="$refs.unitCost.value = Math.round((amount / qty) * 1e6) / 1e6">
+                                            Use this
+                                        </button>
+                                        <p x-show="qty > 0 && amount >= 0" class="w-full text-xs text-ink-500">
+                                            = <span class="num font-medium text-ink-700 dark:text-ink-200" x-text="qty > 0 ? formatUnitCost(amount / qty) : ''"></span> per <span x-text="unitLabel"></span>
+                                            <span x-text="`(₱${amount ?? 0} ÷ ${qty ?? 0})`"></span> — not saved, just fills the field above
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -746,6 +765,8 @@
 
         @if ($isEditing)
             <div class="mt-8 flex flex-wrap items-center justify-end gap-2 border-t border-ink-200 pt-6 dark:border-white/[0.06]">
+                <a href="{{ route('admin.inventory.history', $item) }}" class="btn-quiet px-3 py-1.5 text-xs">Stock history</a>
+
                 @if ($canDelete)
                     <form method="POST" action="{{ route('admin.inventory.destroy', $item) }}" class="me-auto"
                         data-confirm-title="Delete {{ $item->name }} for good?" data-confirm="It was never sold or counted, so nothing in your reports changes. This can't be undone." data-confirm-action="Delete for good" data-confirm-danger>

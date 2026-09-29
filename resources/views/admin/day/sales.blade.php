@@ -52,7 +52,7 @@
                                 @php($order = $row['order'])
                                 <tr @class(['align-top', 'text-ink-400 line-through decoration-ink-300' => ! $row['counted']])>
                                     <td class="whitespace-nowrap px-6 py-3">
-                                        <a href="{{ route('pos.orders.receipt', $order) }}" class="num font-semibold hover:underline">#{{ $order->number }}</a>
+                                        <a href="{{ route('admin.orders.show', $order) }}" class="num font-semibold hover:underline">#{{ $order->number }}</a>
                                         <span class="block text-xs text-ink-500">{{ $order->paid_at->format('g:i A') }}</span>
                                         @if ($order->status !== \App\Enums\OrderStatus::Paid)
                                             <span class="pill mt-1 bg-loss-500/10 text-loss-700 no-underline dark:text-loss-300">{{ $order->status->label() }}</span>

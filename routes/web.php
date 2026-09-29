@@ -13,6 +13,8 @@ use App\Http\Controllers\Admin\ExportController;
 use App\Http\Controllers\Admin\ItemController;
 use App\Http\Controllers\Admin\ItemImportController;
 use App\Http\Controllers\Admin\ItemRestockController;
+use App\Http\Controllers\Admin\ItemStockHistoryController;
+use App\Http\Controllers\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Admin\RecipeChangeController;
 use App\Http\Controllers\Admin\RecipeFixController;
 use App\Http\Controllers\Admin\ReportController;
@@ -94,9 +96,11 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
     Route::post('/inventory/items/{item}/unlink-recipes', [ItemController::class, 'unlinkRecipes'])->name('inventory.unlink-recipes');
     Route::post('/inventory/items/{item}/unlink-recipes/{menuItem}', [ItemController::class, 'unlinkRecipe'])->name('inventory.unlink-recipe');
     Route::post('/inventory/items/{item}/restock', ItemRestockController::class)->name('inventory.restock');
+    Route::get('/inventory/items/{item}/history', ItemStockHistoryController::class)->name('inventory.history');
     Route::post('/inventory/import', ItemImportController::class)->name('inventory.import');
     Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
 
+    Route::get('/orders/{order}', [AdminOrderController::class, 'show'])->name('orders.show');
     Route::post('/orders/{order}/void/approve', [VoidRequestController::class, 'approve'])->name('orders.void.approve');
     Route::post('/orders/{order}/void/reject', [VoidRequestController::class, 'reject'])->name('orders.void.reject');
 

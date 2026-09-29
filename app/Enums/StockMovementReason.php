@@ -9,4 +9,15 @@ enum StockMovementReason: string
     case Audit = 'audit';
     case Restock = 'restock';
     case Adjustment = 'adjustment';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Sale => 'Sale',
+            self::Void => 'Void',
+            self::Audit => 'Closing audit',
+            self::Restock => 'Restock',
+            self::Adjustment => 'Adjustment',
+        };
+    }
 }

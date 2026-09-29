@@ -39,4 +39,32 @@ class StockMovement extends Model
     {
         return $this->belongsTo(Item::class);
     }
+
+    /**
+     * The order this movement was a sale or void for, if any.
+     *
+     * @return BelongsTo<Order, $this>
+     */
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(Order::class);
+    }
+
+    /**
+     * The closing audit this movement was counted in, if any.
+     *
+     * @return BelongsTo<Audit, $this>
+     */
+    public function audit(): BelongsTo
+    {
+        return $this->belongsTo(Audit::class);
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 }
