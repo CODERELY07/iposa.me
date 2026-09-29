@@ -44,7 +44,8 @@
 
             <div class="rule"></div>
 
-            <div class="row muted"><span>{{ $order->paid_at->format('M j, Y g:i A') }}</span><span>Cashier: {{ $order->cashier_name }}</span></div>
+            <div class="muted">{{ $order->paid_at->format('M j, Y g:i A') }}</div>
+            <div class="muted">Cashier: {{ $order->cashier_name }}</div>
 
             @if ($order->isVoided())
                 <div class="void">VOIDED</div>
