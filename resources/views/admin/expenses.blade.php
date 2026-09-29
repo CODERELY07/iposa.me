@@ -13,7 +13,12 @@
     ];
     $monthStart = $month->copy()->startOfMonth();
     $monthEnd = $month->copy()->endOfMonth()->min(today());
-    $openTab = request('tab') === 'assets' || $errors->hasAny(['name', 'price', 'terms', 'installment_amount', 'first_due_on']) ? 'assets' : 'operating';
+    $openTab = match (true) {
+        request('tab') === 'assets' || $errors->hasAny(['name', 'price', 'terms', 'installment_amount', 'first_due_on']) => 'assets',
+        request('tab') === 'recurring' || $errors->hasAny(['frequency', 'next_due_on']) => 'recurring',
+        default => 'operating',
+    };
+    $frequencyLabels = collect($frequencies)->mapWithKeys(fn ($frequency) => [$frequency->value => $frequency->label()]);
 @endphp
 
 <x-app-layout title="Expenses">
@@ -35,10 +40,22 @@
         <div class="inline-flex gap-1 rounded-xl bg-ink-100 p-1 dark:bg-white/[0.05]">
             <button type="button" @click="tab = 'operating'" :class="tab === 'operating' ? 'tab-active' : ''" class="tab">Daily expenses</button>
             <button type="button" @click="tab = 'assets'" :class="tab === 'assets' ? 'tab-active' : ''" class="tab">Equipment & payables</button>
+            <button type="button" @click="tab = 'recurring'" :class="tab === 'recurring' ? 'tab-active' : ''" class="tab">Recurring</button>
         </div>
 
         <div x-show="tab === 'operating'" class="grid gap-6 lg:grid-cols-[1fr_300px]">
             <div class="space-y-4">
+                @if ($dueRecurring->isNotEmpty())
+                    <div class="surface flex flex-wrap items-center gap-3 border-l-4 border-l-brand-400 p-4">
+                        <x-icon name="clock" class="size-5 shrink-0 text-brand-500" />
+                        <p class="flex-1 text-sm">
+                            {{ $dueRecurring->count() === 1 ? 'A bill is' : $dueRecurring->count().' bills are' }} due:
+                            {{ $dueRecurring->map(fn ($item) => $item->description.' (₱'.number_format((float) $item->amount, 2).')')->join(', ') }}
+                        </p>
+                        <button type="button" @click="tab = 'recurring'" class="btn-ghost px-3 py-1.5 text-xs">Review</button>
+                    </div>
+                @endif
+
                 {{-- Quick add: one spreadsheet row --}}
                 <form method="POST" action="{{ route('expenses.store') }}" class="surface grid gap-3 p-4 sm:grid-cols-[140px_170px_1fr_140px_auto] sm:items-end">
                     @csrf
@@ -316,6 +333,105 @@
                 </div>
                 <div class="flex items-end sm:col-span-2 lg:col-span-1 lg:col-start-4">
                     <button type="submit" class="btn-primary w-full" data-loading-text="Adding…"><x-icon name="plus" class="size-4" /> Add equipment</button>
+                </div>
+            </form>
+        </div>
+
+        <div x-show="tab === 'recurring'" x-cloak class="space-y-4">
+            <p class="text-sm text-ink-500">Bills that repeat — rent, wages, a subscription. Nothing posts on its own: when one's due, you get a one-tap reminder here and on Daily expenses, and you confirm it (editable afterward like any other expense).</p>
+
+            <div class="surface overflow-hidden">
+                @if ($recurring->isEmpty())
+                    <div class="px-6 py-10 text-center text-sm text-ink-500">Nothing set up yet. Add rent or a subscription below.</div>
+                @else
+                    <div class="overflow-x-auto">
+                        <table class="w-full min-w-[680px] text-sm">
+                            <thead class="table-head">
+                                <tr class="border-b border-ink-200 dark:border-white/[0.07]">
+                                    <th class="px-5 py-3 font-semibold">Description</th>
+                                    <th class="px-3 py-3 font-semibold">Category</th>
+                                    <th class="px-3 py-3 font-semibold">Frequency</th>
+                                    <th class="px-3 py-3 text-right font-semibold">Amount</th>
+                                    <th class="px-3 py-3 font-semibold">Next due</th>
+                                    <th class="px-5 py-3"><span class="sr-only">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-ink-100 dark:divide-white/[0.05]">
+                                @foreach ($recurring as $item)
+                                    <tr class="hover:bg-ink-50 dark:hover:bg-white/[0.02]">
+                                        <td class="px-5 py-3 font-medium">{{ $item->description }}</td>
+                                        <td class="px-3 py-3">
+                                            <span class="inline-flex items-center gap-2">
+                                                <span class="size-2 rounded-full {{ $categoryColors[$item->category->value] }}"></span>{{ $item->category->label() }}
+                                            </span>
+                                        </td>
+                                        <td class="px-3 py-3 text-ink-500">{{ $item->frequency->label() }}</td>
+                                        <td class="num px-3 py-3 text-right font-medium">₱{{ number_format((float) $item->amount, 2) }}</td>
+                                        <td class="px-3 py-3">
+                                            <span @class(['pill', 'bg-brand-400/15 text-brand-700 dark:text-brand-300' => $item->isDue(), 'bg-ink-200 text-ink-600 dark:bg-white/10 dark:text-ink-300' => ! $item->isDue()])>
+                                                {{ $item->isDue() ? 'Due now' : $item->next_due_on->format('M j, Y') }}
+                                            </span>
+                                        </td>
+                                        <td class="px-5 py-3">
+                                            <div class="flex justify-end gap-1">
+                                                @if ($item->isDue())
+                                                    <form method="POST" action="{{ route('admin.recurring-expenses.confirm', $item) }}">
+                                                        @csrf
+                                                        <button type="submit" class="btn-ghost px-3 py-1.5 text-xs" data-loading-text="Adding…">Add ₱{{ number_format((float) $item->amount, 2) }}</button>
+                                                    </form>
+                                                @endif
+                                                <form method="POST" action="{{ route('admin.recurring-expenses.destroy', $item) }}" data-confirm-title="Remove {{ $item->description }}?" data-confirm="It stops reminding you. Entries already added stay in your expenses." data-confirm-action="Remove" data-confirm-danger>
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn-quiet size-8 !px-0" aria-label="Remove {{ $item->description }}" data-loading-text=""><x-icon name="trash" class="size-4" /></button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </div>
+
+            <form method="POST" action="{{ route('admin.recurring-expenses.store') }}" class="surface grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-5">
+                @csrf
+                <input type="hidden" name="tab" value="recurring">
+                <p class="font-semibold sm:col-span-2 lg:col-span-5">Add a recurring expense</p>
+                <div class="sm:col-span-2">
+                    <label class="field-label" for="recurring_description">What for</label>
+                    <input id="recurring_description" name="description" type="text" value="{{ old('description') }}" required maxlength="160" class="field" placeholder="e.g. Shop rent">
+                </div>
+                <div>
+                    <label class="field-label" for="recurring_category">Category</label>
+                    <select id="recurring_category" name="category" class="field">
+                        @foreach ($categories as $category)
+                            <option value="{{ $category->value }}" @selected(old('category') === $category->value)>{{ $category->label() }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="field-label" for="recurring_amount">Amount</label>
+                    <div class="relative">
+                        <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-400">₱</span>
+                        <input id="recurring_amount" name="amount" type="number" step="0.01" min="0.01" value="{{ old('amount') }}" required class="field num pl-7" placeholder="0.00">
+                    </div>
+                </div>
+                <div>
+                    <label class="field-label" for="recurring_frequency">Repeats</label>
+                    <select id="recurring_frequency" name="frequency" class="field">
+                        @foreach ($frequencies as $frequency)
+                            <option value="{{ $frequency->value }}" @selected(old('frequency', 'monthly') === $frequency->value)>{{ $frequency->label() }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="flex items-end gap-3 sm:col-span-2 lg:col-span-5">
+                    <div class="flex-1">
+                        <label class="field-label" for="recurring_next_due_on">First due date</label>
+                        <input id="recurring_next_due_on" name="next_due_on" type="date" value="{{ old('next_due_on', today()->toDateString()) }}" min="{{ today()->toDateString() }}" required class="field num">
+                    </div>
+                    <button type="submit" class="btn-primary" data-loading-text="Adding…"><x-icon name="plus" class="size-4" /> Add</button>
                 </div>
             </form>
         </div>

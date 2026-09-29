@@ -8,7 +8,16 @@
                     <span class="pill mt-2 bg-loss-500/10 text-loss-700 dark:text-loss-300">{{ $order->status->label() }}</span>
                 @endif
             </div>
-            <a href="{{ route('pos.orders.receipt', $order) }}" target="_blank" class="btn-quiet px-3 py-1.5 text-xs">Receipt</a>
+            <div class="flex items-center gap-2">
+                <a href="{{ route('pos.orders.receipt', $order) }}" target="_blank" class="btn-quiet px-3 py-1.5 text-xs">Receipt</a>
+                @if ($order->status === \App\Enums\OrderStatus::Paid)
+                    <form method="POST" action="{{ route('pos.orders.void', $order) }}"
+                        data-confirm-title="Void order #{{ $order->number }}?" data-confirm="The sale leaves your reports and the stock goes back." data-confirm-action="Void order" data-confirm-danger>
+                        @csrf
+                        <button type="submit" class="btn-quiet px-3 py-1.5 text-xs text-loss-600 dark:text-loss-400" data-loading-text="Voiding…">Void</button>
+                    </form>
+                @endif
+            </div>
         </div>
 
         <section class="surface overflow-hidden">

@@ -18,6 +18,7 @@ use App\Http\Controllers\Admin\ItemStockHistoryController;
 use App\Http\Controllers\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Admin\RecipeChangeController;
 use App\Http\Controllers\Admin\RecipeFixController;
+use App\Http\Controllers\Admin\RecurringExpenseController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\ReportPdfController;
 use App\Http\Controllers\Admin\SettingsController;
@@ -122,6 +123,9 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
         Route::post('/assets', [AssetController::class, 'store'])->name('assets.store');
         Route::post('/assets/{asset}/pay', [AssetController::class, 'pay'])->name('assets.pay');
         Route::delete('/assets/{asset}', [AssetController::class, 'destroy'])->name('assets.destroy');
+        Route::post('/recurring-expenses', [RecurringExpenseController::class, 'store'])->name('recurring-expenses.store');
+        Route::post('/recurring-expenses/{recurring}/confirm', [RecurringExpenseController::class, 'confirm'])->name('recurring-expenses.confirm');
+        Route::delete('/recurring-expenses/{recurring}', [RecurringExpenseController::class, 'destroy'])->name('recurring-expenses.destroy');
     });
 
     Route::get('/reports', ReportController::class)->middleware('plan:reports')->name('reports');

@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Enums\ExpenseCategory;
+use App\Enums\ExpenseFrequency;
 use App\Http\Requests\StoreExpenseRequest;
 use App\Models\Asset;
 use App\Models\Expense;
+use App\Models\RecurringExpense;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -38,6 +40,9 @@ class ExpenseController extends Controller
         $assets = Asset::query()->orderBy('name')->get();
         $dueThisMonth = $assets->filter(fn (Asset $asset) => $asset->nextDueOn()?->lte(now()->endOfMonth()));
 
+        $recurring = RecurringExpense::query()->orderBy('next_due_on')->get();
+        $dueRecurring = $recurring->filter(fn (RecurringExpense $item) => $item->isDue());
+
         $firstExpenseDate = Expense::query()->min('date');
 
         return view('admin.expenses', [
@@ -50,6 +55,9 @@ class ExpenseController extends Controller
             'assets' => $assets,
             'payablesThisMonth' => round($dueThisMonth->sum(fn (Asset $asset) => $asset->paymentAmount()), 2),
             'nextDueAsset' => $assets->filter(fn (Asset $asset) => $asset->nextDueOn() !== null)->sortBy(fn (Asset $asset) => $asset->nextDueOn())->first(),
+            'recurring' => $recurring,
+            'dueRecurring' => $dueRecurring,
+            'frequencies' => ExpenseFrequency::cases(),
         ]);
     }
 
