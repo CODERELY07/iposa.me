@@ -10,7 +10,7 @@
             </div>
             <div class="flex items-center gap-2">
                 <a href="{{ route('pos.orders.receipt', $order) }}" target="_blank" class="btn-quiet px-3 py-1.5 text-xs">Receipt</a>
-                @if ($order->status === \App\Enums\OrderStatus::Paid)
+                @if ($order->status === \App\Enums\OrderStatus::Paid && $order->paid_at->isToday())
                     <form method="POST" action="{{ route('pos.orders.void', $order) }}"
                         data-confirm-title="Void order #{{ $order->number }}?" data-confirm="The sale leaves your reports and the stock goes back." data-confirm-action="Void order" data-confirm-danger>
                         @csrf

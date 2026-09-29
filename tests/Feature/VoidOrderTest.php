@@ -68,3 +68,29 @@ it('cannot touch another shop\'s orders', function () {
 
     $this->actingAs($stranger)->post(route('admin.orders.void.approve', $this->order))->assertNotFound();
 });
+
+it('refuses to void an order from a previous day, even for the owner', function () {
+    $this->order->update(['paid_at' => now()->subDay()]);
+
+    $this->actingAs($this->owner)->post(route('pos.orders.void', $this->order))->assertSessionHasErrors('order');
+
+    expect($this->order->refresh()->status)->toBe(OrderStatus::Paid)
+        ->and((float) $this->menu['bun']->refresh()->on_hand)->toBe(98.0);
+});
+
+it('refuses to send a void request for an order from a previous day', function () {
+    $this->order->update(['paid_at' => now()->subDay()]);
+
+    $this->actingAs($this->cashier)->post(route('pos.orders.void', $this->order))->assertSessionHasErrors('order');
+
+    expect($this->order->refresh()->status)->toBe(OrderStatus::Paid);
+});
+
+it('refuses to approve a stale void request once the day has rolled over', function () {
+    $this->actingAs($this->cashier)->post(route('pos.orders.void', $this->order));
+    $this->order->update(['paid_at' => now()->subDay()]);
+
+    $this->actingAs($this->owner)->post(route('admin.orders.void.approve', $this->order))->assertSessionHasErrors('order');
+
+    expect($this->order->refresh()->status)->toBe(OrderStatus::VoidRequested);
+});

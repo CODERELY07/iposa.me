@@ -26,6 +26,10 @@ class VoidOrderService
             throw ValidationException::withMessages(['order' => 'Only paid orders can be voided.']);
         }
 
+        if (! $order->paid_at->isToday()) {
+            throw ValidationException::withMessages(['order' => 'Only today\'s orders can be voided.']);
+        }
+
         $order->update([
             'status' => OrderStatus::VoidRequested,
             'void_requested_by' => $requester->id,
@@ -43,6 +47,10 @@ class VoidOrderService
     {
         if ($order->isVoided()) {
             throw ValidationException::withMessages(['order' => 'This order is already voided.']);
+        }
+
+        if (! $order->paid_at->isToday()) {
+            throw ValidationException::withMessages(['order' => 'Only today\'s orders can be voided.']);
         }
 
         return DB::transaction(function () use ($order, $approver): Order {
