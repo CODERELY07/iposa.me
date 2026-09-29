@@ -73,6 +73,30 @@ class ExpenseController extends Controller
         return back()->with('status', 'Expense added.');
     }
 
+    /**
+     * Correct a typo: date, category, description or amount. Payables and missing-stock
+     * rows aren't editable here — they're kept in sync with the installment or delivery
+     * that created them, so changing them by hand would drift the two apart.
+     */
+    public function update(StoreExpenseRequest $request, Expense $expense): RedirectResponse
+    {
+        if (in_array($expense->category, [ExpenseCategory::Payables, ExpenseCategory::MissingStock], true)) {
+            return back()->withErrors(['expense' => "{$expense->category->label()} entries aren't edited here."]);
+        }
+
+        $category = ExpenseCategory::from($request->validated('category'));
+
+        $expense->update([
+            'date' => $request->validated('date'),
+            'category' => $category,
+            'description' => $request->validated('description'),
+            'kind' => $request->validated('kind') ?? $category->defaultKind()->value,
+            'amount' => $request->validated('amount'),
+        ]);
+
+        return back()->with('status', 'Expense updated.');
+    }
+
     public function destroy(Expense $expense): RedirectResponse
     {
         if ($expense->asset_id !== null) {

@@ -26,6 +26,65 @@
             @endif
         </section>
 
+        <section class="surface p-6">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 class="font-semibold">Cash drawer</h2>
+                <p class="text-xs text-ink-500">Starting cash + cash sales − expenses logged today.</p>
+            </div>
+
+            <dl class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div class="rounded-xl bg-ink-100/70 p-3 dark:bg-white/[0.04]">
+                    <dt class="text-xs text-ink-500">Starting cash</dt>
+                    <dd class="num mt-1 font-semibold">₱{{ number_format($data['cashFloat']['starting'], 2) }}</dd>
+                </div>
+                <div class="rounded-xl bg-ink-100/70 p-3 dark:bg-white/[0.04]">
+                    <dt class="text-xs text-ink-500">Cash sales</dt>
+                    <dd class="num mt-1 font-semibold">₱{{ number_format($data['cashFloat']['cashSales'], 2) }}</dd>
+                </div>
+                <div class="rounded-xl bg-ink-100/70 p-3 dark:bg-white/[0.04]">
+                    <dt class="text-xs text-ink-500">Paid out (expenses)</dt>
+                    <dd class="num mt-1 font-semibold">−₱{{ number_format($data['cashFloat']['cashOut'], 2) }}</dd>
+                </div>
+                <div class="rounded-xl bg-brand-400/10 p-3">
+                    <dt class="text-xs text-ink-500">Should be in drawer</dt>
+                    <dd class="num mt-1 font-semibold">₱{{ number_format($data['cashFloat']['expected'], 2) }}</dd>
+                </div>
+            </dl>
+
+            @if ($data['cashFloat']['counted'] !== null)
+                @php($variance = $data['cashFloat']['variance'])
+                <p class="mt-3 text-sm">
+                    Counted <span class="num font-semibold">₱{{ number_format($data['cashFloat']['counted'], 2) }}</span>
+                    @if (abs($variance) < 0.005)
+                        <span class="text-gain-700 dark:text-gain-400">— matches exactly.</span>
+                    @else
+                        <span @class(['num font-semibold', 'text-loss-600 dark:text-loss-400' => $variance < 0, 'text-gain-700 dark:text-gain-400' => $variance > 0])>— {{ $variance > 0 ? 'over' : 'short' }} by ₱{{ number_format(abs($variance), 2) }}</span>
+                    @endif
+                </p>
+            @endif
+
+            @if ($data['cashFloat']['isToday'])
+                <form method="POST" action="{{ route('admin.cash-float.store') }}" class="mt-4 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                    @csrf
+                    <div>
+                        <label class="field-label" for="starting_amount">Starting cash</label>
+                        <div class="relative">
+                            <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-400">₱</span>
+                            <input id="starting_amount" name="starting_amount" type="number" step="any" min="0" value="{{ old('starting_amount', $data['cashFloat']['starting']) }}" required class="field num pl-7">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="field-label" for="counted_amount">Counted (end of day)</label>
+                        <div class="relative">
+                            <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-400">₱</span>
+                            <input id="counted_amount" name="counted_amount" type="number" step="any" min="0" value="{{ old('counted_amount', $data['cashFloat']['counted']) }}" class="field num pl-7" placeholder="Not counted yet">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary" data-loading-text="Saving…">Save</button>
+                </form>
+            @endif
+        </section>
+
         <section class="surface overflow-hidden">
             <div class="px-6 pt-6">
                 <h2 class="font-semibold">Every order</h2>

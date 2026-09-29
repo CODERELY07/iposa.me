@@ -20,11 +20,16 @@
             </div>
             @foreach ($shift['totals'] as $total)
                 <div class="bg-white p-4 dark:bg-ink-900">
-                    <dt class="text-xs text-ink-500">{{ $total['label'] === 'Cash' ? 'Cash in drawer' : $total['label'] }}</dt>
+                    <dt class="text-xs text-ink-500">{{ $total['label'] }}</dt>
                     <dd class="num mt-1 text-xl font-semibold">₱{{ number_format($total['amount'], 2) }}</dd>
                 </div>
             @endforeach
         </dl>
+
+        <div class="surface flex flex-wrap items-center justify-between gap-2 p-4">
+            <p class="text-sm text-ink-500">Should be in the drawer <span class="text-xs">(whole shop, not just your sales)</span></p>
+            <p class="num text-xl font-semibold">₱{{ number_format($cashFloat['expected'], 2) }}</p>
+        </div>
 
         @if ($orders->isEmpty())
             <div class="surface px-6 py-14 text-center">

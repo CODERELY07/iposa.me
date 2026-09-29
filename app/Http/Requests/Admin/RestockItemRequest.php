@@ -4,6 +4,7 @@ namespace App\Http\Requests\Admin;
 
 use App\Models\Item;
 use App\Models\ItemContainer;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -30,6 +31,7 @@ class RestockItemRequest extends FormRequest
             'container_id' => ['nullable', 'integer', Rule::exists('item_containers', 'id')->where('item_id', $this->item()?->id)],
             'paid' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
             'log_expense' => ['nullable', 'boolean'],
+            'date' => ['nullable', 'date', 'before_or_equal:today'],
         ];
     }
 
@@ -57,6 +59,17 @@ class RestockItemRequest extends FormRequest
         $paid = $this->validated('paid');
 
         return $paid === null || $paid === '' ? null : (float) $paid;
+    }
+
+    /**
+     * Defaults to today, so a restock can be backdated when it was bought earlier
+     * and just wasn't entered yet.
+     */
+    public function boughtOn(): CarbonImmutable
+    {
+        $date = $this->validated('date');
+
+        return $date ? CarbonImmutable::parse($date)->startOfDay() : CarbonImmutable::today();
     }
 
     private function item(): ?Item

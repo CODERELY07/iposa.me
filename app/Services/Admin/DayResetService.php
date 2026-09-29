@@ -4,6 +4,7 @@ namespace App\Services\Admin;
 
 use App\Models\Audit;
 use App\Models\Business;
+use App\Models\CashFloat;
 use App\Models\Expense;
 use App\Models\Item;
 use App\Models\Order;
@@ -16,8 +17,8 @@ use Illuminate\Support\Facades\DB;
  *
  * Deletes today's orders, puts back the stock every one of today's stock movements
  * moved (sales, voids, restocks, adjustments, the closing audit), deletes today's
- * closing audit, and deletes today's expenses. Recipe links, prices and every other
- * day are never touched.
+ * closing audit, today's expenses, and today's cash drawer count. Recipe links,
+ * prices and every other day are never touched.
  */
 class DayResetService
 {
@@ -56,6 +57,8 @@ class DayResetService
             }
 
             Expense::withoutGlobalScopes()->whereKey($expenses->pluck('id'))->delete();
+
+            CashFloat::withoutGlobalScopes()->where('business_id', $locked->id)->whereDate('date', today())->delete();
 
             // A running total across the shop's whole history, not reset daily: after
             // deleting today's orders the next sale must resume where yesterday left off.

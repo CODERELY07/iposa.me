@@ -659,6 +659,10 @@
                                 <input id="restock_paid" name="paid" type="number" min="0" step="0.01" x-model="paid" class="field num w-36 pl-7" placeholder="0.00">
                             </div>
                         </div>
+                        <div>
+                            <label class="field-label" for="restock_date">Bought on</label>
+                            <input id="restock_date" name="date" type="date" value="{{ old('date', today()->toDateString()) }}" max="{{ today()->toDateString() }}" class="field num w-40">
+                        </div>
                     </div>
 
                     <p class="rounded-xl bg-ink-100/70 px-4 py-3 text-sm dark:bg-white/[0.04]">

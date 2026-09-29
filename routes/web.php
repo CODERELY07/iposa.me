@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AssetController;
 use App\Http\Controllers\Admin\AuditCostSettingsController;
 use App\Http\Controllers\Admin\AuditReopenController;
 use App\Http\Controllers\Admin\BillingController;
+use App\Http\Controllers\Admin\CashFloatController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DayController;
@@ -112,9 +113,11 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
     Route::post('/recipe-fixes/{auditLine}/dismiss', [RecipeFixController::class, 'dismiss'])->name('recipe-fixes.dismiss');
     Route::post('/deliveries/{delivery}/check', DeliveryCheckController::class)->name('deliveries.check');
     Route::post('/reset-today', DayResetController::class)->name('reset-today');
+    Route::post('/cash-float', [CashFloatController::class, 'store'])->name('cash-float.store');
 
     Route::middleware('plan:expenses')->group(function () {
         Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses');
+        Route::put('/expenses/{expense}', [ExpenseController::class, 'update'])->name('expenses.update');
         Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');
         Route::post('/assets', [AssetController::class, 'store'])->name('assets.store');
         Route::post('/assets/{asset}/pay', [AssetController::class, 'pay'])->name('assets.pay');

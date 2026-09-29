@@ -89,27 +89,63 @@
                                 </thead>
                                 <tbody class="divide-y divide-ink-100 dark:divide-white/[0.05]">
                                     @foreach ($expenses as $expense)
-                                        <tr class="group hover:bg-ink-50 dark:hover:bg-white/[0.02]">
-                                            <td class="num whitespace-nowrap px-5 py-3 text-ink-500">{{ $expense->date->format('D j M') }}</td>
+                                        @php($editable = ! in_array($expense->category, [ExpenseCategory::Payables, ExpenseCategory::MissingStock], true))
+                                        <tr class="group hover:bg-ink-50 dark:hover:bg-white/[0.02]" x-data="{ editing: false }">
+                                            <td class="px-5 py-3">
+                                                <span class="num whitespace-nowrap text-ink-500" x-show="! editing">{{ $expense->date->format('D j M') }}</span>
+                                                @if ($editable)
+                                                    <input form="edit-expense-{{ $expense->id }}" name="date" type="date" value="{{ $expense->date->toDateString() }}" max="{{ today()->toDateString() }}" required x-show="editing" x-cloak class="field num w-36 py-1.5 text-xs">
+                                                @endif
+                                            </td>
                                             <td class="px-3 py-3">
-                                                <span class="inline-flex items-center gap-2">
+                                                <span class="inline-flex items-center gap-2" x-show="! editing">
                                                     <span class="size-2 rounded-full {{ $categoryColors[$expense->category->value] }}"></span>{{ $expense->category->label() }}
                                                 </span>
+                                                @if ($editable)
+                                                    <select form="edit-expense-{{ $expense->id }}" name="category" x-show="editing" x-cloak class="field w-40 py-1.5 text-xs">
+                                                        @foreach ($categories as $category)
+                                                            <option value="{{ $category->value }}" @selected($expense->category === $category)>{{ $category->label() }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                @endif
                                             </td>
                                             <td class="px-3 py-3">
-                                                {{ $expense->description }}
-                                                <span class="text-xs text-ink-400">· {{ $expense->logged_by }}</span>
+                                                <span x-show="! editing">
+                                                    {{ $expense->description }}
+                                                    <span class="text-xs text-ink-400">· {{ $expense->logged_by }}</span>
+                                                </span>
+                                                @if ($editable)
+                                                    <input form="edit-expense-{{ $expense->id }}" name="description" type="text" value="{{ $expense->description }}" maxlength="160" required x-show="editing" x-cloak class="field w-full py-1.5 text-xs">
+                                                @endif
                                             </td>
                                             <td class="px-3 py-3 text-xs text-ink-500">{{ $expense->kind->label() }}</td>
-                                            <td class="num px-3 py-3 text-right font-medium">₱{{ number_format((float) $expense->amount, 2) }}</td>
                                             <td class="px-3 py-3 text-right">
-                                                <form method="POST" action="{{ route('admin.expenses.destroy', $expense) }}" data-confirm-title="Delete this expense?" data-confirm="It disappears from this month's total and your P&amp;L." data-confirm-action="Delete" data-confirm-danger>
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" class="btn-quiet size-8 !px-0 opacity-0 transition group-hover:opacity-100 focus:opacity-100" aria-label="Delete expense" data-loading-text="">
-                                                        <x-icon name="trash" class="size-4" />
-                                                    </button>
-                                                </form>
+                                                <span class="num font-medium" x-show="! editing">₱{{ number_format((float) $expense->amount, 2) }}</span>
+                                                @if ($editable)
+                                                    <input form="edit-expense-{{ $expense->id }}" name="amount" type="number" step="0.01" min="0.01" value="{{ (float) $expense->amount }}" required x-show="editing" x-cloak class="field num w-24 py-1.5 text-right text-xs">
+                                                @endif
+                                            </td>
+                                            <td class="px-3 py-3 text-right">
+                                                <div class="flex justify-end gap-1">
+                                                    @if ($editable)
+                                                        <button type="button" @click="editing = true" x-show="! editing" class="btn-quiet size-8 !px-0 opacity-0 transition group-hover:opacity-100 focus:opacity-100" aria-label="Edit expense">
+                                                            <x-icon name="pencil" class="size-4" />
+                                                        </button>
+                                                        <button type="submit" form="edit-expense-{{ $expense->id }}" x-show="editing" x-cloak class="btn-quiet size-8 !px-0 text-brand-600 dark:text-brand-300" aria-label="Save expense" data-loading-text="">
+                                                            <x-icon name="check" class="size-4" />
+                                                        </button>
+                                                        <button type="button" @click="editing = false" x-show="editing" x-cloak class="btn-quiet size-8 !px-0" aria-label="Cancel edit">
+                                                            <x-icon name="x" class="size-4" />
+                                                        </button>
+                                                    @endif
+                                                    <form method="POST" action="{{ route('admin.expenses.destroy', $expense) }}" data-confirm-title="Delete this expense?" data-confirm="It disappears from this month's total and your P&amp;L." data-confirm-action="Delete" data-confirm-danger>
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit" class="btn-quiet size-8 !px-0 opacity-0 transition group-hover:opacity-100 focus:opacity-100" aria-label="Delete expense" data-loading-text="">
+                                                            <x-icon name="trash" class="size-4" />
+                                                        </button>
+                                                    </form>
+                                                </div>
                                             </td>
                                         </tr>
                                     @endforeach
@@ -123,6 +159,16 @@
                                 </tfoot>
                             </table>
                         </div>
+
+                        {{-- Kept outside the table: a <form> can't legally sit between <tr> elements. --}}
+                        @foreach ($expenses as $expense)
+                            @if (! in_array($expense->category, [ExpenseCategory::Payables, ExpenseCategory::MissingStock], true))
+                                <form id="edit-expense-{{ $expense->id }}" method="POST" action="{{ route('admin.expenses.update', $expense) }}" class="hidden">
+                                    @csrf
+                                    @method('PUT')
+                                </form>
+                            @endif
+                        @endforeach
                     @endif
                 </div>
             </div>

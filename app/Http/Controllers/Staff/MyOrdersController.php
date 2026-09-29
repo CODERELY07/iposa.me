@@ -7,6 +7,8 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Reports\DayBreakdown;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
@@ -16,7 +18,7 @@ class MyOrdersController extends Controller
     /**
      * Today's orders rung up by this cashier, with drawer totals per payment method.
      */
-    public function __invoke(Request $request): View
+    public function __invoke(Request $request, DayBreakdown $breakdown): View
     {
         $orders = Order::query()
             ->where('user_id', $request->user()->id)
@@ -46,6 +48,8 @@ class MyOrdersController extends Controller
             'canLogExpenses' => Gate::allows('log-expenses') && $business->hasFeature('expenses'),
             'canVoid' => Gate::allows('void-orders'),
             'expenseCategories' => ExpenseCategory::selectable(),
+            // Whole-shop drawer total, not just this cashier's own sales, since the float is shared.
+            'cashFloat' => $breakdown->cashFloat($business, CarbonImmutable::today()),
         ]);
     }
 }

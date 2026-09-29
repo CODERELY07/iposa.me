@@ -10,6 +10,7 @@ use App\Enums\StockMovementReason;
 use App\Models\Audit;
 use App\Models\AuditLine;
 use App\Models\Business;
+use App\Models\CashFloat;
 use App\Models\Expense;
 use App\Models\Item;
 use App\Models\Order;
@@ -66,6 +67,49 @@ class DayBreakdown
             'total' => round($countedOrders->sum(fn (array $row) => (float) $row['order']->subtotal), 2),
             'cost' => round($countedOrders->sum('cost'), 2),
             'count' => $countedOrders->count(),
+            'cashFloat' => $this->cashFloat($business, $day),
+        ];
+    }
+
+    /**
+     * What the drawer should hold: the starting float, plus cash sales, minus
+     * every expense logged today (the app already treats a logged expense as
+     * money that left the drawer — see the Expenses module). Compared against
+     * what was actually counted, once someone counts it.
+     *
+     * @return array{starting: float, cashSales: float, cashOut: float, expected: float, counted: ?float, variance: ?float, isToday: bool}
+     */
+    public function cashFloat(Business $business, CarbonImmutable $day): array
+    {
+        $cashSales = round((float) Order::withoutGlobalScopes()
+            ->where('business_id', $business->id)
+            ->where('payment_method', PaymentMethod::Cash)
+            ->whereIn('status', OrderStatus::countedAsSales())
+            ->whereBetween('paid_at', [$day->startOfDay(), $day->endOfDay()])
+            ->sum('subtotal'), 2);
+
+        $cashOut = round((float) Expense::withoutGlobalScopes()
+            ->where('business_id', $business->id)
+            ->whereDate('date', $day->toDateString())
+            ->sum('amount'), 2);
+
+        $float = CashFloat::withoutGlobalScopes()
+            ->where('business_id', $business->id)
+            ->whereDate('date', $day->toDateString())
+            ->first();
+
+        $starting = (float) ($float?->starting_amount ?? 0);
+        $counted = $float?->counted_amount !== null ? (float) $float->counted_amount : null;
+        $expected = round($starting + $cashSales - $cashOut, 2);
+
+        return [
+            'starting' => $starting,
+            'cashSales' => $cashSales,
+            'cashOut' => $cashOut,
+            'expected' => $expected,
+            'counted' => $counted,
+            'variance' => $counted !== null ? round($counted - $expected, 2) : null,
+            'isToday' => $day->isSameDay(CarbonImmutable::today()),
         ];
     }
 

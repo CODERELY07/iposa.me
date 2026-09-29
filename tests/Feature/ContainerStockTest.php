@@ -163,6 +163,31 @@ it('restocks a tin: the count goes up, the cost follows, and the purchase is an 
         ->and($expense->description)->toBe('Cooking oil · 1 tin (18,000 ml)');
 });
 
+it('backdates a restock to when it was actually bought', function () {
+    $oil = makeOil($this);
+    $boughtOn = today()->subDays(2);
+
+    $this->actingAs($this->owner)
+        ->post(route('admin.inventory.restock', $oil), [
+            'quantity' => 2, 'container_id' => $oil->containers->first()->id, 'paid' => 290, 'log_expense' => 1, 'date' => $boughtOn->toDateString(),
+        ])
+        ->assertRedirect(route('admin.inventory.edit', $oil));
+
+    $movement = StockMovement::withoutGlobalScopes()->where('item_id', $oil->id)->latest('id')->first();
+    expect($movement->created_at->toDateString())->toBe($boughtOn->toDateString());
+
+    $expense = Expense::withoutGlobalScopes()->where('business_id', $this->business->id)->latest('id')->first();
+    expect($expense->date->toDateString())->toBe($boughtOn->toDateString());
+});
+
+it('refuses to backdate a restock into the future', function () {
+    $oil = makeOil($this);
+
+    $this->actingAs($this->owner)
+        ->post(route('admin.inventory.restock', $oil), ['quantity' => 1, 'container_id' => $oil->containers->first()->id, 'date' => today()->addDay()->toDateString()])
+        ->assertSessionHasErrors('date');
+});
+
 it('restocks without logging an expense when asked not to, and on the plan without expenses', function () {
     $oil = makeOil($this);
 

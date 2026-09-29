@@ -7,6 +7,7 @@ use App\Enums\StockMovementReason;
 use App\Models\Item;
 use App\Models\ItemContainer;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -23,9 +24,11 @@ class RestockService
     /**
      * @return array{added: float, unit_cost: ?float, expense_logged: bool}
      */
-    public function restock(Item $item, User $user, float $quantity, ?ItemContainer $container, ?float $paid, bool $logExpense): array
+    public function restock(Item $item, User $user, float $quantity, ?ItemContainer $container, ?float $paid, bool $logExpense, ?CarbonInterface $at = null): array
     {
-        return DB::transaction(function () use ($item, $user, $quantity, $container, $paid, $logExpense): array {
+        $at ??= now();
+
+        return DB::transaction(function () use ($item, $user, $quantity, $container, $paid, $logExpense, $at): array {
             $added = round($container !== null ? $quantity * (float) $container->size : $quantity, 3);
             $unitCost = null;
 
@@ -33,7 +36,7 @@ class RestockService
                 $item->forceFill(['on_hand' => 0])->save();
             }
 
-            $this->stock->apply($item->business, [$item->id => $added], StockMovementReason::Restock, ['user_id' => $user->id]);
+            $this->stock->apply($item->business, [$item->id => $added], StockMovementReason::Restock, ['user_id' => $user->id], $at);
 
             if ($paid !== null && $paid > 0 && $added > 0) {
                 $unitCost = round($paid / $added, 6);
@@ -49,7 +52,7 @@ class RestockService
                 $category = $item->isCostedWhenUsed($item->business) ? ExpenseCategory::StockPurchase : ExpenseCategory::Supplies;
 
                 $item->business->expenses()->create([
-                    'date' => today(),
+                    'date' => $at->toDateString(),
                     'category' => $category,
                     'kind' => $category->defaultKind(),
                     'description' => $this->describe($item, $quantity, $container, $added),
