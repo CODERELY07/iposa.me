@@ -115,6 +115,33 @@
             </form>
         </section>
 
+        <section class="grid gap-6 lg:grid-cols-[240px_1fr]" x-data="thermalPrinterSettings()">
+            <div>
+                <h2 class="font-semibold">Thermal printer (Bluetooth)</h2>
+                <p class="mt-1 text-sm text-ink-500">Print receipts straight to a Bluetooth thermal printer from Chrome, no extra app needed. Everywhere else, receipts keep using the normal print dialog.</p>
+            </div>
+            <div class="surface p-6">
+                <template x-if="! supported">
+                    <p class="text-sm text-ink-500">Not available in this browser (Chrome on Android is needed). Receipts print through the normal browser dialog instead — that still works everywhere.</p>
+                </template>
+                <template x-if="supported">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <p class="text-sm">
+                            <span x-show="paired">Paired with <span class="font-medium" x-text="printerName || 'a printer'"></span>.</span>
+                            <span x-show="! paired" class="text-ink-500">No printer paired yet.</span>
+                        </p>
+                        <div class="flex gap-2">
+                            <button type="button" @click="pair()" class="btn-primary" :disabled="pairing" data-loading-text="Pairing…">
+                                <span x-text="pairing ? 'Pairing…' : (paired ? 'Pair a different printer' : 'Pair printer')"></span>
+                            </button>
+                            <button type="button" x-show="paired" @click="forget()" class="btn-quiet">Forget</button>
+                        </div>
+                    </div>
+                </template>
+                <p x-show="error" x-text="error" class="mt-3 text-sm text-loss-600 dark:text-loss-400"></p>
+            </div>
+        </section>
+
         <section id="billing" class="grid scroll-mt-8 gap-6 lg:grid-cols-[240px_1fr]">
             <div>
                 <h2 class="font-semibold">Plan & billing</h2>

@@ -1,5 +1,6 @@
 import Alpine from 'alpinejs';
 import { offlineQueueStore } from './offline-queue';
+import './thermal-printer';
 
 window.Alpine = Alpine;
 
@@ -167,6 +168,50 @@ Alpine.store('fullscreen', {
 ['fullscreenchange', 'webkitfullscreenchange'].forEach((name) =>
     document.addEventListener(name, () => Alpine.store('fullscreen').sync()),
 );
+
+/**
+ * Settings → pair (or forget) the Bluetooth thermal printer receipts print to
+ * directly, bypassing the browser print dialog. See resources/js/thermal-printer.js.
+ */
+Alpine.data('thermalPrinterSettings', () => ({
+    supported: false,
+    paired: false,
+    printerName: '',
+    pairing: false,
+    error: null,
+
+    init() {
+        this.supported = window.ThermalPrinter?.isSupported() ?? false;
+        this.refresh();
+    },
+
+    refresh() {
+        this.paired = window.ThermalPrinter?.isPaired() ?? false;
+        this.printerName = window.ThermalPrinter?.pairedName() ?? '';
+    },
+
+    async pair() {
+        this.pairing = true;
+        this.error = null;
+
+        try {
+            await window.ThermalPrinter.pairPrinter();
+            this.refresh();
+        } catch (e) {
+            // NotFoundError: the user closed the device picker without choosing one.
+            if (e?.name !== 'NotFoundError') {
+                this.error = "Couldn't pair. Make sure the printer is on, nearby, and in pairing mode, then try again.";
+            }
+        } finally {
+            this.pairing = false;
+        }
+    },
+
+    forget() {
+        window.ThermalPrinter?.forgetPrinter();
+        this.refresh();
+    },
+}));
 
 const spinnerMarkup = '<svg class="size-4 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>';
 

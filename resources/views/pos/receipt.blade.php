@@ -4,6 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Receipt #{{ $order->number }} · {{ $business->business_name }}</title>
+        @vite(['resources/js/thermal-printer.js'])
         <style>
             /* 58mm thermal paper: ~48mm printable. Plain CSS so it prints the same everywhere. */
             @page { size: 58mm auto; margin: 3mm; }
@@ -72,11 +73,57 @@
 
         <div class="actions">
             <button type="button" onclick="window.close()">Close</button>
-            <button type="button" class="primary" onclick="window.print()">Print</button>
+            <button type="button" class="primary" onclick="printNow()">Print</button>
         </div>
 
         <script>
-            window.addEventListener('load', () => setTimeout(() => window.print(), 150));
+            window.__receiptOrder = @js([
+                'businessName' => $business->business_name,
+                'address' => $business->address,
+                'tin' => $business->tin,
+                'number' => $order->number,
+                'paidAt' => $order->paid_at->format('M j, Y g:i A'),
+                'cashierName' => $order->cashier_name,
+                'voided' => $order->isVoided(),
+                'paymentLabel' => $order->payment_method->label(),
+                'subtotal' => (float) $order->subtotal,
+                'tendered' => (float) ($order->tendered ?? $order->subtotal),
+                'change' => $order->change !== null ? (float) $order->change : null,
+                'footer' => $business->receipt_footer,
+                'lines' => $order->lines->map(fn ($line) => [
+                    'name' => $line->name,
+                    'variantLabel' => $line->variant_label,
+                    'qty' => $line->qty,
+                    'price' => (float) $line->price,
+                    'total' => $line->lineTotal(),
+                ])->values(),
+            ]);
+
+            let printing = false;
+
+            /**
+             * Tries the Bluetooth printer paired in Settings first; falls back to the
+             * normal browser print dialog whenever that isn't set up or doesn't work.
+             */
+            async function printNow() {
+                if (printing) {
+                    return;
+                }
+
+                printing = true;
+                const printer = window.ThermalPrinter;
+                const printedSilently = printer?.isSupported() && printer?.isPaired()
+                    ? await printer.printViaBluetooth(window.__receiptOrder)
+                    : false;
+
+                if (!printedSilently) {
+                    window.print();
+                }
+
+                printing = false;
+            }
+
+            window.addEventListener('load', () => setTimeout(printNow, 150));
         </script>
     </body>
 </html>
