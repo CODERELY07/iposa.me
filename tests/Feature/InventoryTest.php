@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\CostingMethod;
 use App\Enums\ItemKind;
 use App\Enums\StockMovementReason;
 use App\Models\Category;
@@ -46,16 +47,16 @@ it('counts linked pieces in the cost of a sale only when the owner asks for it',
         'recipe' => [['piece_item_id' => $this->menu['bun']->id, 'qty' => 2]],
     ];
 
-    $this->actingAs($this->owner)->put(route('admin.inventory.update', $this->menu['burger']), $payload + ['include_recipe_cost' => '1'])->assertRedirect();
+    $this->actingAs($this->owner)->put(route('admin.inventory.update', $this->menu['burger']), $payload + ['costing_method' => 'manual_plus_linked'])->assertRedirect();
 
     $burger = $this->menu['burger']->refresh()->load('recipeLines.piece');
-    expect($burger->include_recipe_cost)->toBeTrue()
+    expect($burger->costing_method)->toBe(CostingMethod::ManualPlusLinked)
         ->and($burger->variants->first()->costPerSale())->toBe(25.0)
         ->and($burger->variants->first()->marginPercent())->toBe(75.0);
 
-    $this->actingAs($this->owner)->put(route('admin.inventory.update', $this->menu['burger']), $payload + ['include_recipe_cost' => '0'])->assertRedirect();
+    $this->actingAs($this->owner)->put(route('admin.inventory.update', $this->menu['burger']), $payload + ['costing_method' => 'manual_only'])->assertRedirect();
 
-    expect($this->menu['burger']->refresh()->include_recipe_cost)->toBeFalse()
+    expect($this->menu['burger']->refresh()->costing_method)->toBe(CostingMethod::ManualOnly)
         ->and($this->menu['burger']->variants->first()->costPerSale())->toBe(10.0);
 });
 
@@ -319,7 +320,7 @@ it('filters pieces to only those at or below their low-stock alert', function ()
 });
 
 it('keeps an item\'s links when it is saved on a plan without ingredient links', function () {
-    $this->menu['burger']->update(['include_recipe_cost' => true]);
+    $this->menu['burger']->update(['costing_method' => CostingMethod::ManualPlusLinked]);
     $this->owner->business->update(['plan' => 'tindahan']);
 
     $this->actingAs($this->owner)->put(route('admin.inventory.update', $this->menu['burger']), [
@@ -331,7 +332,7 @@ it('keeps an item\'s links when it is saved on a plan without ingredient links',
 
     $burger = $this->menu['burger']->refresh();
     expect($burger->recipeLines->pluck('piece_item_id')->sort()->values()->all())->toBe([$this->menu['bun']->id, $this->menu['patty']->id])
-        ->and($burger->include_recipe_cost)->toBeTrue()
+        ->and($burger->costing_method)->toBe(CostingMethod::ManualPlusLinked)
         ->and((float) $this->menu['burgerRegular']->refresh()->price)->toBe(115.0);
 
     $this->actingAs($this->owner)->get(route('admin.inventory.edit', $burger))->assertOk()->assertSee('These links are kept and keep working.');
@@ -350,12 +351,12 @@ it('removes every link when the owner clears them on a plan with links', functio
 it('starts new menu items with linked costs included, and warns when they are not', function () {
     $this->actingAs($this->owner)->get(route('admin.inventory.create'))
         ->assertOk()
-        ->assertViewHas('formState', fn (array $state) => $state['includeRecipeCost'] === true);
+        ->assertViewHas('formState', fn (array $state) => $state['costingMethod'] === 'manual_plus_linked');
 
     $this->actingAs($this->owner)->get(route('admin.inventory.edit', $this->menu['burger']))
         ->assertOk()
-        ->assertViewHas('formState', fn (array $state) => $state['includeRecipeCost'] === false)
-        ->assertSee("Sales will take these off the shelf but won't count what they cost.", false);
+        ->assertViewHas('formState', fn (array $state) => $state['costingMethod'] === 'manual_only')
+        ->assertSee('not counted — your typed cost is used instead', false);
 
     $this->actingAs($this->owner)->get(route('admin.inventory'))->assertOk()->assertSee('not in cost');
 });

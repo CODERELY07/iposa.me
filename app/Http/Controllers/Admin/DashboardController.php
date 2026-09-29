@@ -44,12 +44,13 @@ class DashboardController extends Controller
 
         $yesterdaySalesSoFar = $ledger->salesBetween($business, today()->subDay(), now()->subDay());
         $yesterdayExpenses = (float) Expense::query()->whereDate('date', today()->subDay())->sum('amount');
-        $profitSoFar = round($today['sales'] - $today['expenses'] - $today['stock_purchases'], 2);
+        $profitSoFar = $today['net'];
         $yesterdayProfitAtThisHour = round($yesterdaySalesSoFar - $yesterdayExpenses, 2);
+        $todayCoverage = $today['sales'] > 0 ? round($today['known_revenue'] / $today['sales'] * 100, 1) : null;
 
         return view('admin.dashboard', [
             'business' => $business,
-            'today' => $today + ['expenseCount' => $expenseCount, 'stockPurchaseCount' => $stockPurchaseCount],
+            'today' => $today + ['expenseCount' => $expenseCount, 'stockPurchaseCount' => $stockPurchaseCount, 'coverage' => $todayCoverage],
             'profitSoFar' => $profitSoFar,
             'profitDelta' => round($profitSoFar - $yesterdayProfitAtThisHour, 2),
             'week' => $week->values(),

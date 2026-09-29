@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['item_id', 'label', 'cost', 'price', 'sort'])]
+#[Fillable(['item_id', 'label', 'cost', 'cost_updated_at', 'price', 'sort'])]
 class ItemVariant extends Model
 {
     /**
@@ -19,6 +19,7 @@ class ItemVariant extends Model
         return [
             'cost' => 'decimal:2',
             'price' => 'decimal:2',
+            'cost_updated_at' => 'datetime',
         ];
     }
 
@@ -31,23 +32,40 @@ class ItemVariant extends Model
     }
 
     /**
-     * The cost of one sale, linked pieces and liquids included when the item asks for it.
+     * The cost of one sale, per the item's costing method. Null when it isn't known.
      */
-    public function costPerSale(): float
+    public function costPerSale(): ?float
     {
         return $this->item->costPerSale($this);
     }
 
-    public function profit(): float
+    /**
+     * Null when the cost isn't known -- there is no profit figure to show.
+     */
+    public function profit(): ?float
     {
-        return round((float) $this->price - $this->costPerSale(), 2);
+        $cost = $this->costPerSale();
+
+        return $cost !== null ? round((float) $this->price - $cost, 2) : null;
     }
 
     /**
-     * Margin as a percentage of the selling price, or null when the price is zero.
+     * Margin as a percentage of the selling price. Null when the price is zero or the cost isn't known.
      */
     public function marginPercent(): ?float
     {
-        return (float) $this->price > 0 ? round($this->profit() / (float) $this->price * 100, 1) : null;
+        $profit = $this->profit();
+
+        return $profit !== null && (float) $this->price > 0 ? round($profit / (float) $this->price * 100, 1) : null;
+    }
+
+    /**
+     * A nudge, not a fact: the owner may still be exactly right. There is no
+     * ingredient signal for a manual cost to check itself against, so this is
+     * the only freshness check available -- it never changes the cost itself.
+     */
+    public function isCostStale(int $days = 90): bool
+    {
+        return $this->cost_updated_at !== null && $this->cost_updated_at->lt(now()->subDays($days));
     }
 }

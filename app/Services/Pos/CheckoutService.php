@@ -117,7 +117,7 @@ class CheckoutService
                         $used = (float) $recipeLine->qty * $qty;
                         $deductions[$recipeLine->piece_item_id] = ($deductions[$recipeLine->piece_item_id] ?? 0) - $used;
 
-                        if ($variant->item->include_recipe_cost) {
+                        if ($variant->item->costing_method->usesLinked()) {
                             $costedDeductions[$recipeLine->piece_item_id] = ($costedDeductions[$recipeLine->piece_item_id] ?? 0) - $used;
                         }
                     }

@@ -2,6 +2,7 @@
 
 namespace App\Services\Inventory;
 
+use App\Enums\CostingMethod;
 use App\Enums\ItemKind;
 use App\Models\Business;
 use App\Models\Item;
@@ -14,11 +15,11 @@ class ItemService
 
     /**
      * Create or update an item with its sizes and recipe links in one transaction.
-     * Leave out `recipe` (and `include_recipe_cost`) to keep the item's links as they are.
+     * Leave out `recipe` (and `costing_method`) to keep the item's links as they are.
      *
      * @param  array{
      *     kind: string, name: string, category_id?: int|null, unit?: string|null,
-     *     on_hand?: float|string|null, low_threshold?: float|string|null, unit_cost?: float|string|null, include_recipe_cost?: bool|null,
+     *     on_hand?: float|string|null, low_threshold?: float|string|null, unit_cost?: float|string|null, costing_method?: string|null,
      *     containers?: list<array{id?: int|null, label: string, size: float|string, price?: float|string|null}>,
      *     variants?: list<array{id?: int|null, label: string, cost?: float|string|null, price: float|string}>,
      *     recipe?: list<array{piece_item_id: int, qty: float|string, variant_index?: int|null, order_type?: string|null}>
@@ -43,9 +44,9 @@ class ItemService
             ]);
 
             if ($kind !== ItemKind::Menu) {
-                $item->include_recipe_cost = false;
-            } elseif (array_key_exists('include_recipe_cost', $data)) {
-                $item->include_recipe_cost = (bool) $data['include_recipe_cost'];
+                $item->costing_method = CostingMethod::ManualOnly;
+            } elseif (array_key_exists('costing_method', $data) && $data['costing_method'] !== null) {
+                $item->costing_method = CostingMethod::from($data['costing_method']);
             }
 
             // With containers the cost comes from what the owner paid for one;
@@ -149,14 +150,22 @@ class ItemService
         $keptIds = [];
 
         foreach (array_values($rows) as $sort => $row) {
+            $cost = self::nullableNumber($row['cost'] ?? null);
             $attributes = [
                 'label' => $row['label'],
-                'cost' => self::nullableNumber($row['cost'] ?? null) ?? 0,
+                'cost' => $cost,
                 'price' => $row['price'],
                 'sort' => $sort,
             ];
 
             $variant = ! empty($row['id']) ? $item->variants()->whereKey($row['id'])->first() : null;
+            $costChanged = $variant === null
+                ? $cost !== null
+                : ($variant->cost === null ? $cost !== null : $cost === null || abs((float) $variant->cost - $cost) >= 0.005);
+
+            if ($costChanged) {
+                $attributes['cost_updated_at'] = now();
+            }
 
             if ($variant !== null) {
                 $variant->update($attributes);

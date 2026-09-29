@@ -123,6 +123,8 @@
                             @foreach ($menuItems as $item)
                                 @forelse ($item->variants as $variant)
                                     @php($margin = $variant->marginPercent())
+                                    @php($cost = $variant->costPerSale())
+                                    @php($profit = $variant->profit())
                                     <tr class="hover:bg-ink-50 dark:hover:bg-white/[0.02]">
                                         <td class="px-5 py-3">
                                             @if ($loop->first)
@@ -131,9 +133,15 @@
                                             @endif
                                         </td>
                                         <td class="px-3 py-3 text-ink-600 dark:text-ink-300">{{ $variant->label }}</td>
-                                        <td class="num px-3 py-3 text-right text-ink-500">₱{{ number_format($variant->costPerSale(), 2) }}@if ($item->include_recipe_cost && $item->recipeLines->isNotEmpty())<span class="block text-[11px]">with links</span>@endif</td>
+                                        <td class="num px-3 py-3 text-right text-ink-500">
+                                            @if ($cost !== null)
+                                                ₱{{ number_format($cost, 2) }}@if ($item->costing_method->usesLinked() && $item->recipeLines->isNotEmpty())<span class="block text-[11px]">with links</span>@endif
+                                            @else
+                                                <span class="text-loss-600 dark:text-loss-400" title="Cost not configured">Unknown</span>
+                                            @endif
+                                        </td>
                                         <td class="num px-3 py-3 text-right">₱{{ number_format((float) $variant->price, 2) }}</td>
-                                        <td class="num px-3 py-3 text-right font-medium">₱{{ number_format($variant->profit(), 2) }}</td>
+                                        <td class="num px-3 py-3 text-right font-medium">{{ $profit !== null ? '₱'.number_format($profit, 2) : '—' }}</td>
                                         <td class="px-3 py-3 text-right">
                                             @if ($margin !== null)
                                                 <span @class(['num font-semibold', 'text-gain-600 dark:text-gain-400' => $margin >= 50, 'text-brand-600 dark:text-brand-300' => $margin < 50 && $margin >= 25, 'text-loss-600 dark:text-loss-400' => $margin < 25])>{{ number_format($margin, 1) }}%</span>
@@ -146,8 +154,8 @@
                                                 @php($variantLines = $item->recipeLines->filter(fn ($line) => $line->appliesTo($variant)))
                                                 @if ($variantLines->isNotEmpty())
                                                     <span class="inline-flex items-center gap-1.5"><x-icon name="link" class="size-3.5" /> {{ $variantLines->map(fn ($line) => ((float) $line->qty != 1 ? $formatQty($line->qty).' × ' : '').($line->piece?->name ?? '?').($line->order_type ? ' ('.$line->order_type->label().')' : ''))->join(', ') }}</span>
-                                                    @unless ($item->include_recipe_cost)
-                                                        <span class="pill bg-loss-500/10 text-loss-700 dark:text-loss-300" title="Sales take these off the shelf but don't count their cost. Tick “Include in cost”, or include them in the cost you type.">not in cost</span>
+                                                    @unless ($item->costing_method->usesLinked())
+                                                        <span class="pill bg-ink-200 text-ink-600 dark:bg-white/10 dark:text-ink-300" title="Costing method is manual only. Sales still take these off the shelf.">not in cost</span>
                                                     @endunless
                                                 @else
                                                     <span class="text-ink-400">No links for this size</span>

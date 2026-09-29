@@ -4,7 +4,7 @@
     $base = max($sales, 0.01);
     $waterfall = [
         ['label' => 'Gross revenue', 'amount' => $sales, 'kind' => 'total', 'note' => number_format($totals['orders']).' '.\Illuminate\Support\Str::plural('order', $totals['orders']).' from the register'],
-        ['label' => 'Restock costs', 'amount' => -$totals['stock_purchases'], 'kind' => 'cost', 'note' => 'Stock bought this period, paid in full'],
+        ['label' => 'COGS', 'amount' => -$totals['cogs'], 'kind' => 'cost', 'note' => 'What sold this period actually cost, locked in at the sale'],
         ['label' => 'Operating expenses', 'amount' => -$totals['expenses'], 'kind' => 'cost', 'note' => 'Rent, wages, utilities, supplies, equipment payables'],
         ['label' => 'Net profit', 'amount' => $net, 'kind' => 'result', 'note' => $sales > 0 ? number_format($net / $sales * 100, 1).'% of revenue' : 'No sales yet'],
     ];
@@ -18,7 +18,7 @@
 <x-app-layout title="Profit & ledger">
     <div class="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-8">
         <x-page-header eyebrow="Profit & loss" :title="$periodLabel"
-            description="Same columns as your spreadsheet. Cash basis: a restock counts against profit the day you pay for it, not the day it sells.">
+            description="Net profit is what sold, minus what it actually cost (COGS) and every operating expense. A restock is a cash outflow, not a profit expense — it only counts once it's sold.">
             <x-slot:actions>
                 <div class="inline-flex gap-1 rounded-xl bg-ink-100 p-1 dark:bg-white/[0.05]">
                     <a href="{{ route('admin.reports', ['period' => 'week']) }}" @class(['tab', 'tab-active' => $period === 'week'])>Last 7 days</a>
@@ -48,7 +48,14 @@
                 <div>
                     <p class="eyebrow">Net profit · {{ $periodLabel }}</p>
                     <p @class(['num mt-2 text-4xl font-semibold tracking-tight', 'text-loss-600 dark:text-loss-400' => $net < 0])>{{ $net < 0 ? '−' : '' }}₱{{ number_format(abs($net), 2) }}</p>
-                    <p class="mt-2 text-sm text-ink-500">Revenue minus restock costs and every operating expense, including equipment installments. A restock only counts if it was logged as an expense.</p>
+                    <p class="mt-2 text-sm text-ink-500">Revenue minus what sold actually cost (COGS) and every operating expense, including equipment installments.</p>
+
+                    @if ($totals['coverage'] !== null && $totals['coverage'] < 100)
+                        <p class="mt-3 flex gap-2 rounded-xl bg-loss-500/10 px-3 py-2 text-xs text-loss-700 dark:text-loss-300">
+                            <x-icon name="alert" class="mt-0.5 size-3.5 shrink-0" />
+                            Costing coverage {{ number_format($totals['coverage'], 1) }}% of revenue — the rest sold without a configured cost, so COGS understates the real cost.
+                        </p>
+                    @endif
 
                     @if ($uncheckedDeliveries > 0)
                         <a href="{{ route('admin.dashboard') }}#waiting" class="mt-3 flex gap-2 rounded-xl bg-brand-400/10 px-3 py-2 text-xs text-brand-800 hover:underline dark:text-brand-200">
@@ -59,8 +66,14 @@
                     <dl class="mt-6 space-y-2 border-t border-ink-100 pt-4 text-sm dark:border-white/[0.06]">
                         <div class="flex justify-between"><dt class="text-ink-500">Avg per day</dt><dd class="num">₱{{ number_format($net / max(1, $dayCount), 2) }}</dd></div>
                         <div class="flex justify-between"><dt class="text-ink-500">Best day</dt><dd class="num">{{ $bestDay ? $bestDay['date']->format('D j').' · ₱'.number_format($bestDay['net'], 0) : '—' }}</dd></div>
+                        <div class="flex justify-between"><dt class="text-ink-500">COGS %</dt><dd class="num">{{ $sales > 0 ? number_format($totals['cogs'] / $sales * 100, 1).'%' : '—' }}</dd></div>
+                        <div class="flex justify-between"><dt class="text-ink-500">Costing coverage</dt><dd class="num">{{ $totals['coverage'] !== null ? number_format($totals['coverage'], 1).'%' : '—' }}</dd></div>
+                    </dl>
+
+                    {{-- Kept apart from profit on purpose: cash position, not whether the shop made money. --}}
+                    <dl class="mt-4 space-y-2 rounded-xl bg-ink-100/70 p-4 text-sm dark:bg-white/[0.04]">
+                        <div class="flex justify-between"><dt class="text-ink-500">Money movement <span class="text-xs">(not profit)</span></dt><dd @class(['num font-semibold', 'text-loss-600 dark:text-loss-400' => $totals['money_movement'] < 0])>{{ $totals['money_movement'] < 0 ? '−' : '' }}₱{{ number_format(abs($totals['money_movement']), 2) }}</dd></div>
                         <div class="flex justify-between"><dt class="text-ink-500">Restock costs</dt><dd class="num">₱{{ number_format($totals['stock_purchases'], 2) }}</dd></div>
-                        <div class="flex justify-between"><dt class="text-ink-500">Restock cost %</dt><dd class="num">{{ $sales > 0 ? number_format($totals['stock_purchases'] / $sales * 100, 1).'%' : '—' }}</dd></div>
                     </dl>
                 </div>
 
@@ -99,7 +112,7 @@
                 <div class="flex items-center justify-between border-b border-ink-200 px-5 py-4 dark:border-white/[0.07]">
                     <div>
                         <h2 class="font-semibold">Daily ledger</h2>
-                        <p class="text-xs text-ink-500">Newest first. Net = Sales − Restock costs − Expenses.</p>
+                        <p class="text-xs text-ink-500">Newest first. Net = Sales − COGS − Expenses.</p>
                     </div>
                     <a href="{{ route('admin.exports.download', ['dataset' => 'orders'] + $exportRange) }}" download class="btn-ghost py-2 text-xs"><x-icon name="download" class="size-4" /> Orders CSV</a>
                 </div>
@@ -110,7 +123,7 @@
                                 <th class="px-5 py-3 font-semibold">Date</th>
                                 <th class="px-3 py-3 text-right font-semibold">Orders</th>
                                 <th class="px-3 py-3 text-right font-semibold">Sales</th>
-                                <th class="px-3 py-3 text-right font-semibold">Restock</th>
+                                <th class="px-3 py-3 text-right font-semibold">COGS</th>
                                 <th class="px-3 py-3 text-right font-semibold">Expenses</th>
                                 <th class="px-3 py-3 text-right font-semibold">Net</th>
                                 <th class="px-5 py-3 text-right font-semibold">Margin</th>
@@ -125,7 +138,7 @@
                                     </td>
                                     <td class="num px-3 py-2.5 text-right text-ink-500">{{ $row['orders'] ?: '—' }}</td>
                                     <td class="num px-3 py-2.5 text-right">{{ number_format($row['sales'], 2) }}</td>
-                                    <td class="num px-3 py-2.5 text-right text-ink-500">{{ $row['stock_purchases'] ? number_format($row['stock_purchases'], 2) : '—' }}</td>
+                                    <td class="num px-3 py-2.5 text-right text-ink-500">{{ $row['cogs'] ? number_format($row['cogs'], 2) : '—' }}</td>
                                     <td class="num px-3 py-2.5 text-right text-ink-500">{{ $row['expenses'] ? number_format($row['expenses'], 2) : '—' }}</td>
                                     <td @class(['num px-3 py-2.5 text-right font-semibold', 'text-loss-600 dark:text-loss-400' => $row['net'] < 0])>{{ $row['net'] < 0 ? '('.number_format(abs($row['net']), 2).')' : number_format($row['net'], 2) }}</td>
                                     <td class="num px-5 py-2.5 text-right text-ink-500">{{ $row['sales'] > 0 ? number_format($row['net'] / $row['sales'] * 100, 1).'%' : '—' }}</td>
@@ -137,7 +150,7 @@
                                 <td class="px-5 py-3">Total</td>
                                 <td class="num px-3 py-3 text-right">{{ number_format($totals['orders']) }}</td>
                                 <td class="num px-3 py-3 text-right">{{ number_format($totals['sales'], 2) }}</td>
-                                <td class="num px-3 py-3 text-right">{{ number_format($totals['stock_purchases'], 2) }}</td>
+                                <td class="num px-3 py-3 text-right">{{ number_format($totals['cogs'], 2) }}</td>
                                 <td class="num px-3 py-3 text-right">{{ number_format($totals['expenses'], 2) }}</td>
                                 <td @class(['num px-3 py-3 text-right', 'text-loss-600 dark:text-loss-400' => $net < 0])>{{ $net < 0 ? '('.number_format(abs($net), 2).')' : number_format($net, 2) }}</td>
                                 <td class="num px-5 py-3 text-right">{{ $sales > 0 ? number_format($net / $sales * 100, 1).'%' : '—' }}</td>

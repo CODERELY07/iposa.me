@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\CostingMethod;
 use App\Enums\StockMovementReason;
 use App\Models\Delivery;
 use App\Models\Expense;
@@ -68,14 +69,14 @@ it('sends a cashier\'s link change to the owner instead of applying it', functio
 
     $this->actingAs($this->cashier)->put(route('staff.products.links.update', $burger), [
         'name' => 'Free Burger',
-        'include_recipe_cost' => 1,
+        'costing_method' => 'manual_plus_linked',
         'variants' => [['label' => 'Regular', 'price' => 1, 'cost' => 0]],
         'recipe' => [['piece_item_id' => $this->menu['bun']->id, 'qty' => 2]],
     ])->assertRedirect(route('staff.products'));
 
     $burger->refresh();
     expect($burger->name)->toBe('Cheeseburger')
-        ->and($burger->include_recipe_cost)->toBeFalse()
+        ->and($burger->costing_method)->toBe(CostingMethod::ManualOnly)
         ->and((float) $this->menu['burgerRegular']->refresh()->price)->toBe(109.0)
         ->and($burger->recipeLines)->toHaveCount(2);
 

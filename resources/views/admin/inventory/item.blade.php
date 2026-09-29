@@ -18,7 +18,7 @@
         'categories' => $categories->map(fn ($category) => ['id' => $category->id, 'name' => $category->name, 'color' => $category->color])->values(),
         'variants' => array_values($formState['variants']),
         'recipe' => array_values($formState['recipe']),
-        'includeRecipeCost' => $recipesEnabled && $formState['includeRecipeCost'],
+        'costingMethod' => $recipesEnabled ? $formState['costingMethod'] : 'manual_only',
         'pieceCosts' => $pieceCosts,
         'pieceUnits' => $pieceUnits,
         'pieceStock' => $pieceStock,
@@ -162,18 +162,30 @@
                     const category = this.categories.find((c) => String(c.id) === String(this.categoryId));
                     return this.tones[category?.color ?? 'ink'];
                 },
+                // null means not typed, not zero -- the cost box being blank must not read as a free item.
+                manualCostFor(index) {
+                    const raw = this.variants[index].cost;
+                    return raw === '' || raw === null || raw === undefined || isNaN(parseFloat(raw)) ? null : parseFloat(raw);
+                },
+                // null means nothing linked to this size, not zero.
+                linkedCostFor(variantIndex) {
+                    const lines = this.recipe.filter((line) => this.isRecipeSizeChecked(line, variantIndex));
+                    if (lines.length === 0) return null;
+                    return lines.reduce((total, line) => total + (this.pieceCosts[line.piece_item_id] || 0) * (parseFloat(line.qty) || 0), 0);
+                },
                 costPerSale(index) {
-                    const own = parseFloat(this.variants[index].cost) || 0;
-                    return Math.round((own + (this.includeRecipeCost ? this.recipeCostFor(index) : 0)) * 100) / 100;
+                    const manual = this.manualCostFor(index);
+                    const linked = this.linkedCostFor(index);
+                    let cost = null;
+                    if (this.costingMethod === 'manual_only') cost = manual;
+                    else if (this.costingMethod === 'linked_only') cost = linked;
+                    else cost = (manual !== null && linked !== null) ? manual + linked : null;
+                    return cost === null ? null : Math.round(cost * 100) / 100;
                 },
                 margin(index) {
                     const price = parseFloat(this.variants[index].price);
-                    return price > 0 ? ((price - this.costPerSale(index)) / price) * 100 : null;
-                },
-                recipeCostFor(variantIndex) {
-                    return this.recipe
-                        .filter((line) => this.isRecipeSizeChecked(line, variantIndex))
-                        .reduce((total, line) => total + (this.pieceCosts[line.piece_item_id] || 0) * (parseFloat(line.qty) || 0), 0);
+                    const cost = this.costPerSale(index);
+                    return (price > 0 && cost !== null) ? ((price - cost) / price) * 100 : null;
                 },
                 // What's actually on the shelf for a linked piece, so a wrong pick or an
                 // empty shelf shows up while setting up the link, not after the first sale fails.
@@ -299,6 +311,7 @@
                                     <div class="relative">
                                         <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-400">₱</span>
                                         <input x-model="variant.cost" :name="`variants[${index}][cost]`" :disabled="! isMenu" type="number" step="0.01" min="0" class="field num pl-7 text-right" placeholder="0.00" aria-label="Cost">
+                                        <p x-show="variant.costStale" class="mt-1 text-right text-[11px] text-ink-400" title="Not reviewed in over 90 days — still used as typed, just a nudge to double check it.">not reviewed in a while</p>
                                     </div>
                                     <div class="relative">
                                         <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-400">₱</span>
@@ -381,33 +394,34 @@
                                     <x-icon name="plus" class="size-4" /> Link a piece or liquid
                                 </button>
 
-                                {{-- Added at every sale, never copied into the Cost box: it can't be counted twice and follows price changes. --}}
+                                {{-- Stock always leaves the shelf either way; this only decides what counts toward cost. --}}
                                 <div x-show="recipe.length" class="mt-4 rounded-xl bg-ink-100/70 p-4 dark:bg-white/[0.04]">
-                                    <input type="hidden" name="include_recipe_cost" value="0" :disabled="! isMenu">
-                                    <label class="flex cursor-pointer items-start gap-3">
-                                        <input x-model="includeRecipeCost" type="checkbox" name="include_recipe_cost" value="1" :disabled="! isMenu" class="mt-0.5 size-4 rounded border-ink-300 text-brand-600 focus:ring-brand-500">
-                                        <span>
-                                            <span class="block text-sm font-semibold">Include linked pieces & liquids in cost</span>
-                                            <span class="text-xs text-ink-500">Type only your own cost above. The app adds what the links cost at today's prices to every sale.</span>
-                                        </span>
-                                    </label>
-                                    <p x-show="! includeRecipeCost" class="mt-3 flex gap-2 rounded-lg bg-loss-500/10 px-3 py-2 text-xs text-loss-700 dark:text-loss-300">
+                                    <label class="field-label" for="costing-method-select">How is this size's cost worked out?</label>
+                                    <select x-model="costingMethod" name="costing_method" id="costing-method-select" :disabled="! isMenu" class="field mt-1.5 max-w-sm">
+                                        <option value="manual_only">Manual cost only</option>
+                                        <option value="linked_only">Linked pieces & liquids only</option>
+                                        <option value="manual_plus_linked">Manual cost + linked pieces & liquids</option>
+                                    </select>
+                                    <p x-show="costingMethod === 'linked_only'" class="mt-3 flex gap-2 rounded-lg bg-ink-200/60 px-3 py-2 text-xs text-ink-600 dark:bg-white/[0.06] dark:text-ink-300">
                                         <x-icon name="alert" class="mt-0.5 size-3.5 shrink-0" />
-                                        <span>Sales will take these off the shelf but won't count what they cost. Tick the box, or make sure the cost you typed above already includes them.</span>
+                                        <span>The cost you typed above is ignored for this size. Only the linked cost below counts.</span>
                                     </p>
                                     <ul class="mt-3 space-y-1 text-xs text-ink-500">
                                         <template x-for="(variant, index) in variants" :key="index">
                                             <li class="num">
                                                 <span x-show="variants.length > 1" class="font-medium text-ink-700 dark:text-ink-200" x-text="(variant.label || 'Size ' + (index + 1)) + ': '"></span>
-                                                <template x-if="includeRecipeCost">
+                                                <template x-if="costingMethod === 'manual_plus_linked'">
                                                     <span>
-                                                        Your cost <span x-text="formatPeso(parseFloat(variant.cost) || 0)"></span>
-                                                        + Linked <span x-text="formatPeso(recipeCostFor(index))"></span>
-                                                        = <span class="font-semibold text-ink-900 dark:text-white" x-text="formatPeso(costPerSale(index)) + ' per sale'"></span>
+                                                        Your cost <span x-text="manualCostFor(index) === null ? 'not set' : formatPeso(manualCostFor(index))"></span>
+                                                        + Linked <span x-text="linkedCostFor(index) === null ? 'nothing linked' : formatPeso(linkedCostFor(index))"></span>
+                                                        = <span :class="costPerSale(index) === null ? 'font-semibold text-loss-600 dark:text-loss-400' : 'font-semibold text-ink-900 dark:text-white'" x-text="costPerSale(index) === null ? 'cost not configured' : formatPeso(costPerSale(index)) + ' per sale'"></span>
                                                     </span>
                                                 </template>
-                                                <template x-if="! includeRecipeCost">
-                                                    <span>Linked items cost <span class="font-semibold text-ink-900 dark:text-white" x-text="formatPeso(recipeCostFor(index))"></span>, not counted in cost.</span>
+                                                <template x-if="costingMethod === 'linked_only'">
+                                                    <span>Linked cost <span :class="costPerSale(index) === null ? 'font-semibold text-loss-600 dark:text-loss-400' : 'font-semibold text-ink-900 dark:text-white'" x-text="costPerSale(index) === null ? 'not configured' : formatPeso(costPerSale(index)) + ' per sale'"></span></span>
+                                                </template>
+                                                <template x-if="costingMethod === 'manual_only'">
+                                                    <span>Linked items cost <span x-text="linkedCostFor(index) === null ? 'nothing' : formatPeso(linkedCostFor(index))"></span>, not counted — your typed cost is used instead.</span>
                                                 </template>
                                             </li>
                                         </template>
@@ -590,7 +604,7 @@
                             <template x-for="(variant, index) in variants" :key="index">
                                 <li class="flex justify-between">
                                     <span class="text-ink-500" x-text="variant.label || 'Size'"></span>
-                                    <span class="num font-semibold" x-text="formatPeso((parseFloat(variant.price) || 0) - costPerSale(index))"></span>
+                                    <span class="num font-semibold" x-text="costPerSale(index) === null ? '—' : formatPeso((parseFloat(variant.price) || 0) - costPerSale(index))"></span>
                                 </li>
                             </template>
                         </ul>

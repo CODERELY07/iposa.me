@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CostingMethod;
 use App\Enums\ItemKind;
 use App\Models\Concerns\BelongsToBusiness;
 use Database\Factories\ItemFactory;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['business_id', 'category_id', 'kind', 'name', 'unit', 'on_hand', 'low_threshold', 'unit_cost', 'include_recipe_cost', 'include_audit_cost', 'archived_at'])]
+#[Fillable(['business_id', 'category_id', 'kind', 'name', 'unit', 'on_hand', 'low_threshold', 'unit_cost', 'costing_method', 'include_audit_cost', 'archived_at'])]
 class Item extends Model
 {
     /** @use HasFactory<ItemFactory> */
@@ -45,7 +46,7 @@ class Item extends Model
             'on_hand' => 'decimal:3',
             'low_threshold' => 'decimal:3',
             'unit_cost' => 'decimal:6',
-            'include_recipe_cost' => 'boolean',
+            'costing_method' => CostingMethod::class,
             'include_audit_cost' => 'boolean',
             'archived_at' => 'datetime',
         ];
@@ -90,29 +91,46 @@ class Item extends Model
     }
 
     /**
-     * What the linked pieces and liquids of one sale of this size cost, at their current cost per unit.
-     * Expects `recipeLines.piece` to be loaded.
+     * What the linked pieces and liquids of one sale of this size cost, at their
+     * current cost per unit. Null when nothing is linked to this size -- there is
+     * no recipe cost to report, not a free one. Expects `recipeLines.piece` loaded.
      */
-    public function linkedCostFor(ItemVariant $variant): float
+    public function linkedCostFor(ItemVariant $variant): ?float
     {
-        return (float) $this->recipeLines
-            ->filter(fn (RecipeLine $line) => $line->appliesTo($variant))
-            ->sum(fn (RecipeLine $line) => (float) $line->qty * (float) ($line->piece?->unit_cost ?? 0));
+        $lines = $this->recipeLines->filter(fn (RecipeLine $line) => $line->appliesTo($variant));
+
+        if ($lines->isEmpty()) {
+            return null;
+        }
+
+        return round((float) $lines->sum(fn (RecipeLine $line) => (float) $line->qty * (float) ($line->piece?->unit_cost ?? 0)), 2);
     }
 
     /**
-     * The cost of one sale of this size: what the owner typed, plus the linked
-     * pieces and liquids when the owner asked for them to be included.
+     * The cost of one sale of this size, per the item's costing method. Null when
+     * the method needs a piece that isn't configured -- a menu item's cost must
+     * never silently become ₱0 just because nobody has priced it yet.
      */
-    public function costPerSale(ItemVariant $variant): float
+    public function costPerSale(ItemVariant $variant): ?float
     {
-        $cost = (float) $variant->cost;
+        $manual = $variant->cost !== null ? (float) $variant->cost : null;
+        $linked = $this->linkedCostFor($variant);
 
-        if ($this->include_recipe_cost) {
-            $cost += $this->linkedCostFor($variant);
-        }
+        $cost = match ($this->costing_method) {
+            CostingMethod::ManualOnly => $manual,
+            CostingMethod::LinkedOnly => $linked,
+            CostingMethod::ManualPlusLinked => $manual !== null && $linked !== null ? $manual + $linked : null,
+        };
 
-        return round($cost, 2);
+        return $cost !== null ? round($cost, 2) : null;
+    }
+
+    /**
+     * Whether costPerSale() can actually price this size right now.
+     */
+    public function hasKnownCost(ItemVariant $variant): bool
+    {
+        return $this->costPerSale($variant) !== null;
     }
 
     /**

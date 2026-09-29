@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\CostingMethod;
 use App\Enums\ExpenseCategory;
 use App\Models\AuditLine;
 use App\Models\Expense;
@@ -13,7 +14,7 @@ beforeEach(function () {
     $this->business = $this->owner->business;
     $this->ketchup = Item::withoutGlobalScopes()->create(['business_id' => $this->business->id, 'kind' => 'bulk', 'name' => 'Ketchup', 'unit' => 'ml', 'on_hand' => 3000, 'unit_cost' => 0.05]);
     $this->ketchup->containers()->create(['label' => 'jug', 'size' => 3000, 'price' => 150, 'sort' => 0]);
-    $this->burger = Item::withoutGlobalScopes()->create(['business_id' => $this->business->id, 'kind' => 'menu', 'name' => 'Burger', 'include_recipe_cost' => true]);
+    $this->burger = Item::withoutGlobalScopes()->create(['business_id' => $this->business->id, 'kind' => 'menu', 'name' => 'Burger', 'costing_method' => CostingMethod::ManualPlusLinked]);
     $this->regular = $this->burger->variants()->create(['label' => 'Regular', 'price' => 100, 'cost' => 40]);
     $this->burger->recipeLines()->create(['piece_item_id' => $this->ketchup->id, 'qty' => 15]);
 
@@ -43,13 +44,12 @@ it('gives back exactly what the recipes over-charged when the count says they us
         ->and((float) $line->recipe_surplus_costed)->toBe(30.0)
         ->and($today['cogs'])->toBe(407.5)
         ->and($today['bulk'])->toBe(-1.5)
-        // Net is cash basis and doesn't move from this: no expenses were logged,
-        // so it's just the 10 burgers' sales (₱1,000) with nothing subtracted.
-        ->and($today['net'])->toBe(1000.0);
+        // Net Profit is COGS-based: 1,000 sales − 407.5 COGS, no expenses logged.
+        ->and($today['net'])->toBe(592.5);
 });
 
 it('gives nothing back for recipes whose cost the sales never charged', function () {
-    $this->burger->update(['include_recipe_cost' => false]);
+    $this->burger->update(['costing_method' => CostingMethod::ManualOnly]);
 
     ($this->sell)(10);
     ($this->count)(2880, 'recipe');
@@ -172,7 +172,7 @@ it('keeps recipe suggestions inside their shop', function () {
     expect(($this->line)()->recipe_fix)->toBeNull();
 });
 
-it('subtracts both stock purchases and supplies from profit, in separate buckets', function () {
+it('keeps stock purchases out of profit but counts them in money movement, separate from supplies', function () {
     $log = fn (ExpenseCategory $category, float $amount) => Expense::withoutGlobalScopes()->create([
         'business_id' => $this->business->id, 'date' => today(), 'category' => $category,
         'kind' => $category->defaultKind(), 'description' => $category->label(), 'amount' => $amount, 'logged_by' => 'Owner',
@@ -183,7 +183,8 @@ it('subtracts both stock purchases and supplies from profit, in separate buckets
 
     expect(($this->today)()['expenses'])->toBe(80.0)
         ->and(($this->today)()['stock_purchases'])->toBe(500.0)
-        ->and(($this->today)()['net'])->toBe(-580.0);
+        ->and(($this->today)()['net'])->toBe(-80.0)
+        ->and(($this->today)()['money_movement'])->toBe(-580.0);
 });
 
 it('logs the owner\'s restock as a stock purchase only for items whose use is costed', function () {

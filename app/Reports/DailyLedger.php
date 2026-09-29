@@ -14,20 +14,24 @@ use Illuminate\Support\Facades\DB;
 /**
  * One row per day: the same columns as the owner's spreadsheet.
  *
- *   Net = Sales − Restock costs − Operating expenses
+ *   Net Profit    = Sales − COGS − Operating expenses
+ *   Money Movement = Sales − Operating expenses − Restock costs
  *
- * Cash basis, on purpose: stock counts against profit the day it's paid for, not
- * the day it sells. A restock only counts here if it was logged as an expense
- * (the "log this as an expense" box on the restock form) — same as every other
- * cash figure in this app. `cogs` and `bulk` are kept for the Ingredients and
- * Bulk drill-down pages and the recipe-surplus math, but no longer feed Net.
+ * COGS is the locked-in cost of exactly what sold (`order_lines.unit_cost`,
+ * fixed at checkout — never recalculated from today's prices). A sale with an
+ * unconfigured cost contributes nothing to COGS, which is why `coverage` exists:
+ * it says what share of sales revenue actually had a known cost, so Net Profit's
+ * trustworthiness is visible, not just its number. Restocks are a cash outflow,
+ * not a profit expense — they convert cash into inventory, and only count once
+ * that inventory is sold, via COGS. `bulk` is kept for the Bulk drill-down page
+ * and the recipe-surplus math, but (like COGS) never feeds Money Movement.
  *
  * Every report and dashboard reads from here, so the numbers always match.
  */
 class DailyLedger
 {
     /**
-     * @return Collection<string, array{date: CarbonImmutable, orders: int, sales: float, cogs: float, bulk: float, audited: bool, expenses: float, payables: float, missing: float, stock_purchases: float, net: float}>
+     * @return Collection<string, array{date: CarbonImmutable, orders: int, sales: float, cogs: float, known_revenue: float, bulk: float, audited: bool, expenses: float, payables: float, missing: float, stock_purchases: float, net: float, money_movement: float}>
      */
     public function forRange(Business $business, CarbonInterface $from, CarbonInterface $to): Collection
     {
@@ -49,6 +53,8 @@ class DailyLedger
                 'orders' => (int) ($sales[$key]->orders ?? 0),
                 'sales' => round((float) ($sales[$key]->sales ?? 0), 2),
                 'cogs' => round((float) ($cogs[$key]->cogs ?? 0), 2),
+                // Revenue from lines whose cost is actually known -- the numerator for coverage.
+                'known_revenue' => round((float) ($cogs[$key]->known_revenue ?? 0), 2),
                 'bulk' => round((float) ($bulk[$key]->bulk ?? 0), 2),
                 // Whether the day was closed at all, regardless of whether any counted
                 // item's extra usage was turned on to count against profit.
@@ -58,7 +64,8 @@ class DailyLedger
                 'missing' => round((float) ($expenses[$key]->missing ?? 0), 2),
                 'stock_purchases' => round((float) ($expenses[$key]->stock_purchases ?? 0), 2),
             ];
-            $row['net'] = round($row['sales'] - $row['expenses'] - $row['stock_purchases'], 2);
+            $row['net'] = round($row['sales'] - $row['cogs'] - $row['expenses'], 2);
+            $row['money_movement'] = round($row['sales'] - $row['expenses'] - $row['stock_purchases'], 2);
 
             $rows->put($key, $row);
         }
@@ -67,16 +74,21 @@ class DailyLedger
     }
 
     /**
-     * Column totals for a set of ledger rows.
+     * Column totals for a set of ledger rows. `coverage` is revenue-weighted (not
+     * a count of items) so two unpriced items can't hide behind many cheap, priced
+     * ones -- null when there were no sales to measure coverage against.
      *
      * @param  Collection<string, array<string, mixed>>  $rows
-     * @return array{orders: int, sales: float, cogs: float, bulk: float, expenses: float, payables: float, missing: float, stock_purchases: float, net: float}
+     * @return array{orders: int, sales: float, cogs: float, bulk: float, expenses: float, payables: float, missing: float, stock_purchases: float, net: float, money_movement: float, coverage: ?float}
      */
     public function totals(Collection $rows): array
     {
+        $sales = round($rows->sum('sales'), 2);
+        $knownRevenue = round($rows->sum('known_revenue'), 2);
+
         return [
             'orders' => (int) $rows->sum('orders'),
-            'sales' => round($rows->sum('sales'), 2),
+            'sales' => $sales,
             'cogs' => round($rows->sum('cogs'), 2),
             'bulk' => round($rows->sum('bulk'), 2),
             'expenses' => round($rows->sum('expenses'), 2),
@@ -84,6 +96,8 @@ class DailyLedger
             'missing' => round($rows->sum('missing'), 2),
             'stock_purchases' => round($rows->sum('stock_purchases'), 2),
             'net' => round($rows->sum('net'), 2),
+            'money_movement' => round($rows->sum('money_movement'), 2),
+            'coverage' => $sales > 0 ? round($knownRevenue / $sales * 100, 1) : null,
         ];
     }
 
@@ -149,7 +163,7 @@ class DailyLedger
             ->where('orders.business_id', $business->id)
             ->whereIn('orders.status', $this->countedStatuses())
             ->whereBetween('orders.paid_at', [$from, $to])
-            ->selectRaw('date(orders.paid_at) as day, sum(order_lines.qty * order_lines.unit_cost) as cogs')
+            ->selectRaw('date(orders.paid_at) as day, sum(order_lines.qty * order_lines.unit_cost) as cogs, sum(case when order_lines.unit_cost is not null then order_lines.qty * order_lines.price else 0 end) as known_revenue')
             ->groupByRaw('date(orders.paid_at)')
             ->get()
             ->keyBy('day');

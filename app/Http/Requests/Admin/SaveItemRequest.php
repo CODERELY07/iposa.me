@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Enums\CostingMethod;
 use App\Enums\ItemKind;
 use App\Enums\OrderType;
 use Illuminate\Foundation\Http\FormRequest;
@@ -63,7 +64,7 @@ class SaveItemRequest extends FormRequest
             'variants.*.cost' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
             'variants.*.price' => ['required', 'numeric', 'min:0', 'max:9999999'],
 
-            'include_recipe_cost' => ['nullable', 'boolean'],
+            'costing_method' => ['nullable', Rule::enum(CostingMethod::class)],
             'recipe' => ['nullable', 'array', 'max:30'],
             'recipe.*.piece_item_id' => [
                 'required', 'integer',

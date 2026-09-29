@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\CostingMethod;
 use App\Enums\ItemKind;
 use App\Enums\StockMovementReason;
 use App\Http\Controllers\Controller;
@@ -247,11 +248,13 @@ class ItemController extends Controller
                 'variants' => old('variants', $variants->map(fn ($variant) => [
                     'id' => $variant->id,
                     'label' => $variant->label,
-                    'cost' => (float) $variant->cost,
+                    'cost' => $variant->cost !== null ? (float) $variant->cost : null,
+                    'costUpdatedAt' => $variant->cost_updated_at?->toIso8601String(),
+                    'costStale' => $variant->isCostStale(),
                     'price' => (float) $variant->price,
-                ])->values()->all() ?: [['id' => null, 'label' => 'Regular', 'cost' => null, 'price' => null]]),
+                ])->values()->all() ?: [['id' => null, 'label' => 'Regular', 'cost' => null, 'costUpdatedAt' => null, 'costStale' => false, 'price' => null]]),
                 // New items start with links counted in cost, so nothing linked goes uncosted by default.
-                'includeRecipeCost' => (bool) old('include_recipe_cost', $item->exists ? $item->include_recipe_cost : true),
+                'costingMethod' => old('costing_method', $item->exists && $item->costing_method !== null ? $item->costing_method->value : CostingMethod::ManualPlusLinked->value),
                 'unit' => old('unit', $item->unit ?? ''),
                 'containers' => array_values(old('containers', $containers->map(fn ($container) => [
                     'id' => $container->id,
@@ -298,7 +301,7 @@ class ItemController extends Controller
             $data['recipe'] ??= [];
         } else {
             // Without ingredient links on the plan the form has no links: keep the ones saved.
-            unset($data['recipe'], $data['include_recipe_cost']);
+            unset($data['recipe'], $data['costing_method']);
         }
 
         return $data;

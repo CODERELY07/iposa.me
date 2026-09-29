@@ -219,7 +219,8 @@ class DayBreakdown
 
     /**
      * The day's expenses, split the way the P&L splits them: `total` is operating
-     * expenses, `stockPurchases` is restock costs — both count against Net.
+     * expenses (counts against Net Profit), `stockPurchases` is restock costs (a
+     * cash outflow only — it counts against Net once the stock sells, via COGS).
      *
      * @return array{entries: Collection<int, Expense>, total: float, stockPurchases: float}
      */

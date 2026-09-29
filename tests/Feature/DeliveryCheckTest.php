@@ -48,7 +48,9 @@ it('settles a matching delivery: the price sets the cost and is logged as a rest
         ->and((float) $expense->amount)->toBe(320.0)
         ->and(($this->today)()['expenses'])->toBe(0.0)
         ->and(($this->today)()['stock_purchases'])->toBe(320.0)
-        ->and(($this->today)()['net'])->toBe(-320.0)
+        // Net Profit doesn't move for a restock with no sales yet; money movement does.
+        ->and(($this->today)()['net'])->toBe(0.0)
+        ->and(($this->today)()['money_movement'])->toBe(-320.0)
         ->and(Delivery::withoutGlobalScopes()->sole()->status)->toBe(Delivery::CHECKED);
 });
 
@@ -64,9 +66,10 @@ it('logs stock that never reached the shelf as missing, at the receipt price', f
         ->and((float) $this->menu['bun']->refresh()->on_hand)->toBe(140.0)
         ->and((float) $this->menu['bun']->unit_cost)->toBe(7.5)
         ->and(($this->today)()['missing'])->toBe(75.0)
-        // Net is cash basis: the ₱375 paid is a restock cost, on top of the ₱75 missing-stock expense.
         ->and(($this->today)()['stock_purchases'])->toBe(375.0)
-        ->and(($this->today)()['net'])->toBe(-450.0);
+        // Net Profit sees the ₱75 missing-stock expense only; the ₱375 restock is money movement, not profit.
+        ->and(($this->today)()['net'])->toBe(-75.0)
+        ->and(($this->today)()['money_movement'])->toBe(-450.0);
 });
 
 it('counts a shortage as missing even when the purchase is not logged', function () {

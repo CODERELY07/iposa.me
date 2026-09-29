@@ -6,7 +6,7 @@
             <div class="flex flex-wrap items-start justify-between gap-3 px-6 pt-6">
                 <div>
                     <h2 class="font-semibold">Expenses</h2>
-                    <p class="text-xs text-ink-500">Restock costs and operating expenses each count against profit as their own line — restock the day it's paid for, not the day it sells.</p>
+                    <p class="text-xs text-ink-500">Operating expenses count against profit today. Restock costs are a cash outflow only — they count against profit once that stock is sold, through the Ingredients line.</p>
                 </div>
                 @if ($business->hasFeature('expenses'))
                     <a href="{{ route('admin.expenses') }}" class="btn-ghost py-2">Add or edit expenses</a>
@@ -47,8 +47,8 @@
                                 <td class="num px-6 py-3 text-right">₱{{ number_format($data['total'], 2) }}</td>
                             </tr>
                             @if ($data['stockPurchases'] > 0)
-                                <tr class="font-semibold">
-                                    <td class="px-6 pb-3" colspan="3">Restock costs</td>
+                                <tr class="font-semibold text-ink-500">
+                                    <td class="px-6 pb-3" colspan="3">Restock costs <span class="text-xs font-normal">(not counted in profit yet)</span></td>
                                     <td class="num px-6 pb-3 text-right">₱{{ number_format($data['stockPurchases'], 2) }}</td>
                                 </tr>
                             @endif

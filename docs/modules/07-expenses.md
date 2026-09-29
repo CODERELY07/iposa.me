@@ -45,17 +45,17 @@ One spreadsheet-like row: date, category, description, amount. `StoreExpenseRequ
 
 ## Categories & kind
 
-Every category counts against [Net profit](08-reports.md) (cash basis), but lands on a different P&L line:
+Every category except Stock purchase counts against [Net profit](08-reports.md) as an operating expense, the day it's logged:
 
 | Category | Default kind | Counted as |
 |---|---|---|
 | Utilities, Rent, Wages | Fixed | Operating expenses |
 | Supplies, Misc | Variable | Operating expenses |
-| **Stock purchase** | Variable | **Restock costs** — its own P&L line, separate from ingredient cost (COGS), which is still tracked per sale for margin reporting but no longer feeds Net |
+| **Stock purchase** | Variable | **Not an operating expense.** A cash outflow only — it counts against Net later, through COGS, once that stock actually sells |
 | Payables (equipment) | Fixed — system only | Operating expenses |
 | **Missing stock** | Variable — system only | Operating expenses — stock bought that never reached the shelf ([checked deliveries](04-inventory.md#cashier-products--deliveries)) |
 
-`ExpenseCategory::lowersProfit()` is the one place Operating-expenses-vs-Restock-costs is decided. Things you buy but never track in inventory (ice, napkins) belong in **Supplies**.
+`ExpenseCategory::lowersProfit()` is the one place Operating-expenses-vs-Stock-purchase is decided. Things you buy but never track in inventory (ice, napkins) belong in **Supplies**.
 
 `ExpenseKind` (fixed/variable) is what later makes a break-even chart possible; it's recorded from day one even though nothing reads it yet.
 

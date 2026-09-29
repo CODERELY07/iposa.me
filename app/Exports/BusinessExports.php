@@ -26,12 +26,13 @@ class BusinessExports
      */
     public function ledger(Business $business, CarbonInterface $from, CarbonInterface $to): iterable
     {
-        yield ['Date', 'Orders', 'Sales', 'Restock costs', 'Expenses', 'Net', 'Margin %'];
+        yield ['Date', 'Orders', 'Sales', 'COGS', 'Expenses', 'Net', 'Margin %', 'Restock costs', 'Money movement'];
 
         foreach ($this->ledger->forRange($business, $from, $to) as $row) {
             yield [
-                $row['date']->toDateString(), $row['orders'], $row['sales'], $row['stock_purchases'], $row['expenses'], $row['net'],
+                $row['date']->toDateString(), $row['orders'], $row['sales'], $row['cogs'], $row['expenses'], $row['net'],
                 $row['sales'] > 0 ? round($row['net'] / $row['sales'] * 100, 1) : null,
+                $row['stock_purchases'], $row['money_movement'],
             ];
         }
     }
@@ -76,7 +77,11 @@ class BusinessExports
         foreach ($items as $item) {
             foreach ($item->variants as $variant) {
                 /** @var ItemVariant $variant */
-                yield [$item->name, $item->category?->name, $variant->label, (float) $variant->cost, (float) $variant->price, $variant->profit(), $variant->marginPercent()];
+                yield [
+                    $item->name, $item->category?->name, $variant->label,
+                    $variant->cost !== null ? (float) $variant->cost : null,
+                    (float) $variant->price, $variant->profit(), $variant->marginPercent(),
+                ];
             }
         }
     }

@@ -11,7 +11,7 @@
     $sales = $totals['sales'];
     $pl = [
         ['Sales', $sales, 'total'],
-        ['Restock costs', -$totals['stock_purchases'], 'cost'],
+        ['COGS (what sold actually cost)', -$totals['cogs'], 'cost'],
         ['Operating expenses (rent, wages, utilities, supplies, payables)', -$totals['expenses'], 'cost'],
         ['Net profit', $totals['net'], 'result'],
     ];
@@ -102,7 +102,7 @@
     <td><div class="kpi"><div class="label">Sales</div><div class="value num">{{ $peso($sales) }}</div><div class="small muted">{{ number_format($orders) }} {{ \Illuminate\Support\Str::plural('order', $orders) }}</div></div></td>
     <td><div class="kpi"><div class="label">Net profit</div><div class="value num {{ $totals['net'] < 0 ? 'loss' : '' }}">{{ $peso($totals['net']) }}</div><div class="small muted">{{ $pct($margin) }} of sales</div></div></td>
     <td><div class="kpi"><div class="label">Average order</div><div class="value num">{{ $peso($orders > 0 ? $sales / $orders : 0) }}</div><div class="small muted">{{ $peso($days->count() > 0 ? $sales / $days->count() : 0) }} sales per day</div></div></td>
-    <td><div class="kpi"><div class="label">Restock cost</div><div class="value num">{{ $pct($sales > 0 ? $totals['stock_purchases'] / $sales * 100 : null) }}</div><div class="small muted">stock bought, of sales</div></div></td>
+    <td><div class="kpi"><div class="label">Costing coverage</div><div class="value num {{ $totals['coverage'] !== null && $totals['coverage'] < 100 ? 'loss' : '' }}">{{ $pct($totals['coverage']) }}</div><div class="small muted">of sales revenue has a known cost</div></div></td>
 </tr></table>
 
 <h3>Profit and loss</h3>
@@ -122,6 +122,7 @@
 @if ($pendingDeliveries > 0)
     <div class="note">{{ $pendingDeliveries }} cashier {{ \Illuminate\Support\Str::plural('delivery', $pendingDeliveries) }} not checked against the receipt yet. A short delivery lowers profit once it's checked.</div>
 @endif
+<p class="small muted">Money movement (sales − expenses − restocks, not profit): {{ $peso($totals['money_movement']) }}. Restocks this period: {{ $peso($totals['stock_purchases']) }} — a cash outflow that only becomes COGS once it's sold.</p>
 
 <h3>Sales and profit {{ $byWeek ? 'per week' : 'per day' }}</h3>
 <p class="small muted"><span class="swatch sales"></span>Sales &nbsp; <span class="swatch profit"></span>Profit &nbsp; <span class="swatch lossbar"></span>Loss</p>
@@ -135,16 +136,16 @@
 {{-- 2. Daily ledger --}}
 <div class="section">
     <h2>Daily ledger</h2>
-    <p class="intro">Every day in the period. Net = Sales − Restock costs − Expenses.</p>
+    <p class="intro">Every day in the period. Net = Sales − COGS − Expenses.</p>
     <table class="data">
-        <thead><tr><th>Date</th><th class="r">Orders</th><th class="r">Sales</th><th class="r">Restock</th><th class="r">Expenses</th><th class="r">Net profit</th><th class="r">Margin</th></tr></thead>
+        <thead><tr><th>Date</th><th class="r">Orders</th><th class="r">Sales</th><th class="r">COGS</th><th class="r">Expenses</th><th class="r">Net profit</th><th class="r">Margin</th></tr></thead>
         <tbody>
         @foreach ($days as $day)
             <tr class="{{ $loop->even ? 'stripe' : '' }}">
                 <td class="num">{{ $day['date']->format('D, M j') }}</td>
                 <td class="r num">{{ $day['orders'] }}</td>
                 <td class="r num">{{ number_format($day['sales'], 2) }}</td>
-                <td class="r num">{{ number_format($day['stock_purchases'], 2) }}</td>
+                <td class="r num">{{ number_format($day['cogs'], 2) }}</td>
                 <td class="r num">{{ number_format($day['expenses'], 2) }}</td>
                 <td class="r num {{ $day['net'] < 0 ? 'loss' : '' }}">{{ $day['net'] < 0 ? '('.number_format(abs($day['net']), 2).')' : number_format($day['net'], 2) }}</td>
                 <td class="r num">{{ $day['sales'] > 0 ? $pct($day['net'] / $day['sales'] * 100) : '—' }}</td>
@@ -154,7 +155,7 @@
             <td>Total</td>
             <td class="r num">{{ number_format($orders) }}</td>
             <td class="r num">{{ number_format($sales, 2) }}</td>
-            <td class="r num">{{ number_format($totals['stock_purchases'], 2) }}</td>
+            <td class="r num">{{ number_format($totals['cogs'], 2) }}</td>
             <td class="r num">{{ number_format($totals['expenses'], 2) }}</td>
             <td class="r num {{ $totals['net'] < 0 ? 'loss' : '' }}">{{ $totals['net'] < 0 ? '('.number_format(abs($totals['net']), 2).')' : number_format($totals['net'], 2) }}</td>
             <td class="r num">{{ $pct($margin) }}</td>
@@ -293,7 +294,7 @@
         @endif
         </tbody>
     </table>
-    <p class="small muted" style="margin-top: 4pt">Profit here is after ingredients only, for comparing items to each other. It isn't part of the profit and loss above, which is cash basis: restock costs and expenses, not ingredient cost.</p>
+    <p class="small muted" style="margin-top: 4pt">Cost is each sale's locked-in COGS — the same figure that feeds the profit and loss above. An item without a configured cost shows ₱0 here and is excluded from Costing coverage.</p>
 </div>
 
 {{-- 4. Costs & stock --}}
@@ -399,14 +400,15 @@
                 <td>{{ $category['label'] }}</td>
                 <td class="r num">{{ $category['entries'] }}</td>
                 <td class="r num">{{ $peso($category['amount']) }}</td>
-                <td>{{ $category['lowers_profit'] ? 'Operating expenses' : 'Restock costs' }}</td>
+                <td>{{ $category['lowers_profit'] ? 'Operating expenses' : 'Money movement only (COGS counts it once sold)' }}</td>
                 <td><div class="bar-track"><div class="bar costbar" style="width: {{ $share($category['amount'], $expenseTotal) }}%"></div></div></td>
             </tr>
         @empty
             <tr><td colspan="5" class="muted">No expenses in this period.</td></tr>
         @endforelse
         @if ($expenseCategories->isNotEmpty())
-            <tr class="total"><td colspan="2">Counted in profit</td><td class="r num">{{ $peso($totals['expenses'] + $totals['stock_purchases']) }}</td><td colspan="2"></td></tr>
+            <tr class="total"><td colspan="2">Counted in profit (operating expenses)</td><td class="r num">{{ $peso($totals['expenses']) }}</td><td colspan="2"></td></tr>
+            <tr><td colspan="2">Stock purchases (cash only, not profit)</td><td class="r num">{{ $peso($totals['stock_purchases']) }}</td><td colspan="2"></td></tr>
         @endif
         </tbody>
     </table>

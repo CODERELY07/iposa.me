@@ -51,9 +51,9 @@ Everything a shop buys, stores and sells. Three kinds of stock, each counted the
 | Table | Columns |
 |---|---|
 | `categories` | `business_id`, `name` (unique per shop), `color`, `sort` |
-| `items` | `business_id`, `category_id`, `kind`, `name`, `unit`, `on_hand` (12,3), `low_threshold`, `unit_cost` (**14,6**), `include_recipe_cost`, `archived_at` |
+| `items` | `business_id`, `category_id`, `kind`, `name`, `unit`, `on_hand` (12,3), `low_threshold`, `unit_cost` (**14,6**), `costing_method`, `archived_at` |
 | `item_containers` | `item_id`, `label` (bottle, jug, tin), `size` (in the item's unit), `price` (per container), `sort` |
-| `item_variants` | `item_id`, `label`, `cost`, `price`, `sort` |
+| `item_variants` | `item_id`, `label`, `cost` (nullable — `NULL` means not configured, `0.00` means intentionally free), `cost_updated_at`, `price`, `sort` |
 | `recipe_lines` | `item_id`, `item_variant_id` (null = all sizes), `piece_item_id`, `qty` |
 | `stock_movements` | `business_id`, `item_id`, `qty_change`, `costed_qty` (the part a sale charged in its cost), `reason`, `order_id`, `audit_id`, `user_id`, `created_at` |
 | `recipe_changes` | `business_id`, `item_id`, `user_id`, `requested_by`, `status` (saved, pending, approved, rejected, replaced), `before`/`after` (JSON snapshots with names and units), `decided_by`, `decided_by_name`, `decided_at` |
@@ -67,7 +67,21 @@ Quantities are `decimal(12,3)` so half a bottle is exact. **Cost per unit keeps 
 
 The Excel pricing matrix: one row per size, each with its own **cost** and **selling price**. Margin is computed, never stored (`ItemVariant::costPerSale()`, `profit()`, `marginPercent()`).
 
-**Include linked pieces & liquids in cost** (`items.include_recipe_cost`). When on, the cost the owner types is *their own* cost (labor, packaging) and each sale adds what the links cost at that moment: ₱29 typed + 1 bun at ₱1 = **₱30 per sale**. It's added at every sale and never copied into the cost box, so it can't be counted twice and follows price changes. New menu items start with it on. With it off, the typed cost must already include the links; the editor warns, and Inventory tags the item **not in cost**. The menu export keeps the typed cost (so a re-import doesn't add the links twice) while its profit and margin use the full cost.
+### Costing methods
+
+Every menu item picks how its cost of goods sold (COGS) is worked out (`items.costing_method`, `App\Enums\CostingMethod`):
+
+| Method | COGS | Notes |
+|---|---|---|
+| **Manual cost only** | The typed cost | Linked pieces & liquids still leave the shelf on sale — this only decides what counts toward cost |
+| **Linked pieces & liquids only** | What the links cost at today's prices | The typed cost is ignored for COGS |
+| **Manual cost + linked pieces & liquids** | Typed cost + linked cost | New menu items start here |
+
+A manual cost is a first-class input, not a fallback — an owner's own calculated cost is valid even with no inventory linked at all. `cost` is **nullable**: `NULL` means "not configured," `0.00` means "intentionally free" (e.g. a promo item) — the app never turns a blank cost box into a silent ₱0. If a method needs a piece that isn't configured (no typed cost, or nothing linked), `Item::costPerSale()` returns `null` and the UI shows **Unknown** rather than a number, so profit reports can't be misled into thinking an unpriced item cost nothing. A sale's COGS is locked in at checkout (`order_lines.unit_cost`) and never recalculated later — see [Reports › Daily ledger](08-reports.md#daily-ledger).
+
+`item_variants.cost_updated_at` stamps when a manual cost last changed (only on an actual change, not every save). Past 90 days, the item edit page shows a quiet "not reviewed in a while" nudge — informational only, it never touches the cost itself; only the owner can say whether it's still right.
+
+With **Manual cost only** or an unconfigured **Linked only**, Inventory tags the item **not in cost**. The menu export keeps the typed cost (so a re-import doesn't add the links twice) while its profit and margin use the full COGS.
 
 The editor shows the margin live, colored green ≥50%, amber ≥25%, red below. `SaveItemRequest` requires at least one size with a price for menu items, and rejects duplicate size names.
 
@@ -103,9 +117,9 @@ The Bulk tab shows container items as "3 bottles · 3,000 ml" and "₱145 / bott
 
 1. On hand goes up by `quantity × container size`, logged as a **Restock** stock movement (not an adjustment).
 2. When a price is given, the cost per unit becomes what this purchase cost (`paid ÷ added`), and that container's price is updated for next time.
-3. Optionally (Negosyo plan) the payment is logged in Expenses, e.g. "Cooking oil · 1 tin (18,000 ml)". **The box is unticked by default**, so a restock only reaches Expenses — and only then counts against [Net profit](08-reports.md), which is cash basis — when the owner asks for it:
-   - as a **Stock purchase** when using the item already lowers profit elsewhere (`Item::isCostedWhenUsed()`): menu items that count themselves, bulk, pieces in a recipe, and all pieces when the shop counts them at closing. Shown as its own **Restock costs** line on the P&L, separate from ingredient cost (COGS), which is still tracked per sale for margin reporting but no longer feeds Net.
-   - as **Supplies** otherwise (a paper bag nobody links or counts), landing in **Operating expenses** instead.
+3. Optionally (Negosyo plan) the payment is logged in Expenses, e.g. "Cooking oil · 1 tin (18,000 ml)". **The box is unticked by default**, so a restock only reaches Expenses when the owner asks for it:
+   - as a **Stock purchase** when using the item already lowers profit elsewhere (`Item::isCostedWhenUsed()`): menu items that count themselves, bulk, pieces in a recipe, and all pieces when the shop counts them at closing. A Stock purchase is a cash outflow, not an operating expense — it counts against [Net profit](08-reports.md) later, through COGS, once that stock actually sells. It does count immediately in **Money Movement**.
+   - as **Supplies** otherwise (a paper bag nobody links or counts), landing in **Operating expenses** instead — counted against Net right away.
 
 Pieces and ready-made menu items (bottled water) can be restocked in their own unit too; made-to-order food can't. `App\Services\Inventory\RestockService`.
 
@@ -115,7 +129,7 @@ Pieces and ready-made menu items (bottled water) can be restocked in their own u
 
 **Liquids can be in recipes too.** Each sale then deducts the recipe amount (60 burgers × 15 ml = 900 ml), so Today shows how much ketchup is left before anyone counts. At closing the audit still counts the truth and corrects it — see [Closing audit › Liquids in recipes](06-closing-audit.md#liquids-in-recipes). Some liquids are better left audit-only: cooking oil is reused and topped up, so a per-sale amount would be fiction.
 
-The editor shows, per size, *your cost + linked = cost per sale*, with the **Include in cost** checkbox ([above](#menu-items--sizes)). An ingredient must belong to the same shop and be a piece or a bulk item (`Rule::exists` scoped by `business_id` and `kind`).
+The editor shows, per size, the breakdown for whichever [costing method](#costing-methods) is chosen — *your cost + linked = cost per sale*, *linked only*, or *your cost only, links not counted*. An ingredient must belong to the same shop and be a piece or a bulk item (`Rule::exists` scoped by `business_id` and `kind`).
 
 On the Tindahan plan the section is hidden and submitted recipe lines are ignored, but **links saved earlier are kept and keep working**: saving the item never deletes them, and the editor says what each sale still uses. On a plan with links, clearing every row removes them.
 
@@ -185,6 +199,8 @@ Deleting removes the item with its sizes and its own recipe lines, in one transa
 `InventoryTest`: delete an item with no history · refuse to delete one that was sold, counted or linked · no cross-shop delete · the editor offers delete only when it's allowed · create with sizes and size-specific recipe links · update syncs sizes · menu items need a priced size · pieces and bulk need a unit cost · cross-shop piece refused · on-hand edit logs an adjustment · archive/restore · CSV import (including a broken row) · inline category · recipes hidden on Tindahan.
 
 `RecipeChangesTest`, `DeliveryCheckTest`, `StaffProductsTest`: owner saves recorded only when links change · approve/reject from Today · replaced requests · no-op requests · stale and archived-piece approvals refused · cross-shop and cashier approval blocked · deliveries on Today · matching, short, over-recorded and container deliveries · supplies without missing stock · checked once · cashier pages hide pesos and only change links through requests.
+
+`CostingMethodTest`: each of the three costing methods prices a size correctly · a manual-only item with no typed cost is unknown, not free · a linked-only item with nothing linked is unknown · manual-plus-linked needs both halves · checkout locks an unknown cost as `NULL`, never rounding to zero · inventory deduction stays independent of costing method · a sale's locked-in cost never changes after the recipe, manual cost or costing method change later · a manual cost is stamped only when it actually changes · the item edit page nudges when a manual cost hasn't been reviewed in a while.
 
 ## What's left
 

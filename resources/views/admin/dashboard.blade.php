@@ -7,7 +7,7 @@
     $waitingCount = $deliveries->count() + $recipeRequests->count() + $recipeFixes->count() + $reopenRequests->count();
     $equation = [
         ['label' => 'Sales', 'amount' => $today['sales'], 'negative' => false, 'hint' => $today['orders'].' '.\Illuminate\Support\Str::plural('order', $today['orders']), 'href' => route('admin.day', 'sales')],
-        ['label' => 'Restock costs', 'amount' => $today['stock_purchases'], 'negative' => true, 'hint' => $today['stockPurchaseCount'].' '.\Illuminate\Support\Str::plural('restock', $today['stockPurchaseCount']).' logged today', 'href' => route('admin.day', 'expenses')],
+        ['label' => 'COGS', 'amount' => $today['cogs'], 'negative' => true, 'hint' => 'What today\'s sales actually cost', 'href' => route('admin.day', 'ingredients')],
         ['label' => 'Expenses', 'amount' => $today['expenses'], 'negative' => true, 'hint' => $today['expenseCount'].' '.\Illuminate\Support\Str::plural('entry', $today['expenseCount']).' today', 'href' => route('admin.day', 'expenses')],
     ];
 @endphp
@@ -27,7 +27,7 @@
             {{-- The one number --}}
             <section class="surface p-6 lg:col-span-2 lg:p-8">
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                    <p class="eyebrow">True profit so far</p>
+                    <p class="eyebrow">Net profit so far</p>
                     <span @class(['pill', 'bg-gain-500/15 text-gain-700 dark:text-gain-300' => $profitDelta >= 0, 'bg-loss-500/15 text-loss-700 dark:text-loss-300' => $profitDelta < 0])>
                         <x-icon :name="$profitDelta >= 0 ? 'arrow-up-right' : 'arrow-down-right'" class="size-3" />
                         ₱{{ number_format(abs($profitDelta), 0) }} vs yesterday at this hour
@@ -36,6 +36,12 @@
                 <p @class(['num mt-3 text-5xl font-semibold tracking-tighter sm:text-6xl', 'text-loss-600 dark:text-loss-400' => $profitSoFar < 0])>
                     {{ $profitSoFar < 0 ? '−' : '' }}₱{{ number_format(abs($profitSoFar), 2) }}
                 </p>
+                @if ($today['coverage'] !== null && $today['coverage'] < 100)
+                    <p class="mt-1.5 flex items-center gap-1.5 text-xs text-loss-600 dark:text-loss-400">
+                        <x-icon name="alert" class="size-3.5 shrink-0" />
+                        Costing coverage {{ number_format($today['coverage'], 1) }}% — some of today's sales don't have a configured cost yet, so this understates COGS.
+                    </p>
+                @endif
 
                 {{-- The equation: every peso is traceable --}}
                 <div class="mt-8 grid gap-px overflow-hidden rounded-xl border border-ink-200 bg-ink-200 sm:grid-cols-3 dark:border-white/[0.07] dark:bg-white/[0.07]">
@@ -53,6 +59,14 @@
                             <p class="mt-0.5 text-[11px] text-ink-400">{{ $part['hint'] }}</p>
                         </a>
                     @endforeach
+                </div>
+
+                {{-- Kept apart from profit on purpose: this is what happened to cash, not whether the shop made money. --}}
+                <div class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-ink-100/70 px-4 py-3 text-sm dark:bg-white/[0.04]">
+                    <span class="text-ink-500">Money movement today <span class="text-xs">(sales − expenses − restocks, not profit)</span></span>
+                    <span @class(['num font-semibold', 'text-loss-600 dark:text-loss-400' => $today['money_movement'] < 0])>
+                        {{ $today['money_movement'] < 0 ? '−' : '' }}₱{{ number_format(abs($today['money_movement']), 2) }}
+                    </span>
                 </div>
             </section>
 

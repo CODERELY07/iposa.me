@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\CostingMethod;
 use App\Enums\ExpenseCategory;
 use App\Models\Expense;
 use App\Models\Order;
@@ -10,7 +11,7 @@ beforeEach(function () {
     $this->business = $this->owner->business;
     $this->menu = demoMenu($this->owner);
     $this->cashier = cashierOf($this->owner);
-    $this->menu['burger']->update(['include_recipe_cost' => true]);
+    $this->menu['burger']->update(['costing_method' => CostingMethod::ManualPlusLinked]);
 
     $this->sell = fn (array $lines, string $method = 'gcash') => $this->actingAs($this->cashier)
         ->postJson(route('pos.orders.store'), orderPayload($lines, $method))->assertCreated();
@@ -84,8 +85,10 @@ it('lists the day\'s expenses and keeps stock purchases out of the total', funct
     expect($data['total'])->toBe(120.0)
         ->and($data['total'])->toBe(($this->ledger)()['expenses'])
         ->and($data['stockPurchases'])->toBe(900.0)
-        // Both count against Net now, on their own P&L lines: 0 sales − 120 expenses − 900 restock.
-        ->and(($this->ledger)()['net'])->toBe(-1020.0);
+        // Net Profit only sees operating expenses: 0 sales − 0 cogs − 120 expenses.
+        // The 900 restock is a cash outflow, not a profit expense, until it sells.
+        ->and(($this->ledger)()['net'])->toBe(-120.0)
+        ->and(($this->ledger)()['money_movement'])->toBe(-1020.0);
 });
 
 it('opens any past day, never the future, and only for the owner\'s shop', function () {

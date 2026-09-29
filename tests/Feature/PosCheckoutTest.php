@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\CostingMethod;
 use App\Enums\StockMovementReason;
 use App\Models\Item;
 use App\Models\Order;
@@ -31,8 +32,8 @@ it('rings up a sale and deducts every linked piece', function () {
 });
 
 it('adds what the linked pieces cost when the item includes them', function () {
-    $this->menu['burger']->update(['include_recipe_cost' => true]);
-    $this->menu['tea']->update(['include_recipe_cost' => true]);
+    $this->menu['burger']->update(['costing_method' => CostingMethod::ManualPlusLinked]);
+    $this->menu['tea']->update(['costing_method' => CostingMethod::ManualPlusLinked]);
 
     $this->actingAs($this->cashier)
         ->postJson(route('pos.orders.store'), orderPayload([[$this->menu['burgerRegular'], 2], [$this->menu['tea22'], 1]], 'gcash'))
