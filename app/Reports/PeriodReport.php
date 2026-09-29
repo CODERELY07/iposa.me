@@ -143,8 +143,11 @@ class PeriodReport
 
     /**
      * Every size sold: quantity, sales, cost and profit, most profitable first.
+     * `price_each` and `cost_each` are averages of what a sale actually charged
+     * and cost at the moment it was rung up, so they only drift from the item's
+     * current typed price or cost when that changed sometime during the period.
      *
-     * @return Collection<int, array{name: string, sold: int, sales: float, cost: float, profit: float, margin: ?float}>
+     * @return Collection<int, array{name: string, sold: int, sales: float, price_each: float, cost: float, cost_each: float, profit: float, margin: ?float}>
      */
     private function menu(Business $business, CarbonImmutable $from, CarbonImmutable $to): Collection
     {
@@ -157,14 +160,17 @@ class PeriodReport
             ->selectRaw('order_lines.name, order_lines.variant_label, sum(order_lines.qty) as sold, sum(order_lines.qty * order_lines.price) as sales, sum(order_lines.qty * order_lines.unit_cost) as cost')
             ->get()
             ->map(function (object $row): array {
+                $sold = (int) $row->sold;
                 $sales = round((float) $row->sales, 2);
                 $cost = round((float) $row->cost, 2);
 
                 return [
                     'name' => $row->name.($row->variant_label && $row->variant_label !== 'Regular' ? ' · '.$row->variant_label : ''),
-                    'sold' => (int) $row->sold,
+                    'sold' => $sold,
                     'sales' => $sales,
+                    'price_each' => $sold > 0 ? round($sales / $sold, 2) : 0.0,
                     'cost' => $cost,
+                    'cost_each' => $sold > 0 ? round($cost / $sold, 2) : 0.0,
                     'profit' => round($sales - $cost, 2),
                     'margin' => $sales > 0 ? round(($sales - $cost) / $sales * 100, 1) : null,
                 ];

@@ -271,28 +271,32 @@
 
     <h3>All items</h3>
     <table class="data">
-        <thead><tr><th>Item</th><th class="r">Sold</th><th class="r">Sales</th><th class="r">Cost</th><th class="r">Profit</th><th class="r">Margin</th><th style="width: 22%">Profit share</th></tr></thead>
+        <thead><tr><th>Item</th><th class="r">Sold</th><th class="r">Price</th><th class="r">Sales</th><th class="r">Cost</th><th class="r">Cost each</th><th class="r">Profit</th><th class="r">Margin</th><th style="width: 15%">Profit share</th></tr></thead>
         <tbody>
         @php($menuProfitMax = max(1, $menu->max('profit') ?? 1))
         @forelse ($menu as $row)
             <tr class="{{ $loop->even ? 'stripe' : '' }}">
                 <td>{{ $row['name'] }}</td>
                 <td class="r num">{{ number_format($row['sold']) }}</td>
+                <td class="r num">{{ number_format($row['price_each'], 2) }}</td>
                 <td class="r num">{{ number_format($row['sales'], 2) }}</td>
                 <td class="r num">{{ number_format($row['cost'], 2) }}</td>
+                <td class="r num">{{ number_format($row['cost_each'], 2) }}</td>
                 <td class="r num {{ $row['profit'] < 0 ? 'loss' : '' }}">{{ number_format($row['profit'], 2) }}</td>
                 <td class="r num">{{ $pct($row['margin']) }}</td>
                 <td><div class="bar-track"><div class="bar {{ $row['profit'] < 0 ? 'lossbar' : 'profit' }}" style="width: {{ $share(abs($row['profit']), $menuProfitMax) }}%"></div></div></td>
             </tr>
         @empty
-            <tr><td colspan="7" class="muted">Nothing sold in this period.</td></tr>
+            <tr><td colspan="9" class="muted">Nothing sold in this period.</td></tr>
         @endforelse
         @if ($menu->isNotEmpty())
             <tr class="total">
                 <td>Total</td>
                 <td class="r num">{{ number_format($menu->sum('sold')) }}</td>
+                <td></td>
                 <td class="r num">{{ number_format($menu->sum('sales'), 2) }}</td>
                 <td class="r num">{{ number_format($menu->sum('cost'), 2) }}</td>
+                <td></td>
                 <td class="r num">{{ number_format($menu->sum('profit'), 2) }}</td>
                 <td class="r num">{{ $pct($menu->sum('sales') > 0 ? $menu->sum('profit') / $menu->sum('sales') * 100 : null) }}</td>
                 <td></td>
