@@ -7,6 +7,11 @@
             <h2 class="font-semibold">Deliveries to check</h2>
             <p class="text-xs text-ink-500">Restocks your cashiers recorded. Compare each one with the supplier's receipt and enter what you paid.</p>
             <ul class="mt-3 space-y-3">
+                <datalist id="supplier_names">
+                    @foreach ($supplierNames as $supplierName)
+                        <option value="{{ $supplierName }}"></option>
+                    @endforeach
+                </datalist>
                 @foreach ($deliveries as $delivery)
                     <li class="rounded-xl border border-ink-200 p-4 dark:border-white/[0.07]">
                         <p class="text-sm font-medium">{{ $delivery->item?->name ?? 'Deleted item' }} · recorded <span class="num">{{ $delivery->describeRecorded() }}</span></p>
@@ -26,6 +31,10 @@
                                     <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-400">₱</span>
                                     <input id="paid_{{ $delivery->id }}" name="paid" type="number" min="0" step="0.01" class="field num w-32 pl-7" placeholder="0.00">
                                 </div>
+                            </div>
+                            <div>
+                                <label class="field-label" for="supplier_{{ $delivery->id }}">Bought from</label>
+                                <input id="supplier_{{ $delivery->id }}" name="supplier" type="text" list="supplier_names" maxlength="80" class="field w-40" placeholder="Optional">
                             </div>
                             @if ($expensesEnabled)
                                 <label class="flex items-center gap-2 pb-3 text-sm">

@@ -14,6 +14,8 @@ use App\Models\Item;
 use App\Models\OrderLine;
 use App\Models\RecipeLine;
 use App\Models\StockMovement;
+use App\Models\Supplier;
+use App\Reports\PriceHistory;
 use App\Services\Inventory\ItemService;
 use App\Services\Inventory\RecipeChangeService;
 use Illuminate\Http\RedirectResponse;
@@ -70,6 +72,7 @@ class ItemController extends Controller
             'usedToday' => $usedToday,
             'bulkDailyUse' => $this->averageDailyBulkUse($items->where('kind', ItemKind::Bulk)->pluck('id')),
             'lastAudit' => $lastAudit,
+            'priceChanges' => app(PriceHistory::class)->recentIncreases($business),
             'business' => $business,
         ]);
     }
@@ -236,6 +239,8 @@ class ItemController extends Controller
         return [
             'item' => $item,
             'canDelete' => $item->exists && $this->deleteBlockers($item) === [],
+            'priceHistory' => $item->exists ? app(PriceHistory::class)->forItem($item) : null,
+            'supplierNames' => Supplier::query()->orderBy('name')->pluck('name'),
             'canRestock' => $item->exists && ($item->kind !== ItemKind::Menu || $item->tracksAnyStock()),
             'expensesEnabled' => $business->hasFeature('expenses'),
             'measures' => Item::MEASURES,

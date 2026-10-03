@@ -24,6 +24,7 @@ class ItemRestockController extends Controller
             $request->boolean('log_expense'),
             $request->boughtOn(),
             $request->variant(),
+            $request->validated('supplier'),
         );
 
         $item->refresh()->load('containers');

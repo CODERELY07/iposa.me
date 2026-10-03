@@ -20,6 +20,7 @@ class CheckDeliveryRequest extends FormRequest
             'receipt_quantity' => ['required', 'numeric', 'min:0', 'max:999999'],
             'paid' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
             'log_expense' => ['nullable', 'boolean'],
+            'supplier' => ['nullable', 'string', 'max:80'],
         ];
     }
 

@@ -9,3 +9,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('businesses:mark-overdue')->dailyAt('00:05');
+
+Schedule::command('summary:send')->everyMinute()->withoutOverlapping();

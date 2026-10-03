@@ -8,6 +8,7 @@ use App\Models\AuditLine;
 use App\Models\Delivery;
 use App\Models\Item;
 use App\Models\ItemContainer;
+use App\Models\ItemPurchase;
 use App\Models\ItemVariant;
 use App\Models\User;
 use Carbon\CarbonInterface;
@@ -24,7 +25,7 @@ use Illuminate\Validation\ValidationException;
  */
 class DeliveryService
 {
-    public function __construct(private StockService $stock) {}
+    public function __construct(private StockService $stock, private PurchaseRecorder $purchases) {}
 
     public function record(Item $item, User $cashier, float $quantity, ?ItemContainer $container, float $added, ?ItemVariant $variant = null): Delivery
     {
@@ -49,9 +50,9 @@ class DeliveryService
      *
      * @throws ValidationException
      */
-    public function check(Delivery $delivery, User $owner, float $receiptQuantity, ?float $paid, bool $logExpense): array
+    public function check(Delivery $delivery, User $owner, float $receiptQuantity, ?float $paid, bool $logExpense, ?string $supplier = null): array
     {
-        return DB::transaction(function () use ($delivery, $owner, $receiptQuantity, $paid, $logExpense): array {
+        return DB::transaction(function () use ($delivery, $owner, $receiptQuantity, $paid, $logExpense, $supplier): array {
             $delivery = Delivery::withoutGlobalScopes()->whereKey($delivery->id)->lockForUpdate()->firstOrFail();
 
             if (! $delivery->isPending()) {
@@ -81,6 +82,7 @@ class DeliveryService
 
             if ($paid !== null && $paid > 0 && $receiptAdded > 0) {
                 $item->forceFill(['unit_cost' => round($paid / $receiptAdded, 6)])->save();
+                $this->purchases->record($item, $receiptAdded, $paid, ItemPurchase::DELIVERY, now(), $supplier, $owner->id);
 
                 if ($delivery->item_container_id !== null && $receiptQuantity > 0) {
                     $item->containers()->whereKey($delivery->item_container_id)->update(['price' => round($paid / $receiptQuantity, 2)]);

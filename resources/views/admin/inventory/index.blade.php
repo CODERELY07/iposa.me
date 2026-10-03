@@ -23,6 +23,26 @@
             </x-slot:actions>
         </x-page-header>
 
+        @if ($priceChanges->isNotEmpty() && ! $showArchived)
+            <section class="surface p-5">
+                <p class="eyebrow">Prices that went up lately</p>
+                <ul class="mt-3 divide-y divide-ink-100 text-sm dark:divide-white/[0.06]">
+                    @foreach ($priceChanges as $change)
+                        <li class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2">
+                            <a href="{{ route('admin.inventory.edit', $change['item']) }}#price-history" class="font-medium hover:underline">{{ $change['item']->name }}</a>
+                            <span class="text-xs text-ink-500">
+                                <span class="num font-semibold text-loss-600 dark:text-loss-400">+{{ $change['percent'] }}%</span>
+                                · ₱{{ \App\Models\Item::formatUnitCost($change['from']) }} → ₱{{ \App\Models\Item::formatUnitCost($change['to']) }} per {{ $change['item']->unit ?: 'unit' }}
+                                @if ($change['affected'] > 0)
+                                    · raises the cost of {{ $change['affected'] }} menu {{ \Illuminate\Support\Str::plural('item', $change['affected']) }}
+                                @endif
+                            </span>
+                        </li>
+                    @endforeach
+                </ul>
+            </section>
+        @endif
+
         {{-- Import --}}
         <section x-show="importOpen" x-cloak class="surface p-5">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">

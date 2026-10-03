@@ -6,11 +6,16 @@ use App\Enums\PaymentMethod;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateBusinessProfileRequest;
 use App\Http\Requests\Admin\UpdateRegisterSettingsRequest;
+use App\Http\Requests\Admin\UpdateSmsSummaryRequest;
 use App\Models\Business;
+use App\Models\DailySummary;
 use App\Models\Plan;
+use App\Services\Sms\SmsGateClient;
+use App\Services\Summary\DailySummaryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use RuntimeException;
 
 class SettingsController extends Controller
 {
@@ -24,6 +29,9 @@ class SettingsController extends Controller
             'businessTypes' => UpdateBusinessProfileRequest::BUSINESS_TYPES,
             'paymentMethods' => PaymentMethod::cases(),
             'plans' => $this->plansFor($business),
+            'sms' => $business->smsSummary(),
+            'smsGatewayReady' => app(SmsGateClient::class)->isConfigured(),
+            'lastSummary' => DailySummary::query()->latest('date')->first(),
             'manualPayment' => config('plans.manual_payment'),
             'payments' => $business->subscriptionPayments()->latest()->limit(5)->get(),
             'hasPendingPayment' => $business->subscriptionPayments()->where('status', 'pending')->exists(),
@@ -66,5 +74,40 @@ class SettingsController extends Controller
         $business->update(['settings' => $settings]);
 
         return back()->with('status', 'Register settings saved.');
+    }
+
+    public function updateSms(UpdateSmsSummaryRequest $request): RedirectResponse
+    {
+        $business = $request->user()->business;
+        $settings = $business->settings ?? [];
+
+        $settings['sms_summary'] = [
+            'enabled' => $request->boolean('sms_enabled'),
+            'time' => $request->validated('sms_time'),
+            'numbers' => $request->numbers(),
+        ];
+
+        $business->update(['settings' => $settings]);
+
+        return back()->with('status', $settings['sms_summary']['enabled']
+            ? 'Daily SMS saved. It goes out every evening at the time you picked.'
+            : 'Daily SMS saved (switched off).');
+    }
+
+    public function testSms(Request $request, DailySummaryService $summaries): RedirectResponse
+    {
+        $business = $request->user()->business;
+
+        if ($business->smsSummary()['numbers'] === []) {
+            return back()->withErrors(['sms_numbers' => 'Save a number first, then send the test.']);
+        }
+
+        try {
+            $summaries->sendTest($business);
+        } catch (RuntimeException $exception) {
+            return back()->withErrors(['sms_test' => $exception->getMessage()]);
+        }
+
+        return back()->with('status', 'Test text sent. Check the phone.');
     }
 }

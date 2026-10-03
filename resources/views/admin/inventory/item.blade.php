@@ -739,6 +739,15 @@
                             <label class="field-label" for="restock_date">Bought on</label>
                             <input id="restock_date" name="date" type="date" value="{{ old('date', today()->toDateString()) }}" max="{{ today()->toDateString() }}" class="field num w-40">
                         </div>
+                        <div>
+                            <label class="field-label" for="restock_supplier">Bought from <span class="font-normal text-ink-400">(optional)</span></label>
+                            <input id="restock_supplier" name="supplier" type="text" list="supplier_names" maxlength="80" value="{{ old('supplier') }}" class="field w-48" placeholder="Supplier or store">
+                            <datalist id="supplier_names">
+                                @foreach ($supplierNames as $supplierName)
+                                    <option value="{{ $supplierName }}"></option>
+                                @endforeach
+                            </datalist>
+                        </div>
                     </div>
 
                     <p class="rounded-xl bg-ink-100/70 px-4 py-3 text-sm dark:bg-white/[0.04]">
@@ -773,6 +782,117 @@
                         <button type="submit" class="btn-primary" data-loading-text="Restocking…">Restock</button>
                     </div>
                 </form>
+            </section>
+
+            @if ($item->kind !== \App\Enums\ItemKind::Menu || $item->tracksAnyStock())
+                <section id="waste" class="surface mt-8 scroll-mt-8 p-6">
+                    <h2 class="font-semibold">Log waste</h2>
+                    <p class="text-xs text-ink-500">Spilled, expired or thrown away? Take it off the shelf with the reason. It lowers the count and appears in the stock history; it isn't counted as an expense, and the closing audit won't flag it as missing.</p>
+
+                    <form method="POST" action="{{ route('admin.inventory.waste', $item) }}" class="mt-5 space-y-4">
+                        @csrf
+                        <div class="flex flex-wrap items-end gap-3">
+                            @if ($stockedSizes->isNotEmpty())
+                                <div>
+                                    <label class="field-label" for="waste_size">Which size?</label>
+                                    <select id="waste_size" name="item_variant_id" class="field w-40">
+                                        @foreach ($stockedSizes as $size)
+                                            <option value="{{ $size['id'] }}" @selected((string) old('item_variant_id') === (string) $size['id'])>{{ $size['label'] }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            @endif
+                            <div>
+                                <label class="field-label" for="waste_quantity">How much?</label>
+                                <input id="waste_quantity" name="quantity" type="number" min="0" step="any" required value="{{ old('quantity') }}" class="field num w-24 text-center">
+                                @error('quantity')<p class="mt-1 text-xs text-loss-600 dark:text-loss-400">{{ $message }}</p>@enderror
+                            </div>
+                            @if ($item->containers->isNotEmpty())
+                                <div>
+                                    <label class="field-label" for="waste_container">Of</label>
+                                    <select id="waste_container" name="container_id" class="field w-48">
+                                        @foreach ($item->containers as $container)
+                                            <option value="{{ $container->id }}">{{ $container->label }} ({{ \App\Models\Item::trimNumber((float) $container->size) }} {{ $item->unit }})</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            @else
+                                <p class="pb-3 text-sm text-ink-500">{{ $item->unit ?: 'pc' }}</p>
+                            @endif
+                            <div class="min-w-[12rem] flex-1">
+                                <label class="field-label" for="waste_note">What happened?</label>
+                                <input id="waste_note" name="note" type="text" maxlength="160" value="{{ old('note') }}" class="field" placeholder="Spilled, expired, dropped…">
+                            </div>
+                            <div>
+                                <label class="field-label" for="waste_date">On</label>
+                                <input id="waste_date" name="date" type="date" value="{{ old('date', today()->toDateString()) }}" max="{{ today()->toDateString() }}" class="field num w-40">
+                            </div>
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="submit" class="btn-ghost" data-loading-text="Saving…">Log waste</button>
+                        </div>
+                    </form>
+                </section>
+            @endif
+        @endif
+
+
+        @if ($priceHistory && $priceHistory['purchases']->isNotEmpty())
+            <section id="price-history" class="surface mt-8 scroll-mt-8 p-6">
+                <h2 class="font-semibold">Price history</h2>
+                <p class="text-xs text-ink-500">What each purchase cost per {{ $item->unit ?: 'unit' }}. A record only: past sales keep the cost they were rung up at.</p>
+
+                @if ($priceHistory['from'] !== null && $priceHistory['to'] !== null && $priceHistory['from'] !== $priceHistory['to'])
+                    @php($rose = $priceHistory['to'] > $priceHistory['from'])
+                    <p @class(['mt-4 rounded-xl px-4 py-3 text-sm', 'bg-loss-500/10 text-loss-700 dark:text-loss-300' => $rose, 'bg-gain-500/10 text-gain-700 dark:text-gain-300' => ! $rose])>
+                        Last price {{ $rose ? 'went up' : 'came down' }}:
+                        <span class="num font-semibold">₱{{ \App\Models\Item::formatUnitCost($priceHistory['from']) }} → ₱{{ \App\Models\Item::formatUnitCost($priceHistory['to']) }}</span> per {{ $item->unit ?: 'unit' }}.
+                        @if ($priceHistory['affected']->isNotEmpty())
+                            It {{ $rose ? 'adds to' : 'lowers' }} the cost of:
+                            {{ $priceHistory['affected']->map(fn ($row) => $row['name'].($row['size'] ? ' ('.$row['size'].')' : '').' '.($row['change'] >= 0 ? '+' : '−').'₱'.number_format(abs($row['change']), 2))->join(', ') }} per sale.
+                        @endif
+                    </p>
+                @endif
+
+                @if ($priceHistory['suppliers']->count() > 1)
+                    <ul class="mt-4 flex flex-wrap gap-2 text-xs">
+                        @foreach ($priceHistory['suppliers'] as $row)
+                            <li @class(['pill', 'bg-gain-500/15 text-gain-700 dark:text-gain-300' => $row['cheapest'], 'bg-ink-100 text-ink-600 dark:bg-white/[0.06] dark:text-ink-300' => ! $row['cheapest']])>
+                                {{ $row['name'] }} · ₱{{ \App\Models\Item::formatUnitCost($row['unit_cost']) }} ({{ $row['bought_on'] }}){{ $row['cheapest'] ? ' · cheapest' : '' }}
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+
+                <div class="mt-4 overflow-x-auto">
+                    <table class="w-full min-w-[520px] text-sm">
+                        <thead class="table-head">
+                            <tr class="border-b border-ink-200 dark:border-white/[0.07]">
+                                <th class="px-3 py-2 font-semibold">Date</th>
+                                <th class="px-3 py-2 font-semibold">From</th>
+                                <th class="px-3 py-2 text-right font-semibold">Bought</th>
+                                <th class="px-3 py-2 text-right font-semibold">Paid</th>
+                                <th class="px-3 py-2 text-right font-semibold">Per {{ $item->unit ?: 'unit' }}</th>
+                                <th class="px-3 py-2 text-right font-semibold">Change</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-ink-100 dark:divide-white/[0.05]">
+                            @foreach ($priceHistory['purchases'] as $row)
+                                @php($purchase = $row['purchase'])
+                                <tr>
+                                    <td class="whitespace-nowrap px-3 py-2 text-ink-500">{{ $purchase->bought_on->format('M j, Y') }}</td>
+                                    <td class="px-3 py-2">{{ $purchase->supplier?->name ?? '—' }}</td>
+                                    <td class="num px-3 py-2 text-right">{{ \App\Models\Item::trimNumber((float) $purchase->quantity, 3) }}</td>
+                                    <td class="num px-3 py-2 text-right">₱{{ number_format((float) $purchase->paid, 2) }}</td>
+                                    <td class="num px-3 py-2 text-right font-medium">₱{{ \App\Models\Item::formatUnitCost($purchase->unit_cost) }}</td>
+                                    <td @class(['num px-3 py-2 text-right', 'text-loss-600 dark:text-loss-400' => ($row['change'] ?? 0) > 0, 'text-gain-700 dark:text-gain-400' => ($row['change'] ?? 0) < 0, 'text-ink-400' => ($row['change'] ?? 0) == 0])>
+                                        {{ $row['change'] === null ? '—' : (($row['change'] > 0 ? '+' : '').$row['change'].'%') }}
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
             </section>
         @endif
 

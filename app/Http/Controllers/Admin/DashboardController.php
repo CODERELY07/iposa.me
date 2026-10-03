@@ -5,23 +5,21 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\ExpenseCategory;
 use App\Enums\ItemKind;
 use App\Enums\OrderStatus;
-use App\Enums\StockMovementReason;
 use App\Http\Controllers\Controller;
 use App\Models\Audit;
 use App\Models\Delivery;
 use App\Models\Expense;
 use App\Models\Item;
-use App\Models\ItemVariant;
 use App\Models\Order;
 use App\Models\RecipeChange;
 use App\Models\RecipeLine;
-use App\Models\StockMovement;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Reports\DailyLedger;
 use App\Reports\RecipeVariance;
+use App\Reports\StockAlerts;
 use App\Services\Audit\RecipeFixService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
@@ -29,7 +27,7 @@ class DashboardController extends Controller
     /**
      * Today: true profit so far, what needs attention tonight, the last 7 days.
      */
-    public function __invoke(Request $request, DailyLedger $ledger, RecipeVariance $variance, RecipeFixService $recipeFixes): View
+    public function __invoke(Request $request, DailyLedger $ledger, RecipeVariance $variance, RecipeFixService $recipeFixes, StockAlerts $stockAlerts): View
     {
         $business = $request->user()->business;
 
@@ -56,7 +54,7 @@ class DashboardController extends Controller
             'profitDelta' => round($profitSoFar - $yesterdayProfitAtThisHour, 2),
             'week' => $week->values(),
             'bestSellers' => $ledger->bestSellers($business, today(), today()),
-            'lowStock' => $this->lowStock($business),
+            'lowStock' => $stockAlerts->low($business),
             'voidRequests' => Order::query()->where('status', OrderStatus::VoidRequested)->with('lines')->latest('paid_at')->get(),
             'auditDone' => $today['audited'],
             'setupSteps' => $this->setupSteps(),
@@ -66,73 +64,10 @@ class DashboardController extends Controller
             'reopenRequests' => Audit::query()->whereDate('date', today())->where('reopen_status', Audit::REOPEN_PENDING)->get(),
             'recipeFixes' => $recipeFixes->suggestions($business),
             'expensesEnabled' => $business->hasFeature('expenses'),
+            'supplierNames' => Supplier::query()->orderBy('name')->pluck('name'),
             'ordersToday' => $ordersToday,
             'expensesToday' => $expensesToday,
         ]);
-    }
-
-    /**
-     * Tracked items at or below their alert level, with a rough "runs out" estimate.
-     *
-     * @return Collection<int, array{name: string, left: string, runsOut: ?string}>
-     */
-    private function lowStock($business): Collection
-    {
-        $items = Item::query()->active()->whereNotNull('on_hand')->orderBy('on_hand')->get()
-            ->filter(fn (Item $item) => $item->isLowStock($business))
-            ->take(5);
-
-        // Sizes that keep their own count (bottled water 500ml vs 1L) each have their own alert.
-        $sizes = ItemVariant::query()->with('item')->whereNotNull('on_hand')
-            ->whereHas('item', fn ($query) => $query->active())
-            ->orderBy('on_hand')->get()
-            ->filter(fn (ItemVariant $size) => $size->item->isVariantLowStock($size, $business))
-            ->take(5);
-
-        if ($items->isEmpty() && $sizes->isEmpty()) {
-            return collect();
-        }
-
-        $usage = fn (string $column, $ids) => StockMovement::query()
-            ->whereIn($column, $ids)
-            ->whereIn('reason', [StockMovementReason::Sale, StockMovementReason::Audit])
-            ->where('qty_change', '<', 0)
-            ->where('created_at', '>=', today()->subDays(7))
-            ->selectRaw("{$column}, -sum(qty_change) / 7 as per_day")
-            ->groupBy($column)
-            ->pluck('per_day', $column);
-
-        $itemUse = $usage('item_id', $items->pluck('id'));
-        $sizeUse = $usage('item_variant_id', $sizes->pluck('id'));
-
-        $runsOut = fn (?float $daysLeft): ?string => match (true) {
-            $daysLeft === null => null,
-            $daysLeft < 1 => 'today at this pace',
-            $daysLeft < 2 => 'tomorrow at this pace',
-            default => 'in about '.(int) floor($daysLeft).' days',
-        };
-
-        $itemRows = $items->map(function (Item $item) use ($itemUse, $runsOut): array {
-            $perDay = (float) ($itemUse[$item->id] ?? 0);
-
-            return [
-                'name' => $item->name,
-                'left' => rtrim(rtrim(number_format((float) $item->on_hand, 2), '0'), '.').' '.($item->unit ?: ($item->kind === ItemKind::Piece ? 'pcs' : 'left')),
-                'runsOut' => $runsOut($perDay > 0 ? max(0, (float) $item->on_hand) / $perDay : null),
-            ];
-        });
-
-        $sizeRows = $sizes->map(function (ItemVariant $size) use ($sizeUse, $runsOut): array {
-            $perDay = (float) ($sizeUse[$size->id] ?? 0);
-
-            return [
-                'name' => $size->item->name.' · '.$size->label,
-                'left' => rtrim(rtrim(number_format((float) $size->on_hand, 2), '0'), '.').' left',
-                'runsOut' => $runsOut($perDay > 0 ? max(0, (float) $size->on_hand) / $perDay : null),
-            ];
-        });
-
-        return $itemRows->concat($sizeRows)->take(5)->values();
     }
 
     /**

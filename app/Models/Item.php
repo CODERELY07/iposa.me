@@ -145,6 +145,16 @@ class Item extends Model
     }
 
     /**
+     * Every purchase of this item, who from and at what price.
+     *
+     * @return HasMany<ItemPurchase, $this>
+     */
+    public function purchases(): HasMany
+    {
+        return $this->hasMany(ItemPurchase::class);
+    }
+
+    /**
      * @return HasMany<StockMovement, $this>
      */
     public function stockMovements(): HasMany

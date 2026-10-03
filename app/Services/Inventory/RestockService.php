@@ -6,6 +6,7 @@ use App\Enums\ExpenseCategory;
 use App\Enums\StockMovementReason;
 use App\Models\Item;
 use App\Models\ItemContainer;
+use App\Models\ItemPurchase;
 use App\Models\ItemVariant;
 use App\Models\User;
 use Carbon\CarbonInterface;
@@ -20,16 +21,16 @@ use Illuminate\Support\Facades\DB;
  */
 class RestockService
 {
-    public function __construct(private StockService $stock) {}
+    public function __construct(private StockService $stock, private PurchaseRecorder $purchases) {}
 
     /**
      * @return array{added: float, unit_cost: ?float, expense_logged: bool}
      */
-    public function restock(Item $item, User $user, float $quantity, ?ItemContainer $container, ?float $paid, bool $logExpense, ?CarbonInterface $at = null, ?ItemVariant $variant = null): array
+    public function restock(Item $item, User $user, float $quantity, ?ItemContainer $container, ?float $paid, bool $logExpense, ?CarbonInterface $at = null, ?ItemVariant $variant = null, ?string $supplier = null): array
     {
         $at ??= now();
 
-        return DB::transaction(function () use ($item, $user, $quantity, $container, $paid, $logExpense, $at, $variant): array {
+        return DB::transaction(function () use ($item, $user, $quantity, $container, $paid, $logExpense, $at, $variant, $supplier): array {
             $added = round($container !== null ? $quantity * (float) $container->size : $quantity, 3);
             $unitCost = null;
 
@@ -49,6 +50,7 @@ class RestockService
                 // A size has no cost per unit of its own: the price paid is only logged, never copied onto the item.
                 if ($variant === null) {
                     $item->forceFill(['unit_cost' => $unitCost])->save();
+                    $this->purchases->record($item, $added, $paid, ItemPurchase::RESTOCK, $at, $supplier, $user->id);
                 }
 
                 // Next time, the form and the restock screen start from this price.

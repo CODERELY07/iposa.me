@@ -31,6 +31,7 @@ class RestockItemRequest extends FormRequest
             'quantity' => ['required', 'numeric', 'gt:0', 'max:999999'],
             'container_id' => ['nullable', 'integer', Rule::exists('item_containers', 'id')->where('item_id', $this->item()?->id)],
             'item_variant_id' => $this->variantRules(),
+            'supplier' => ['nullable', 'string', 'max:80'],
             'paid' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
             'log_expense' => ['nullable', 'boolean'],
             'date' => ['nullable', 'date', 'before_or_equal:today'],

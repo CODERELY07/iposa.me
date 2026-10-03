@@ -22,6 +22,7 @@ class DeliveryCheckController extends Controller
             (float) $request->validated('receipt_quantity'),
             $request->paid(),
             $request->boolean('log_expense'),
+            $request->validated('supplier'),
         );
 
         $item = $delivery->item;

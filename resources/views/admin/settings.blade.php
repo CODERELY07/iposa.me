@@ -115,6 +115,64 @@
             </form>
         </section>
 
+        <section class="grid gap-6 lg:grid-cols-[240px_1fr]">
+            <div>
+                <h2 class="font-semibold">Daily SMS</h2>
+                <p class="mt-1 text-sm text-ink-500">One short text each evening with the voids of the day and what is running low, sent from an Android phone running SMS Gateway.</p>
+            </div>
+            <div class="surface p-6">
+                @unless ($smsGatewayReady)
+                    <p class="mb-5 flex gap-2 rounded-xl bg-brand-400/10 px-4 py-3 text-sm text-brand-800 dark:text-brand-200">
+                        <x-icon name="alert" class="mt-0.5 size-4 shrink-0" />
+                        <span>The SMS phone isn't connected on the server yet, so texts can't go out. Set SMS_GATE_USERNAME and SMS_GATE_PASSWORD (from the SMS Gateway app) in the server settings.</span>
+                    </p>
+                @endunless
+
+                <form method="POST" action="{{ route('admin.settings.sms') }}" class="grid gap-5 sm:grid-cols-2">
+                    @csrf
+                    @method('PATCH')
+                    <label class="flex items-start gap-3 sm:col-span-2">
+                        <input type="hidden" name="sms_enabled" value="0">
+                        <input type="checkbox" name="sms_enabled" value="1" @checked(old('sms_enabled', $sms['enabled']))
+                            class="mt-0.5 rounded border-ink-300 text-brand-500 focus:ring-brand-400 dark:border-white/20 dark:bg-ink-900">
+                        <span>
+                            <span class="block text-sm font-medium">Text me every evening</span>
+                            <span class="text-xs text-ink-500">Voids (who, how many, how much), void requests waiting, and items running low.</span>
+                        </span>
+                    </label>
+                    <div>
+                        <label class="field-label" for="sms_time">Send at</label>
+                        <input id="sms_time" name="sms_time" type="time" value="{{ old('sms_time', $sms['time']) }}" required class="field num">
+                    </div>
+                    <div>
+                        <label class="field-label" for="sms_numbers">Mobile number(s)</label>
+                        <input id="sms_numbers" name="sms_numbers" type="text" value="{{ old('sms_numbers', implode(', ', $sms['numbers'])) }}" maxlength="200" class="field num" placeholder="0917 123 4567">
+                        <p class="mt-1 text-xs text-ink-500">Up to 3, separated by commas.</p>
+                        @error('sms_numbers')<p class="mt-1 text-xs text-loss-600 dark:text-loss-400">{{ $message }}</p>@enderror
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between gap-3 sm:col-span-2">
+                        <p class="text-xs text-ink-500">
+                            @if ($lastSummary)
+                                Last text: {{ $lastSummary->date->format('M j') }} ·
+                                <span @class(['font-medium', 'text-loss-600 dark:text-loss-400' => ! $lastSummary->wasSent()])>{{ $lastSummary->wasSent() ? 'sent' : 'failed' }}</span>{{ $lastSummary->error ? ' ('.$lastSummary->error.')' : '' }}
+                            @else
+                                Nothing sent yet.
+                            @endif
+                        </p>
+                        <button type="submit" class="btn-primary" data-loading-text="Saving…">Save</button>
+                    </div>
+                </form>
+
+                @if ($sms['numbers'] !== [])
+                    <form method="POST" action="{{ route('admin.settings.sms.test') }}" class="mt-4 border-t border-ink-100 pt-4 dark:border-white/[0.06]">
+                        @csrf
+                        <button type="submit" class="btn-ghost" data-loading-text="Sending…">Send a test text</button>
+                        @error('sms_test')<span class="ml-3 text-xs text-loss-600 dark:text-loss-400">{{ $message }}</span>@enderror
+                    </form>
+                @endif
+            </div>
+        </section>
+
         <section class="grid gap-6 lg:grid-cols-[240px_1fr]" x-data="thermalPrinterSettings()">
             <div>
                 <h2 class="font-semibold">Thermal printer (Bluetooth)</h2>

@@ -19,7 +19,7 @@ class StockService
      * Apply quantity changes (item id => signed change) and log them.
      *
      * @param  array<int, float>  $changes
-     * @param  array{order_id?: int|null, audit_id?: int|null, user_id?: int|null}  $references
+     * @param  array{order_id?: int|null, audit_id?: int|null, user_id?: int|null, note?: string|null}  $references
      * @param  array<int, float>  $costedChanges  item id => the part of the change a sale charged in its cost (same sign)
      */
     public function apply(Business $business, array $changes, StockMovementReason $reason, array $references = [], ?CarbonInterface $at = null, array $costedChanges = []): void
@@ -54,6 +54,7 @@ class StockService
                 'qty_change' => round($change, 3),
                 'costed_qty' => round($costedChanges[$itemId] ?? 0, 3),
                 'reason' => $reason,
+                'note' => $references['note'] ?? null,
                 'order_id' => $references['order_id'] ?? null,
                 'audit_id' => $references['audit_id'] ?? null,
                 'user_id' => $references['user_id'] ?? null,
@@ -67,7 +68,7 @@ class StockService
      * change), logging each against the item and the size. A size that doesn't count itself is skipped.
      *
      * @param  array<int, float>  $changes
-     * @param  array{order_id?: int|null, user_id?: int|null}  $references
+     * @param  array{order_id?: int|null, user_id?: int|null, note?: string|null}  $references
      */
     public function applyToVariants(Business $business, array $changes, StockMovementReason $reason, array $references = [], ?CarbonInterface $at = null): void
     {
@@ -100,6 +101,7 @@ class StockService
                 'qty_change' => round($change, 3),
                 'costed_qty' => 0,
                 'reason' => $reason,
+                'note' => $references['note'] ?? null,
                 'order_id' => $references['order_id'] ?? null,
                 'user_id' => $references['user_id'] ?? null,
                 'created_at' => $at ?? now(),

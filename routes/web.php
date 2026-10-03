@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\ItemController;
 use App\Http\Controllers\Admin\ItemImportController;
 use App\Http\Controllers\Admin\ItemRestockController;
 use App\Http\Controllers\Admin\ItemStockHistoryController;
+use App\Http\Controllers\Admin\ItemWasteController;
 use App\Http\Controllers\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Admin\RecipeChangeController;
 use App\Http\Controllers\Admin\RecipeFixController;
@@ -99,6 +100,7 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
     Route::post('/inventory/items/{item}/unlink-recipes', [ItemController::class, 'unlinkRecipes'])->name('inventory.unlink-recipes');
     Route::post('/inventory/items/{item}/unlink-recipes/{menuItem}', [ItemController::class, 'unlinkRecipe'])->name('inventory.unlink-recipe');
     Route::post('/inventory/items/{item}/restock', ItemRestockController::class)->name('inventory.restock');
+    Route::post('/inventory/items/{item}/waste', ItemWasteController::class)->name('inventory.waste');
     Route::get('/inventory/items/{item}/history', ItemStockHistoryController::class)->name('inventory.history');
     Route::post('/inventory/import', ItemImportController::class)->name('inventory.import');
     Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
@@ -149,6 +151,8 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
     Route::get('/settings', [SettingsController::class, 'edit'])->name('settings');
     Route::patch('/settings/business', [SettingsController::class, 'updateBusiness'])->name('settings.business');
     Route::patch('/settings/register', [SettingsController::class, 'updateRegister'])->name('settings.register');
+    Route::patch('/settings/sms', [SettingsController::class, 'updateSms'])->name('settings.sms');
+    Route::post('/settings/sms/test', [SettingsController::class, 'testSms'])->name('settings.sms.test');
     Route::get('/audit-cost-settings', [AuditCostSettingsController::class, 'edit'])->name('audit-cost-settings');
     Route::put('/audit-cost-settings', [AuditCostSettingsController::class, 'update'])->name('audit-cost-settings.update');
     Route::patch('/billing/plan', [BillingController::class, 'changePlan'])->name('billing.plan');

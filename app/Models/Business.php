@@ -41,6 +41,11 @@ class Business extends Model
         'audit_reminder_time' => '21:30',
         'default_low_threshold' => 10,
         'audit_pieces' => false,
+        'sms_summary' => [
+            'enabled' => false,
+            'time' => '22:00',
+            'numbers' => [],
+        ],
         'cashier_permissions' => [
             'run_audit' => true,
             'view_costs' => false,
@@ -299,6 +304,22 @@ class Business extends Model
         }
 
         return $resolved;
+    }
+
+    /**
+     * The end-of-day SMS (voids and low stock): on or off, when to send, who gets it.
+     *
+     * @return array{enabled: bool, time: string, numbers: list<string>}
+     */
+    public function smsSummary(): array
+    {
+        $saved = (array) $this->setting('sms_summary');
+
+        return [
+            'enabled' => (bool) ($saved['enabled'] ?? false),
+            'time' => (string) ($saved['time'] ?? '22:00'),
+            'numbers' => array_values((array) ($saved['numbers'] ?? [])),
+        ];
     }
 
     /**

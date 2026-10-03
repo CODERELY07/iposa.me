@@ -109,6 +109,12 @@ services:
       - key: BILLING_BANK
         sync: false
 
+      # SMS Gateway for Android (sms-gate.app): the phone that texts owners their daily voids and low stock.
+      - key: SMS_GATE_USERNAME
+        sync: false
+      - key: SMS_GATE_PASSWORD
+        sync: false
+
       # "true" loads the demo shops (demo logins use the password "password"). Keep "false" for real use.
       - key: SEED_DEMO_DATA
         value: "false"

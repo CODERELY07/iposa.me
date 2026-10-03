@@ -9,6 +9,7 @@ enum StockMovementReason: string
     case Audit = 'audit';
     case Restock = 'restock';
     case Adjustment = 'adjustment';
+    case Waste = 'waste';
 
     public function label(): string
     {
@@ -18,6 +19,7 @@ enum StockMovementReason: string
             self::Audit => 'Closing audit',
             self::Restock => 'Restock',
             self::Adjustment => 'Adjustment',
+            self::Waste => 'Waste',
         };
     }
 }

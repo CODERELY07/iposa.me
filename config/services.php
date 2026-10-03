@@ -28,6 +28,17 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    /*
+    | SMS Gateway for Android (sms-gate.app, open source). Your own Android phone sends the
+    | texts. Cloud mode works from anywhere (default URL); local mode needs the phone to be
+    | reachable from the server, e.g. http://192.168.1.20:8080/message.
+    */
+    'sms_gate' => [
+        'url' => env('SMS_GATE_URL', 'https://api.sms-gate.app/3rdparty/v1/message'),
+        'username' => env('SMS_GATE_USERNAME'),
+        'password' => env('SMS_GATE_PASSWORD'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

@@ -60,6 +60,8 @@
                                             <a href="{{ route('admin.orders.show', $movement->order_id) }}" class="hover:underline">Order #{{ $movement->order?->number ?? $movement->order_id }}</a>
                                         @elseif ($movement->audit_id)
                                             <a href="{{ route('admin.day', ['section' => 'bulk', 'date' => ($movement->audit?->date ?? $movement->created_at)->toDateString()]) }}" class="hover:underline">Closing audit</a>
+                                        @elseif ($movement->note)
+                                            <span class="text-ink-600 dark:text-ink-300">{{ $movement->note }}</span>
                                         @else
                                             <span class="text-ink-500">—</span>
                                         @endif
