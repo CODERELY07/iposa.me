@@ -10,6 +10,7 @@ use App\Models\Business;
 use App\Models\Delivery;
 use App\Models\Expense;
 use App\Models\Item;
+use App\Models\ItemVariant;
 use App\Models\Order;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -51,6 +52,7 @@ class PeriodReport
             'hours' => $this->hours($orders),
             'menu' => $menu,
             'stockUsed' => $this->stockUsed($business, $from, $to),
+            'wasteLines' => $this->wasteLines($business, $from, $to),
             'closingCounts' => $this->closingCounts($business, $from, $to),
             'deliveries' => $this->deliveries($business, $from, $to),
             'pendingDeliveries' => Delivery::withoutGlobalScopes()->where('business_id', $business->id)->where('status', Delivery::PENDING)->count(),
@@ -176,6 +178,37 @@ class PeriodReport
                 ];
             })
             ->sortByDesc('profit')
+            ->values();
+    }
+
+    /**
+     * Waste per item over the period, at the cost locked in when it was logged, biggest loss first.
+     * An item whose waste had no cost set shows its quantity with no loss figure, never as free.
+     *
+     * @return Collection<int, array{name: string, unit: string, qty: float, cost: ?float}>
+     */
+    private function wasteLines(Business $business, CarbonImmutable $from, CarbonImmutable $to): Collection
+    {
+        $rows = DB::table('stock_movements')
+            ->where('business_id', $business->id)
+            ->where('reason', StockMovementReason::Waste->value)
+            ->whereBetween('created_at', [$from, $to])
+            ->selectRaw('item_id, item_variant_id, -sum(qty_change) as qty, sum(-qty_change * unit_cost) as cost, sum(case when unit_cost is null and qty_change < 0 then 1 else 0 end) as unpriced')
+            ->groupBy('item_id', 'item_variant_id')
+            ->get();
+
+        $items = Item::withoutGlobalScopes()->whereKey($rows->pluck('item_id'))->get()->keyBy('id');
+        $sizes = ItemVariant::query()->whereKey($rows->pluck('item_variant_id')->filter())->pluck('label', 'id');
+
+        return $rows
+            ->filter(fn (object $row) => $items->has($row->item_id) && abs((float) $row->qty) >= 0.0005)
+            ->map(fn (object $row): array => [
+                'name' => $items[$row->item_id]->name.($row->item_variant_id && isset($sizes[$row->item_variant_id]) ? ' · '.$sizes[$row->item_variant_id] : ''),
+                'unit' => (string) ($items[$row->item_id]->unit ?: ''),
+                'qty' => round((float) $row->qty, 3),
+                'cost' => (int) $row->unpriced > 0 && $row->cost === null ? null : round((float) $row->cost, 2),
+            ])
+            ->sortByDesc(fn (array $row) => $row['cost'] ?? 0)
             ->values();
     }
 

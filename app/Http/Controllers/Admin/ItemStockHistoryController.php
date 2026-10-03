@@ -26,7 +26,7 @@ class ItemStockHistoryController extends Controller
             ->when($variant !== null, fn ($query) => $query->where('item_variant_id', $variant->id), fn ($query) => $query->whereNull('item_variant_id'));
 
         $movements = $scope(StockMovement::query())
-            ->with('order', 'audit')
+            ->with('order', 'audit', 'undoneBy')
             ->latest('id')
             ->paginate(50)
             ->withQueryString();

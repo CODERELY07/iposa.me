@@ -5,7 +5,7 @@ The answer the owner actually wants: **did I make money today, and where did it 
 Every screen below reads the same class, `App\Reports\DailyLedger`, so Today, the P&L, best sellers and the CSV exports can never disagree.
 
 ```
-Net Profit     = Sales − COGS − Operating expenses
+Net Profit     = Sales − COGS − Operating expenses − Waste
 Money Movement = Sales − Operating expenses − Restock costs
 ```
 
@@ -65,12 +65,13 @@ Four drill-down pages (`Admin\DayController`, `App\Reports\DayBreakdown`), reach
 | **Ingredients** | Each size sold: qty, cost each (the day's average), sales, cost. Then what sales took off the shelf, per piece or liquid, and whether its cost was added by the app, must be in the typed cost, or is the item itself | Yes — this *is* COGS, same figures the P&L uses |
 | **Bulk used** | The closing count per item: expected, counted, used or missing, recipe over-charge given back, unrecorded restocks, cost. "No closing count yet" with a link otherwise | No — informational only |
 | **Expenses** | Every entry with category and who logged it; restock costs shown as their own line, marked "not counted in profit yet" | Operating expenses yes; restock costs no (money movement only) |
+| **Waste** | Every waste entry of the day: item and size, quantity, cost each, loss, what happened, who; an Undo for today's entries. Total equals the ledger's Waste | Yes — Waste |
 
 Each total reads the same rows as the ledger and is rounded once, so it matches Today to the centavo (tested).
 
 ## Daily ledger
 
-`DailyLedger::forRange()` returns one row per day — `orders, sales, cogs, known_revenue, bulk, audited, expenses, payables, missing, stock_purchases, net, money_movement` — by running four grouped queries (sales, COGS, bulk usage, expenses) and merging them over a full list of dates, **so days with no activity appear as zeros** instead of vanishing.
+`DailyLedger::forRange()` returns one row per day — `orders, sales, cogs, known_revenue, bulk, audited, expenses, payables, missing, stock_purchases, waste, waste_unpriced, net, money_movement` — by running four grouped queries (sales, COGS, bulk usage, expenses) and merging them over a full list of dates, **so days with no activity appear as zeros** instead of vanishing.
 
 Details that matter:
 
@@ -79,7 +80,8 @@ Details that matter:
 - `known_revenue` is the revenue from lines whose cost was actually known — the numerator for **coverage** (`totals()` computes `coverage = known_revenue ÷ sales × 100`, revenue-weighted so a couple of expensive unpriced items can't hide behind many cheap priced ones).
 - Bulk uses `(audit_lines.used − recipe_surplus_costed) × unit_cost`, the cost copied at count time, minus what recipes over-charged.
 - `expenses` leaves out **stock purchases**, which are reported separately as `stock_purchases` and feed **Money Movement**, not Net. `missing` (Missing stock) and `payables` (equipment installments) are both slices *within* `expenses` — they do count against Net, broken out for their own line.
-- `net = sales − cogs − expenses`. `money_movement = sales − expenses − stock_purchases` (this is the old cash-basis formula, kept as a distinct, clearly-separate figure — never labeled profit). `bulk` is still computed (it drives the Bulk page and the recipe-surplus math) but doesn't feed either.
+- `waste` is stock written off ([Inventory › Waste](04-inventory.md#waste)), summed from `Waste` stock movements at the cost locked in when each was logged (`sum(−qty_change × unit_cost)` — an undo books the opposite amount on the same day). Entries whose item had no cost are counted in `waste_unpriced` and not valued, never treated as free.
+- `net = sales − cogs − expenses − waste`. `money_movement = sales − expenses − stock_purchases` (this is the old cash-basis formula, kept as a distinct, clearly-separate figure — never labeled profit). `bulk` is still computed (it drives the Bulk page and the recipe-surplus math) but doesn't feed either.
 - Grouping is `date(paid_at)`, which behaves the same on SQLite, MySQL and Postgres.
 
 `totals()` sums a set of rows; `salesBetween()` powers the hour-for-hour comparison on Today.

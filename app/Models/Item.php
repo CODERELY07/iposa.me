@@ -107,9 +107,12 @@ class Item extends Model
     }
 
     /**
-     * The cost of one sale of this size, per the item's costing method. Null when
-     * the method needs a piece that isn't configured -- a menu item's cost must
-     * never silently become ₱0 just because nobody has priced it yet.
+     * The cost of one sale of this size, per the item's costing method.
+     *
+     * A size with no ingredients linked has no recipe cost to add, so the cost the owner
+     * typed stands on its own: linking is optional, and a typed cost is a real cost. It is
+     * only unknown (null, never a silent ₱0) when nothing usable is configured -- no typed
+     * cost where one is needed, or nothing at all for a linked-only size.
      */
     public function costPerSale(ItemVariant $variant): ?float
     {
@@ -118,8 +121,10 @@ class Item extends Model
 
         $cost = match ($this->costing_method) {
             CostingMethod::ManualOnly => $manual,
-            CostingMethod::LinkedOnly => $linked,
-            CostingMethod::ManualPlusLinked => $manual !== null && $linked !== null ? $manual + $linked : null,
+            // Linked pieces when the size has them; otherwise the typed cost is the cost.
+            CostingMethod::LinkedOnly => $linked ?? $manual,
+            // The typed cost, plus the linked pieces when there are any.
+            CostingMethod::ManualPlusLinked => $manual !== null ? $manual + ($linked ?? 0.0) : null,
         };
 
         return $cost !== null ? round($cost, 2) : null;

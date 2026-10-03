@@ -238,4 +238,48 @@ class DayBreakdown
             'stockPurchases' => round($entries->where('category', ExpenseCategory::StockPurchase)->sum(fn (Expense $expense) => (float) $expense->amount), 2),
         ];
     }
+
+    /**
+     * What was written off that day, entry by entry, at the cost locked in when it was logged.
+     * `total` matches the Waste figure in the ledger. An entry made today can still be undone.
+     *
+     * @return array{entries: Collection<int, array{movement: StockMovement, name: string, size: ?string, unit: string, qty: float, unit_cost: ?float, cost: ?float, note: ?string, by: ?string, undoable: bool, undone: bool}>, total: float, unpriced: int}
+     */
+    public function waste(Business $business, CarbonImmutable $day): array
+    {
+        $movements = StockMovement::withoutGlobalScopes()
+            ->where('business_id', $business->id)
+            ->where('reason', StockMovementReason::Waste)
+            ->whereBetween('created_at', [$day->startOfDay(), $day->endOfDay()])
+            ->with(['item' => fn ($query) => $query->withoutGlobalScopes(), 'variant', 'user'])
+            ->orderByDesc('id')
+            ->get();
+
+        $undoneIds = $movements->pluck('reverses_id')->filter()->flip();
+
+        $entries = $movements->map(function (StockMovement $movement) use ($undoneIds): array {
+            $qty = (float) $movement->qty_change;
+            $unitCost = $movement->unit_cost !== null ? (float) $movement->unit_cost : null;
+
+            return [
+                'movement' => $movement,
+                'name' => $movement->item?->name ?? 'Deleted item',
+                'size' => $movement->variant?->label,
+                'unit' => (string) ($movement->item?->unit ?: ''),
+                'qty' => $qty,
+                'unit_cost' => $unitCost,
+                'cost' => $unitCost !== null ? round(-$qty * $unitCost, 2) : null,
+                'note' => $movement->note,
+                'by' => $movement->user?->name,
+                'undone' => $undoneIds->has($movement->id),
+                'undoable' => $qty < 0 && ! $undoneIds->has($movement->id) && $movement->created_at->isToday(),
+            ];
+        });
+
+        return [
+            'entries' => $entries,
+            'total' => round($entries->sum(fn (array $entry) => (float) ($entry['cost'] ?? 0)), 2),
+            'unpriced' => $entries->filter(fn (array $entry) => $entry['cost'] === null && $entry['qty'] < 0)->count(),
+        ];
+    }
 }

@@ -192,8 +192,8 @@
                     const linked = this.linkedCostFor(index);
                     let cost = null;
                     if (this.costingMethod === 'manual_only') cost = manual;
-                    else if (this.costingMethod === 'linked_only') cost = linked;
-                    else cost = (manual !== null && linked !== null) ? manual + linked : null;
+                    else if (this.costingMethod === 'linked_only') cost = linked ?? manual;
+                    else cost = manual !== null ? manual + (linked ?? 0) : null;
                     return cost === null ? null : Math.round(cost * 100) / 100;
                 },
                 margin(index) {
@@ -453,7 +453,7 @@
                                                     </span>
                                                 </template>
                                                 <template x-if="costingMethod === 'linked_only'">
-                                                    <span>Linked cost <span :class="costPerSale(index) === null ? 'font-semibold text-loss-600 dark:text-loss-400' : 'font-semibold text-ink-900 dark:text-white'" x-text="costPerSale(index) === null ? 'not configured' : formatPeso(costPerSale(index)) + ' per sale'"></span></span>
+                                                    <span>Linked cost <span :class="costPerSale(index) === null ? 'font-semibold text-loss-600 dark:text-loss-400' : 'font-semibold text-ink-900 dark:text-white'" x-text="costPerSale(index) === null ? 'not configured' : formatPeso(costPerSale(index)) + ' per sale'"></span><span x-show="linkedCostFor(index) === null && costPerSale(index) !== null" class="text-ink-400"> (nothing linked, so your typed cost is used)</span></span>
                                                 </template>
                                                 <template x-if="costingMethod === 'manual_only'">
                                                     <span>Linked items cost <span x-text="linkedCostFor(index) === null ? 'nothing' : formatPeso(linkedCostFor(index))"></span>, not counted — your typed cost is used instead.</span>
@@ -787,7 +787,7 @@
             @if ($item->kind !== \App\Enums\ItemKind::Menu || $item->tracksAnyStock())
                 <section id="waste" class="surface mt-8 scroll-mt-8 p-6">
                     <h2 class="font-semibold">Log waste</h2>
-                    <p class="text-xs text-ink-500">Spilled, expired or thrown away? Take it off the shelf with the reason. It lowers the count and appears in the stock history; it isn't counted as an expense, and the closing audit won't flag it as missing.</p>
+                    <p class="text-xs text-ink-500">Spilled, expired or thrown away? Take it off the shelf with the reason. It lowers the count and shows in the stock history. What it cost counts against your profit as Waste (it isn't cash going out), and the closing audit won't flag it as missing. Made a mistake? You can undo it the same day.</p>
 
                     <form method="POST" action="{{ route('admin.inventory.waste', $item) }}" class="mt-5 space-y-4">
                         @csrf

@@ -77,7 +77,7 @@ Every menu item picks how its cost of goods sold (COGS) is worked out (`items.co
 | **Linked pieces & liquids only** | What the links cost at today's prices | The typed cost is ignored for COGS |
 | **Manual cost + linked pieces & liquids** | Typed cost + linked cost | New menu items start here |
 
-A manual cost is a first-class input, not a fallback — an owner's own calculated cost is valid even with no inventory linked at all. `cost` is **nullable**: `NULL` means "not configured," `0.00` means "intentionally free" (e.g. a promo item) — the app never turns a blank cost box into a silent ₱0. If a method needs a piece that isn't configured (no typed cost, or nothing linked), `Item::costPerSale()` returns `null` and the UI shows **Unknown** rather than a number, so profit reports can't be misled into thinking an unpriced item cost nothing. A sale's COGS is locked in at checkout (`order_lines.unit_cost`) and never recalculated later — see [Reports › Daily ledger](08-reports.md#daily-ledger).
+A manual cost is a first-class input, not a fallback — an owner's own calculated cost is valid even with no inventory linked at all. A size with **nothing linked** has no recipe cost to add, so the typed cost stands on its own: *Manual + linked* with no links is just the typed cost, and *Linked only* with no links falls back to the typed cost. `cost` is **nullable**: `NULL` means "not configured," `0.00` means "intentionally free" (e.g. a promo item) — the app never turns a blank cost box into a silent ₱0. `Item::costPerSale()` returns `null` (shown as **Unknown**) only when nothing usable is configured: no typed cost where one is needed (*Manual only*, *Manual + linked*), or neither typed cost nor links for *Linked only*. That way profit reports can't be misled into thinking an unpriced item cost nothing, and a typed cost is never shown as Unknown. A sale's COGS is locked in at checkout (`order_lines.unit_cost`) and never recalculated later — see [Reports › Daily ledger](08-reports.md#daily-ledger).
 
 `item_variants.cost_updated_at` stamps when a manual cost last changed (only on an actual change, not every save). Past 90 days, the item edit page shows a quiet "not reviewed in a while" nudge — informational only, it never touches the cost itself; only the owner can say whether it's still right.
 
@@ -94,6 +94,23 @@ A ready-made menu item that counts itself (bottled water) can keep **one count p
 - **Restock.** The owner's form and the cashier's Products screen ask *which size*; a cashier's delivery remembers the size, and the owner's check corrects that size's count. A size has no cost per unit of its own, so a restock price is only logged, never copied onto the item.
 - **History and alerts.** Stock history has a tab per size with its own running balance. Low-stock alerts (Today, the Inventory list, the register's "N left") work per size against the item's alert level.
 - **Cost helper.** Every size row also has **Bought in bulk? Work out the cost** — type how many you bought and what you paid, and *Use this* fills that size's Cost box (₱240 ÷ 24 = ₱10). Nothing is saved until you save the item.
+
+### Waste
+
+**Log waste** (item page, under Restock; owner only) takes spilled, expired or thrown-away stock off the shelf with a reason. It works with containers, per-size counts and a date.
+
+- **Stock.** A `Waste` stock movement (`StockMovementReason::Waste`) with the reason in `note`. The closing audit starts from the lower count, so logged waste is not reported again as a shortage.
+- **Profit.** Its value counts against **Net Profit as Waste**: quantity × the item's cost per unit (a piece or liquid's `unit_cost`; for a menu item that counts itself, the size's own typed cost). The cost is **locked in on the movement** (`stock_movements.unit_cost`) when it's logged, so a later price change can't rewrite it. An item with no cost set is logged but **not valued** — never counted as free — and is flagged ("no cost set") on the entry, the Waste day page and the Profit & ledger page.
+- **Cash.** Waste is not an expense and no cash left, so it stays out of **Money Movement** and the cash drawer. (You already paid for the stock when you bought it.)
+- **Undo.** An entry made today can be undone (a Waste movement for the opposite quantity, `reverses_id` pointing at the original, same day): the stock returns and the loss leaves profit. Older entries are final, like a voided sale's day.
+- **Where to see it.** A *Waste* tab beside Sales / Ingredients / Bulk / Expenses on every day page, a *Waste* tile on Today on days something was written off, a *Waste* line in the P&L waterfall, ledger table, PDF (with a by-item table) and CSV.
+
+### Supplier price history
+
+Every priced restock (the "You paid" box) and every delivery check with a price records a row in `item_purchases`: what was bought, what was paid, the cost per unit, the date (a backdated restock uses its "Bought on" date) and, optionally, the supplier (`suppliers`, remembered by name, matched ignoring case and spacing). It is a record only: it never feeds a sale's locked-in cost or any profit figure. Nothing before this was recorded, so history starts with the first priced purchase.
+
+- **Item page → Price history:** each purchase with its percent change, the latest price per supplier with the cheapest marked, and which menu items get dearer (only items that count their links in cost) with the extra cost per sale.
+- **Inventory page → Prices that went up lately:** items whose latest price rose 5% or more within 60 days, with how many menu items it raises.
 
 ## Pieces
 

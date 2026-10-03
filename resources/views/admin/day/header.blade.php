@@ -1,4 +1,4 @@
-{{-- Shared by the four day pages: which day, the four numbers of its profit, and a tab for each. --}}
+{{-- Shared by the day pages: which day, the numbers of its profit, and a tab for each. --}}
 @php
     $isToday = $day->isToday();
     $dayQuery = $isToday ? [] : ['date' => $day->toDateString()];
@@ -7,6 +7,7 @@
         'ingredients' => ['label' => 'Ingredients', 'amount' => $ledgerDay['cogs'], 'sign' => '−'],
         'bulk' => ['label' => $business->auditsPieces() ? 'Used at closing' : 'Bulk used', 'amount' => $ledgerDay['audited'] ? $ledgerDay['bulk'] : null, 'sign' => '−'],
         'expenses' => ['label' => 'Expenses', 'amount' => $ledgerDay['expenses'], 'sign' => '−'],
+        'waste' => ['label' => 'Waste', 'amount' => $ledgerDay['waste'], 'sign' => '−'],
     ];
     $net = $ledgerDay['net'];
 @endphp
@@ -22,7 +23,7 @@
         <p class="mt-1 text-sm text-ink-500">
             {{ $isToday ? 'Profit so far' : 'Profit' }}:
             <span @class(['num font-semibold text-ink-900 dark:text-white', '!text-loss-600 dark:!text-loss-400' => $net < 0])>{{ $net < 0 ? '−' : '' }}₱{{ number_format(abs($net), 2) }}</span>
-            <span class="text-ink-400">= sales − ingredients used − expenses</span>
+            <span class="text-ink-400">= sales − ingredients used − expenses − waste</span>
         </p>
     </div>
     <form method="GET" action="{{ route('admin.day', $section) }}" class="flex items-center gap-2">
@@ -34,7 +35,7 @@
     </form>
 </div>
 
-<nav class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-ink-200 bg-ink-200 sm:grid-cols-4 dark:border-white/[0.07] dark:bg-white/[0.07]" aria-label="Parts of the day's profit">
+<nav class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-ink-200 bg-ink-200 sm:grid-cols-5 dark:border-white/[0.07] dark:bg-white/[0.07]" aria-label="Parts of the day's profit">
     @foreach ($tabs as $key => $tab)
         <a href="{{ route('admin.day', ['section' => $key] + $dayQuery) }}" @class([
             'block p-4 transition',

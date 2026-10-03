@@ -10,11 +10,11 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
- * The details behind each number on the Today page: sales, ingredients, bulk used, expenses.
+ * The details behind each number on the Today page: sales, ingredients, bulk used, expenses, waste.
  */
 class DayController extends Controller
 {
-    public const SECTIONS = ['sales', 'ingredients', 'bulk', 'expenses'];
+    public const SECTIONS = ['sales', 'ingredients', 'bulk', 'expenses', 'waste'];
 
     public function __invoke(Request $request, string $section, DailyLedger $ledger, DayBreakdown $breakdown): View
     {

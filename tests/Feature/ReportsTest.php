@@ -96,8 +96,8 @@ it('exports the ledger as CSV', function () {
 
     $response->assertOk();
     $csv = $response->streamedContent();
-    expect($csv)->toContain('Date,Orders,Sales,COGS,Expenses,Net,"Margin %","Restock costs","Money movement"')
-        ->and($csv)->toContain(today()->subDay()->toDateString().',2,327,138,300,-111,-33.9,0,27');
+    expect($csv)->toContain('Date,Orders,Sales,COGS,Expenses,Waste,Net,"Margin %","Restock costs","Money movement"')
+        ->and($csv)->toContain(today()->subDay()->toDateString().',2,327,138,300,0,-111,-33.9,0,27');
 });
 
 it('exports the menu in the same columns the importer reads', function () {

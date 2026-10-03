@@ -13,6 +13,7 @@
         ['Sales', $sales, 'total'],
         ['COGS (what sold actually cost)', -$totals['cogs'], 'cost'],
         ['Operating expenses (rent, wages, utilities, supplies, payables)', -$totals['expenses'], 'cost'],
+        ['Waste (stock written off, at cost)', -$totals['waste'], 'cost'],
         ['Net profit', $totals['net'], 'result'],
     ];
 
@@ -136,9 +137,9 @@
 {{-- 2. Daily ledger --}}
 <div class="section">
     <h2>Daily ledger</h2>
-    <p class="intro">Every day in the period. Net = Sales − COGS − Expenses.</p>
+    <p class="intro">Every day in the period. Net = Sales − COGS − Expenses − Waste.</p>
     <table class="data">
-        <thead><tr><th>Date</th><th class="r">Orders</th><th class="r">Sales</th><th class="r">COGS</th><th class="r">Expenses</th><th class="r">Net profit</th><th class="r">Margin</th></tr></thead>
+        <thead><tr><th>Date</th><th class="r">Orders</th><th class="r">Sales</th><th class="r">COGS</th><th class="r">Expenses</th><th class="r">Waste</th><th class="r">Net profit</th><th class="r">Margin</th></tr></thead>
         <tbody>
         @foreach ($days as $day)
             <tr class="{{ $loop->even ? 'stripe' : '' }}">
@@ -147,6 +148,7 @@
                 <td class="r num">{{ number_format($day['sales'], 2) }}</td>
                 <td class="r num">{{ number_format($day['cogs'], 2) }}</td>
                 <td class="r num">{{ number_format($day['expenses'], 2) }}</td>
+                <td class="r num">{{ number_format($day['waste'], 2) }}</td>
                 <td class="r num {{ $day['net'] < 0 ? 'loss' : '' }}">{{ $day['net'] < 0 ? '('.number_format(abs($day['net']), 2).')' : number_format($day['net'], 2) }}</td>
                 <td class="r num">{{ $day['sales'] > 0 ? $pct($day['net'] / $day['sales'] * 100) : '—' }}</td>
             </tr>
@@ -157,6 +159,7 @@
             <td class="r num">{{ number_format($sales, 2) }}</td>
             <td class="r num">{{ number_format($totals['cogs'], 2) }}</td>
             <td class="r num">{{ number_format($totals['expenses'], 2) }}</td>
+            <td class="r num">{{ number_format($totals['waste'], 2) }}</td>
             <td class="r num {{ $totals['net'] < 0 ? 'loss' : '' }}">{{ $totals['net'] < 0 ? '('.number_format(abs($totals['net']), 2).')' : number_format($totals['net'], 2) }}</td>
             <td class="r num">{{ $pct($margin) }}</td>
         </tr>
@@ -301,6 +304,24 @@
 <div class="section">
     <h2>Costs and stock</h2>
     <p class="intro">Where the ingredient money went, what went missing, and what is on the shelf now.</p>
+
+    @if ($wasteLines->isNotEmpty())
+        <h3>Waste</h3>
+        <p class="small muted">Stock spilled, expired or thrown away, valued at its cost when it was logged. It is counted against profit above, never as cash out.</p>
+        <table class="data">
+            <thead><tr><th>Item</th><th class="r">Quantity</th><th class="r">Loss</th></tr></thead>
+            <tbody>
+            @foreach ($wasteLines as $row)
+                <tr class="{{ $loop->even ? 'stripe' : '' }}">
+                    <td>{{ $row['name'] }}</td>
+                    <td class="r num">{{ $qty($row['qty'], $row['unit']) }}</td>
+                    <td class="r num">{{ $row['cost'] === null ? 'no cost set' : $peso($row['cost']) }}</td>
+                </tr>
+            @endforeach
+            <tr class="total"><td colspan="2">Total counted against profit</td><td class="r num">{{ $peso($totals['waste']) }}</td></tr>
+            </tbody>
+        </table>
+    @endif
 
     <h3>Taken off the shelf by sales</h3>
     <table class="data">

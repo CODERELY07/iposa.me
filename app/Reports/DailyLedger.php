@@ -4,6 +4,7 @@ namespace App\Reports;
 
 use App\Enums\ExpenseCategory;
 use App\Enums\OrderStatus;
+use App\Enums\StockMovementReason;
 use App\Models\Business;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -14,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * One row per day: the same columns as the owner's spreadsheet.
  *
- *   Net Profit    = Sales − COGS − Operating expenses
+ *   Net Profit    = Sales − COGS − Operating expenses − Waste
  *   Money Movement = Sales − Operating expenses − Restock costs
  *
  * COGS is the locked-in cost of exactly what sold (`order_lines.unit_cost`,
@@ -23,7 +24,9 @@ use Illuminate\Support\Facades\DB;
  * it says what share of sales revenue actually had a known cost, so Net Profit's
  * trustworthiness is visible, not just its number. Restocks are a cash outflow,
  * not a profit expense — they convert cash into inventory, and only count once
- * that inventory is sold, via COGS. `bulk` is kept for the Bulk drill-down page
+ * that inventory is sold, via COGS. Waste is stock written off (spilled, expired): valued at
+ * its cost the day it was logged, it is a loss against Net but never cash out, so it stays
+ * out of Money Movement. `bulk` is kept for the Bulk drill-down page
  * and the recipe-surplus math, but (like COGS) never feeds Money Movement.
  *
  * Every report and dashboard reads from here, so the numbers always match.
@@ -31,7 +34,7 @@ use Illuminate\Support\Facades\DB;
 class DailyLedger
 {
     /**
-     * @return Collection<string, array{date: CarbonImmutable, orders: int, sales: float, cogs: float, known_revenue: float, bulk: float, audited: bool, expenses: float, payables: float, missing: float, stock_purchases: float, net: float, money_movement: float}>
+     * @return Collection<string, array{date: CarbonImmutable, orders: int, sales: float, cogs: float, known_revenue: float, bulk: float, audited: bool, expenses: float, payables: float, missing: float, stock_purchases: float, waste: float, waste_unpriced: int, net: float, money_movement: float}>
      */
     public function forRange(Business $business, CarbonInterface $from, CarbonInterface $to): Collection
     {
@@ -43,6 +46,7 @@ class DailyLedger
         $bulk = $this->bulkByDay($business, $from, $to);
         $auditedDays = $this->auditedDays($business, $from, $to);
         $expenses = $this->expensesByDay($business, $from, $to);
+        $waste = $this->wasteByDay($business, $from, $to);
 
         $rows = collect();
 
@@ -63,8 +67,11 @@ class DailyLedger
                 'payables' => round((float) ($expenses[$key]->payables ?? 0), 2),
                 'missing' => round((float) ($expenses[$key]->missing ?? 0), 2),
                 'stock_purchases' => round((float) ($expenses[$key]->stock_purchases ?? 0), 2),
+                'waste' => round((float) ($waste[$key]->waste ?? 0), 2),
+                // Waste entries whose item had no cost set: logged, but not valued, so not in `waste`.
+                'waste_unpriced' => (int) ($waste[$key]->unpriced ?? 0),
             ];
-            $row['net'] = round($row['sales'] - $row['cogs'] - $row['expenses'], 2);
+            $row['net'] = round($row['sales'] - $row['cogs'] - $row['expenses'] - $row['waste'], 2);
             $row['money_movement'] = round($row['sales'] - $row['expenses'] - $row['stock_purchases'], 2);
 
             $rows->put($key, $row);
@@ -79,7 +86,7 @@ class DailyLedger
      * ones -- null when there were no sales to measure coverage against.
      *
      * @param  Collection<string, array<string, mixed>>  $rows
-     * @return array{orders: int, sales: float, cogs: float, bulk: float, expenses: float, payables: float, missing: float, stock_purchases: float, net: float, money_movement: float, coverage: ?float}
+     * @return array{orders: int, sales: float, cogs: float, bulk: float, expenses: float, payables: float, missing: float, stock_purchases: float, waste: float, waste_unpriced: int, net: float, money_movement: float, coverage: ?float}
      */
     public function totals(Collection $rows): array
     {
@@ -95,6 +102,8 @@ class DailyLedger
             'payables' => round($rows->sum('payables'), 2),
             'missing' => round($rows->sum('missing'), 2),
             'stock_purchases' => round($rows->sum('stock_purchases'), 2),
+            'waste' => round($rows->sum('waste'), 2),
+            'waste_unpriced' => (int) $rows->sum('waste_unpriced'),
             'net' => round($rows->sum('net'), 2),
             'money_movement' => round($rows->sum('money_movement'), 2),
             'coverage' => $sales > 0 ? round($knownRevenue / $sales * 100, 1) : null,
@@ -216,6 +225,25 @@ class DailyLedger
                 [ExpenseCategory::StockPurchase->value, ExpenseCategory::Payables->value, ExpenseCategory::MissingStock->value, ExpenseCategory::StockPurchase->value],
             )
             ->groupByRaw('date(date)')
+            ->get()
+            ->keyBy('day');
+    }
+
+    /**
+     * Waste per day at the cost locked in when it was logged. An undo books the opposite amount
+     * on the same day, so a cancelled entry nets to nothing. Unvalued entries (no cost set) are
+     * counted separately, never treated as free.
+     *
+     * @return Collection<string, object>
+     */
+    private function wasteByDay(Business $business, CarbonImmutable $from, CarbonImmutable $to): Collection
+    {
+        return DB::table('stock_movements')
+            ->where('business_id', $business->id)
+            ->where('reason', StockMovementReason::Waste->value)
+            ->whereBetween('created_at', [$from, $to])
+            ->selectRaw('date(created_at) as day, sum(-qty_change * unit_cost) as waste, sum(case when unit_cost is null and qty_change < 0 then 1 else 0 end) as unpriced')
+            ->groupByRaw('date(created_at)')
             ->get()
             ->keyBy('day');
     }

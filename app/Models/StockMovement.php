@@ -7,11 +7,12 @@ use App\Models\Concerns\BelongsToBusiness;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Audit trail: every change to an item's on-hand count, and why.
  */
-#[Fillable(['business_id', 'item_id', 'item_variant_id', 'qty_change', 'costed_qty', 'reason', 'note', 'order_id', 'audit_id', 'user_id', 'created_at'])]
+#[Fillable(['business_id', 'item_id', 'item_variant_id', 'reverses_id', 'qty_change', 'costed_qty', 'unit_cost', 'reason', 'note', 'order_id', 'audit_id', 'user_id', 'created_at'])]
 class StockMovement extends Model
 {
     use BelongsToBusiness;
@@ -28,6 +29,7 @@ class StockMovement extends Model
         return [
             'qty_change' => 'decimal:3',
             'costed_qty' => 'decimal:3',
+            'unit_cost' => 'decimal:6',
             'reason' => StockMovementReason::class,
         ];
     }
@@ -48,6 +50,16 @@ class StockMovement extends Model
     public function variant(): BelongsTo
     {
         return $this->belongsTo(ItemVariant::class, 'item_variant_id');
+    }
+
+    /**
+     * The undo that cancelled this waste entry, if it was undone.
+     *
+     * @return HasOne<StockMovement, $this>
+     */
+    public function undoneBy(): HasOne
+    {
+        return $this->hasOne(self::class, 'reverses_id');
     }
 
     /**

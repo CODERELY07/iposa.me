@@ -6,6 +6,8 @@ use App\Models\Expense;
 use App\Models\Item;
 use App\Models\StockMovement;
 use App\Reports\DailyLedger;
+use App\Reports\PeriodReport;
+use Carbon\CarbonImmutable;
 
 beforeEach(function () {
     $this->owner = shopOwner();
@@ -26,17 +28,124 @@ it('takes waste off the count with the reason, as a Waste movement', function ()
         ->and($movement->user_id)->toBe($this->owner->id);
 });
 
-it('is not an expense and never moves profit', function () {
+it('counts against profit as Waste, at the item cost, but is not an expense or cash out', function () {
     $before = app(DailyLedger::class)->forRange($this->business, today(), today())->first();
 
-    $this->actingAs($this->owner)->post(route('admin.inventory.waste', $this->menu['patty']), ['quantity' => 10, 'note' => 'Expired'])->assertRedirect();
+    // 10 patties at ₱24 each.
+    $this->actingAs($this->owner)->post(route('admin.inventory.waste', $this->menu['patty']), ['quantity' => 10, 'note' => 'Expired'])
+        ->assertRedirect()->assertSessionHas('status', fn (string $status) => str_contains($status, '₱240.00 counted against profit as waste'));
 
     $after = app(DailyLedger::class)->forRange($this->business, today(), today())->first();
 
     expect(Expense::withoutGlobalScopes()->count())->toBe(0)
-        ->and($after['net'])->toBe($before['net'])
+        ->and($after['waste'])->toBe(240.0)
+        ->and($after['net'])->toBe($before['net'] - 240.0)
+        // Not an expense, and no cash left: the other figures don't move.
         ->and($after['expenses'])->toBe($before['expenses'])
-        ->and($after['money_movement'])->toBe($before['money_movement']);
+        ->and($after['money_movement'])->toBe($before['money_movement'])
+        ->and($after['waste_unpriced'])->toBe(0);
+});
+
+it('locks the cost in when it is logged, so a later price change cannot rewrite it', function () {
+    $this->actingAs($this->owner)->post(route('admin.inventory.waste', $this->menu['patty']), ['quantity' => 5])->assertRedirect();
+    $this->menu['patty']->update(['unit_cost' => 99]);
+
+    $row = app(DailyLedger::class)->forRange($this->business, today(), today())->first();
+    expect($row['waste'])->toBe(120.0)
+        ->and((float) StockMovement::withoutGlobalScopes()->sole()->unit_cost)->toBe(24.0);
+});
+
+it('values a size at its own cost', function () {
+    $water = Item::withoutGlobalScopes()->create(['business_id' => $this->business->id, 'kind' => 'menu', 'name' => 'Bottled Water']);
+    $water->variants()->create(['label' => '500ml', 'price' => 20, 'cost' => 10, 'on_hand' => 24, 'sort' => 0]);
+    $large = $water->variants()->create(['label' => '1L', 'price' => 35, 'cost' => 18, 'on_hand' => 6, 'sort' => 1]);
+
+    $this->actingAs($this->owner)->post(route('admin.inventory.waste', $water), ['quantity' => 2, 'item_variant_id' => $large->id])->assertRedirect();
+
+    expect(app(DailyLedger::class)->forRange($this->business, today(), today())->first()['waste'])->toBe(36.0);
+});
+
+it('never treats an item with no cost as free: the stock goes down and the entry is flagged', function () {
+    $napkins = Item::withoutGlobalScopes()->create(['business_id' => $this->business->id, 'kind' => 'piece', 'name' => 'Napkins', 'unit' => 'pc', 'on_hand' => 100]);
+
+    $this->actingAs($this->owner)->post(route('admin.inventory.waste', $napkins), ['quantity' => 10])
+        ->assertRedirect()->assertSessionHas('status', fn (string $status) => str_contains($status, 'no cost set'));
+
+    $row = app(DailyLedger::class)->forRange($this->business, today(), today())->first();
+    expect((float) $napkins->refresh()->on_hand)->toBe(90.0)
+        ->and($row['waste'])->toBe(0.0)
+        ->and($row['waste_unpriced'])->toBe(1)
+        ->and(StockMovement::withoutGlobalScopes()->sole()->unit_cost)->toBeNull();
+});
+
+it('undoes today waste: the stock returns and the loss leaves profit', function () {
+    $this->actingAs($this->owner)->post(route('admin.inventory.waste', $this->menu['patty']), ['quantity' => 10, 'note' => 'Oops'])->assertRedirect();
+    $entry = StockMovement::withoutGlobalScopes()->where('reason', StockMovementReason::Waste)->sole();
+
+    $this->actingAs($this->owner)->post(route('admin.inventory.waste.undo', $entry))->assertRedirect()->assertSessionDoesntHaveErrors();
+
+    $undo = StockMovement::withoutGlobalScopes()->latest('id')->first();
+    $row = app(DailyLedger::class)->forRange($this->business, today(), today())->first();
+
+    expect((float) $this->menu['patty']->refresh()->on_hand)->toBe(100.0)
+        ->and($undo->reverses_id)->toBe($entry->id)
+        ->and((float) $undo->qty_change)->toBe(10.0)
+        ->and($row['waste'])->toBe(0.0);
+
+    // Only once.
+    $this->actingAs($this->owner)->post(route('admin.inventory.waste.undo', $entry))->assertSessionHasErrors('waste');
+    expect((float) $this->menu['patty']->refresh()->on_hand)->toBe(100.0);
+});
+
+it('does not let an older entry, a non-waste movement, or another shop be undone', function () {
+    $this->actingAs($this->owner)->post(route('admin.inventory.waste', $this->menu['bun']), ['quantity' => 2, 'date' => today()->subDay()->toDateString()])->assertRedirect();
+    $old = StockMovement::withoutGlobalScopes()->where('reason', StockMovementReason::Waste)->sole();
+
+    $this->actingAs($this->owner)->post(route('admin.inventory.waste.undo', $old))->assertSessionHasErrors('waste');
+
+    $this->actingAs($this->owner)->post(route('admin.inventory.restock', $this->menu['bun']), ['quantity' => 5])->assertRedirect();
+    $restock = StockMovement::withoutGlobalScopes()->where('reason', StockMovementReason::Restock)->sole();
+    $this->actingAs($this->owner)->post(route('admin.inventory.waste.undo', $restock))->assertSessionHasErrors('waste');
+
+    $this->actingAs($this->owner)->post(route('admin.inventory.waste', $this->menu['bun']), ['quantity' => 1])->assertRedirect();
+    $today = StockMovement::withoutGlobalScopes()->where('reason', StockMovementReason::Waste)->latest('id')->first();
+    $this->actingAs(shopOwner())->post(route('admin.inventory.waste.undo', $today))->assertNotFound();
+});
+
+it('lists the day waste and matches the ledger, with an Undo for today entries', function () {
+    $this->actingAs($this->owner)->post(route('admin.inventory.waste', $this->menu['patty']), ['quantity' => 3, 'note' => 'Fell on the floor'])->assertRedirect();
+    $this->actingAs($this->owner)->post(route('admin.inventory.waste', $this->menu['bun']), ['quantity' => 4, 'note' => 'Moldy'])->assertRedirect();
+
+    $response = $this->actingAs($this->owner)->get(route('admin.day', 'waste'))
+        ->assertOk()->assertSee('Fell on the floor')->assertSee('Moldy')->assertSee('Undo');
+
+    $ledger = app(DailyLedger::class)->forRange($this->business, today(), today())->first();
+    expect($response->viewData('data')['total'])->toBe($ledger['waste'])
+        ->and($ledger['waste'])->toBe(102.0);
+});
+
+it('adds a Waste tile to Today only on days something was written off, and the P&L and PDF show it', function () {
+    $this->actingAs($this->owner)->get(route('admin.dashboard'))->assertOk()->assertDontSee('Stock written off today');
+
+    $this->actingAs($this->owner)->post(route('admin.inventory.waste', $this->menu['patty']), ['quantity' => 10])->assertRedirect();
+
+    $this->actingAs($this->owner)->get(route('admin.dashboard'))->assertOk()->assertSee('Stock written off today')
+        ->assertViewHas('profitSoFar', -240.0);
+    $this->actingAs($this->owner)->get(route('admin.reports'))->assertOk()->assertSee('Spilled, expired or thrown-away stock');
+
+    $report = app(PeriodReport::class)->build($this->business, CarbonImmutable::today(), CarbonImmutable::today());
+    expect($report['totals']['waste'])->toBe(240.0)
+        ->and($report['wasteLines']->first())->toMatchArray(['name' => 'Beef patty', 'qty' => 10.0, 'cost' => 240.0]);
+    expect(view('reports.pdf', $report)->render())->toContain('Waste');
+});
+
+it('is taken off again when the day is reset', function () {
+    $this->actingAs($this->owner)->post(route('admin.inventory.waste', $this->menu['patty']), ['quantity' => 10])->assertRedirect();
+
+    $this->actingAs($this->owner)->post(route('admin.reset-today'), ['confirmation' => $this->business->business_name])->assertRedirect();
+
+    expect((float) $this->menu['patty']->refresh()->on_hand)->toBe(100.0)
+        ->and(app(DailyLedger::class)->forRange($this->business, today(), today())->first()['waste'])->toBe(0.0);
 });
 
 it('counts a container the way a restock does', function () {

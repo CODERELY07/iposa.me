@@ -6,6 +6,7 @@
         ['label' => 'Gross revenue', 'amount' => $sales, 'kind' => 'total', 'note' => number_format($totals['orders']).' '.\Illuminate\Support\Str::plural('order', $totals['orders']).' from the register'],
         ['label' => 'COGS', 'amount' => -$totals['cogs'], 'kind' => 'cost', 'note' => 'What sold this period actually cost, locked in at the sale'],
         ['label' => 'Operating expenses', 'amount' => -$totals['expenses'], 'kind' => 'cost', 'note' => 'Rent, wages, utilities, supplies, equipment payables'],
+        ['label' => 'Waste', 'amount' => -$totals['waste'], 'kind' => 'cost', 'note' => 'Spilled, expired or thrown-away stock, at its cost when logged'],
         ['label' => 'Net profit', 'amount' => $net, 'kind' => 'result', 'note' => $sales > 0 ? number_format($net / $sales * 100, 1).'% of revenue' : 'No sales yet'],
     ];
     $running = 0;
@@ -18,7 +19,7 @@
 <x-app-layout title="Profit & ledger">
     <div class="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-8">
         <x-page-header eyebrow="Profit & loss" :title="$periodLabel"
-            description="Net profit is what sold, minus what it actually cost (COGS) and every operating expense. A restock is a cash outflow, not a profit expense — it only counts once it's sold.">
+            description="Net profit is what sold, minus what it actually cost (COGS) and every operating expense and what you wrote off as waste. A restock is a cash outflow, not a profit expense — it only counts once it's sold.">
             <x-slot:actions>
                 <div class="inline-flex gap-1 rounded-xl bg-ink-100 p-1 dark:bg-white/[0.05]">
                     <a href="{{ route('admin.reports', ['period' => 'week']) }}" @class(['tab', 'tab-active' => $period === 'week'])>Last 7 days</a>
@@ -48,12 +49,19 @@
                 <div>
                     <p class="eyebrow">Net profit · {{ $periodLabel }}</p>
                     <p @class(['num mt-2 text-4xl font-semibold tracking-tight', 'text-loss-600 dark:text-loss-400' => $net < 0])>{{ $net < 0 ? '−' : '' }}₱{{ number_format(abs($net), 2) }}</p>
-                    <p class="mt-2 text-sm text-ink-500">Revenue minus what sold actually cost (COGS) and every operating expense, including equipment installments.</p>
+                    <p class="mt-2 text-sm text-ink-500">Revenue minus what sold actually cost (COGS), every operating expense (including equipment installments) and waste.</p>
 
                     @if ($totals['coverage'] !== null && $totals['coverage'] < 100)
                         <p class="mt-3 flex gap-2 rounded-xl bg-loss-500/10 px-3 py-2 text-xs text-loss-700 dark:text-loss-300">
                             <x-icon name="alert" class="mt-0.5 size-3.5 shrink-0" />
                             Costing coverage {{ number_format($totals['coverage'], 1) }}% of revenue — the rest sold without a configured cost, so COGS understates the real cost.
+                        </p>
+                    @endif
+
+                    @if ($totals['waste_unpriced'] > 0)
+                        <p class="mt-3 flex gap-2 rounded-xl bg-loss-500/10 px-3 py-2 text-xs text-loss-700 dark:text-loss-300">
+                            <x-icon name="alert" class="mt-0.5 size-3.5 shrink-0" />
+                            {{ $totals['waste_unpriced'] }} waste {{ \Illuminate\Support\Str::plural('entry', $totals['waste_unpriced']) }} had no cost set, so {{ $totals['waste_unpriced'] === 1 ? "it isn't" : "they aren't" }} counted above.
                         </p>
                     @endif
 
@@ -66,6 +74,7 @@
                     <dl class="mt-6 space-y-2 border-t border-ink-100 pt-4 text-sm dark:border-white/[0.06]">
                         <div class="flex justify-between"><dt class="text-ink-500">Avg per day</dt><dd class="num">₱{{ number_format($net / max(1, $dayCount), 2) }}</dd></div>
                         <div class="flex justify-between"><dt class="text-ink-500">Best day</dt><dd class="num">{{ $bestDay ? $bestDay['date']->format('D j').' · ₱'.number_format($bestDay['net'], 0) : '—' }}</dd></div>
+                        <div class="flex justify-between"><dt class="text-ink-500">Waste</dt><dd class="num">₱{{ number_format($totals['waste'], 2) }}</dd></div>
                         <div class="flex justify-between"><dt class="text-ink-500">COGS %</dt><dd class="num">{{ $sales > 0 ? number_format($totals['cogs'] / $sales * 100, 1).'%' : '—' }}</dd></div>
                         <div class="flex justify-between"><dt class="text-ink-500">Costing coverage</dt><dd class="num">{{ $totals['coverage'] !== null ? number_format($totals['coverage'], 1).'%' : '—' }}</dd></div>
                     </dl>
@@ -112,7 +121,7 @@
                 <div class="flex items-center justify-between border-b border-ink-200 px-5 py-4 dark:border-white/[0.07]">
                     <div>
                         <h2 class="font-semibold">Daily ledger</h2>
-                        <p class="text-xs text-ink-500">Newest first. Net = Sales − COGS − Expenses.</p>
+                        <p class="text-xs text-ink-500">Newest first. Net = Sales − COGS − Expenses − Waste.</p>
                     </div>
                     <a href="{{ route('admin.exports.download', ['dataset' => 'orders'] + $exportRange) }}" download class="btn-ghost py-2 text-xs"><x-icon name="download" class="size-4" /> Orders CSV</a>
                 </div>
@@ -125,6 +134,7 @@
                                 <th class="px-3 py-3 text-right font-semibold">Sales</th>
                                 <th class="px-3 py-3 text-right font-semibold">COGS</th>
                                 <th class="px-3 py-3 text-right font-semibold">Expenses</th>
+                                <th class="px-3 py-3 text-right font-semibold">Waste</th>
                                 <th class="px-3 py-3 text-right font-semibold">Net</th>
                                 <th class="px-5 py-3 text-right font-semibold">Margin</th>
                             </tr>
@@ -140,6 +150,7 @@
                                     <td class="num px-3 py-2.5 text-right">{{ number_format($row['sales'], 2) }}</td>
                                     <td class="num px-3 py-2.5 text-right text-ink-500">{{ $row['cogs'] ? number_format($row['cogs'], 2) : '—' }}</td>
                                     <td class="num px-3 py-2.5 text-right text-ink-500">{{ $row['expenses'] ? number_format($row['expenses'], 2) : '—' }}</td>
+                                    <td class="num px-3 py-2.5 text-right text-ink-500">{{ $row['waste'] ? number_format($row['waste'], 2) : '—' }}</td>
                                     <td @class(['num px-3 py-2.5 text-right font-semibold', 'text-loss-600 dark:text-loss-400' => $row['net'] < 0])>{{ $row['net'] < 0 ? '('.number_format(abs($row['net']), 2).')' : number_format($row['net'], 2) }}</td>
                                     <td class="num px-5 py-2.5 text-right text-ink-500">{{ $row['sales'] > 0 ? number_format($row['net'] / $row['sales'] * 100, 1).'%' : '—' }}</td>
                                 </tr>
@@ -152,6 +163,7 @@
                                 <td class="num px-3 py-3 text-right">{{ number_format($totals['sales'], 2) }}</td>
                                 <td class="num px-3 py-3 text-right">{{ number_format($totals['cogs'], 2) }}</td>
                                 <td class="num px-3 py-3 text-right">{{ number_format($totals['expenses'], 2) }}</td>
+                                <td class="num px-3 py-3 text-right">{{ number_format($totals['waste'], 2) }}</td>
                                 <td @class(['num px-3 py-3 text-right', 'text-loss-600 dark:text-loss-400' => $net < 0])>{{ $net < 0 ? '('.number_format(abs($net), 2).')' : number_format($net, 2) }}</td>
                                 <td class="num px-5 py-3 text-right">{{ $sales > 0 ? number_format($net / $sales * 100, 1).'%' : '—' }}</td>
                             </tr>

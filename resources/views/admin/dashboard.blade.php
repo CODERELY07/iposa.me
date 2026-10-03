@@ -10,6 +10,11 @@
         ['label' => 'COGS', 'amount' => $today['cogs'], 'negative' => true, 'hint' => 'What today\'s sales actually cost', 'href' => route('admin.day', 'ingredients')],
         ['label' => 'Expenses', 'amount' => $today['expenses'], 'negative' => true, 'hint' => $today['expenseCount'].' '.\Illuminate\Support\Str::plural('entry', $today['expenseCount']).' today', 'href' => route('admin.day', 'expenses')],
     ];
+
+    // Waste only joins the equation on days something was written off, so a shop that doesn't log it sees the same three tiles.
+    if ($today['waste'] > 0) {
+        $equation[] = ['label' => 'Waste', 'amount' => $today['waste'], 'negative' => true, 'hint' => 'Stock written off today', 'href' => route('admin.day', 'waste')];
+    }
 @endphp
 
 <x-app-layout title="Today">
@@ -44,7 +49,7 @@
                 @endif
 
                 {{-- The equation: every peso is traceable --}}
-                <div class="mt-8 grid gap-px overflow-hidden rounded-xl border border-ink-200 bg-ink-200 sm:grid-cols-3 dark:border-white/[0.07] dark:bg-white/[0.07]">
+                <div class="mt-8 grid gap-px overflow-hidden rounded-xl border border-ink-200 bg-ink-200 {{ count($equation) === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3' }} dark:border-white/[0.07] dark:bg-white/[0.07]">
                     @foreach ($equation as $part)
                         <a href="{{ $part['href'] ?? '#' }}" @class(['group bg-white p-4 transition dark:bg-ink-900', 'hover:bg-ink-50 dark:hover:bg-ink-800/60' => $part['href'], 'pointer-events-none' => ! $part['href']])>
                             <p class="flex items-center justify-between text-xs text-ink-500">

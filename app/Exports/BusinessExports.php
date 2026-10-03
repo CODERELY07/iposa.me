@@ -26,11 +26,11 @@ class BusinessExports
      */
     public function ledger(Business $business, CarbonInterface $from, CarbonInterface $to): iterable
     {
-        yield ['Date', 'Orders', 'Sales', 'COGS', 'Expenses', 'Net', 'Margin %', 'Restock costs', 'Money movement'];
+        yield ['Date', 'Orders', 'Sales', 'COGS', 'Expenses', 'Waste', 'Net', 'Margin %', 'Restock costs', 'Money movement'];
 
         foreach ($this->ledger->forRange($business, $from, $to) as $row) {
             yield [
-                $row['date']->toDateString(), $row['orders'], $row['sales'], $row['cogs'], $row['expenses'], $row['net'],
+                $row['date']->toDateString(), $row['orders'], $row['sales'], $row['cogs'], $row['expenses'], $row['waste'], $row['net'],
                 $row['sales'] > 0 ? round($row['net'] / $row['sales'] * 100, 1) : null,
                 $row['stock_purchases'], $row['money_movement'],
             ];

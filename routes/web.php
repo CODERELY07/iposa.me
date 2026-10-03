@@ -26,6 +26,7 @@ use App\Http\Controllers\Admin\ReportPdfController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\TeamController;
 use App\Http\Controllers\Admin\VoidRequestController;
+use App\Http\Controllers\Admin\WasteUndoController;
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\BusinessController;
 use App\Http\Controllers\ExpenseController;
@@ -101,6 +102,7 @@ Route::middleware(['auth', 'verified', 'role:admin', 'business'])->prefix('admin
     Route::post('/inventory/items/{item}/unlink-recipes/{menuItem}', [ItemController::class, 'unlinkRecipe'])->name('inventory.unlink-recipe');
     Route::post('/inventory/items/{item}/restock', ItemRestockController::class)->name('inventory.restock');
     Route::post('/inventory/items/{item}/waste', ItemWasteController::class)->name('inventory.waste');
+    Route::post('/inventory/waste/{movement}/undo', WasteUndoController::class)->name('inventory.waste.undo');
     Route::get('/inventory/items/{item}/history', ItemStockHistoryController::class)->name('inventory.history');
     Route::post('/inventory/import', ItemImportController::class)->name('inventory.import');
     Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');

@@ -69,16 +69,22 @@ Details in [Access control › Cashier permissions](02-access-control.md#cashier
 
 ## Business profile
 
-Shop name, business type, address, TIN (digits and dashes only) and a receipt footer of up to 120 characters. These are exactly the fields printed on a [receipt](05-pos.md#receipts).
+Shop name, business type, address, the owner's **mobile number**, TIN (digits and dashes only) and a receipt footer of up to 120 characters. The shop name, address, TIN and footer are printed on a [receipt](05-pos.md#receipts). The mobile number (`businesses.phone`, stored as `+639XXXXXXXXX`) is asked at sign-up (required) and editable here (optional for shops that signed up before it existed); the platform console shows it in the business list (searchable), on each shop's page and on the verification screen, and the daily SMS uses it as the default recipient.
 
 ## Register settings
 
 | Setting | Default | Effect |
 |---|---|---|
-| `payment_methods` | cash, gcash, maya | Which buttons the cashier sees; at least one is required |
+| `payment_methods` | cash, gcash, maya | Which buttons the cashier sees; at least one is required. Card was removed as a payment method |
 | `audit_reminder_time` | 21:30 | Saved; the reminder itself isn't sent yet ([06](06-closing-audit.md#whats-left)) |
 | `default_low_threshold` | 10 | Used by items with no threshold of their own |
 | `audit_pieces` | off | **Count pieces at closing**: buns, patties and cups join the closing audit ([06](06-closing-audit.md#counting-pieces)) |
+
+## Daily SMS
+
+One text a day with the day's **voids** (count, total, who) and **void requests** waiting, and **items running low** — nothing else. Settings → *Daily SMS*: on/off, send time (default 22:00), up to 3 Philippine mobile numbers (stored in `settings.sms_summary`), and a *Send a test text* button.
+
+Sent through [SMS Gateway for Android](https://sms-gate.app) (an Android phone you own does the sending, so there is no per-message fee): `POST` to `SMS_GATE_URL` (default the cloud server, or the phone's local address) with basic auth `SMS_GATE_USERNAME` / `SMS_GATE_PASSWORD`. Without those the page warns and sends fail with a clear message. `summary:send` runs every minute from the scheduler (`DailySummaryService`): at most one text per shop per day (`daily_summaries`), a failed send retries every 5 minutes up to 3 times, and shops that are suspended or owe payment are skipped. `DailyBrief` writes plain ASCII ("PHP 340", not ₱, so it stays in as few SMS parts as possible). Voids and low stock come from the same queries as Today, scoped to the shop, so the text matches the screen.
 
 Settings merge over `Business::DEFAULT_SETTINGS`, so a new switch added later has a sensible value for existing shops without a migration.
 

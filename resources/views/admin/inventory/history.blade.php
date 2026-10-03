@@ -60,8 +60,19 @@
                                             <a href="{{ route('admin.orders.show', $movement->order_id) }}" class="hover:underline">Order #{{ $movement->order?->number ?? $movement->order_id }}</a>
                                         @elseif ($movement->audit_id)
                                             <a href="{{ route('admin.day', ['section' => 'bulk', 'date' => ($movement->audit?->date ?? $movement->created_at)->toDateString()]) }}" class="hover:underline">Closing audit</a>
-                                        @elseif ($movement->note)
-                                            <span class="text-ink-600 dark:text-ink-300">{{ $movement->note }}</span>
+                                        @elseif ($movement->note || $movement->reason === \App\Enums\StockMovementReason::Waste)
+                                            <span class="text-ink-600 dark:text-ink-300">{{ $movement->note ?: 'Waste' }}</span>
+                                            @if ($movement->reason === \App\Enums\StockMovementReason::Waste && (float) $movement->qty_change < 0)
+                                                @if ($movement->undoneBy)
+                                                    <span class="ml-2 text-xs text-ink-400">(undone)</span>
+                                                @elseif ($movement->created_at->isToday())
+                                                    <form method="POST" action="{{ route('admin.inventory.waste.undo', $movement) }}" class="ml-2 inline"
+                                                        data-confirm-title="Undo this waste?" data-confirm="The stock goes back on the shelf and the loss leaves today's profit." data-confirm-action="Undo waste">
+                                                        @csrf
+                                                        <button type="submit" class="text-xs font-medium text-brand-600 hover:underline dark:text-brand-300">Undo</button>
+                                                    </form>
+                                                @endif
+                                            @endif
                                         @else
                                             <span class="text-ink-500">—</span>
                                         @endif

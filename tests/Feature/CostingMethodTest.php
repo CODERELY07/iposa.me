@@ -36,22 +36,43 @@ it('treats a manual-only item with no typed cost as unknown, not free', function
     expect($this->burger->refresh()->load('recipeLines.piece')->costPerSale($this->regular->refresh()))->toBeNull();
 });
 
-it('treats a linked-only item with nothing linked to this size as unknown, not free', function () {
+it('uses the typed cost when a linked-only size has nothing linked, and only calls it unknown with no cost at all', function () {
     $water = $this->menu['water']; // no recipe lines at all
     $water->update(['costing_method' => CostingMethod::LinkedOnly]);
 
-    expect($water->refresh()->load('recipeLines.piece')->costPerSale($this->menu['water500']))->toBeNull();
+    // Nothing linked, but the owner typed ₱11: that is the cost.
+    expect($water->refresh()->load('recipeLines.piece')->costPerSale($this->menu['water500']))->toBe(11.0);
+
+    // Nothing linked and nothing typed: genuinely unknown, never ₱0.
+    $this->menu['water500']->update(['cost' => null]);
+    expect($water->refresh()->load('recipeLines.piece')->costPerSale($this->menu['water500']->refresh()))->toBeNull();
 });
 
-it('treats manual-plus-linked as unknown when either half is missing', function () {
+it('keeps a typed cost with manual-plus-linked when nothing is linked, and needs the typed cost', function () {
+    // Cheeseburger has links: typed 46 + 31.5 linked.
     $this->burger->update(['costing_method' => CostingMethod::ManualPlusLinked]);
-    $this->regular->update(['cost' => null]);
+    expect($this->burger->refresh()->load('recipeLines.piece')->costPerSale($this->regular))->toBe(77.5);
 
-    expect($this->burger->refresh()->load('recipeLines.piece')->costPerSale($this->regular->refresh()))->toBeNull();
-
+    // Bottled water has none: the typed cost alone is the cost, not Unknown.
     $water = $this->menu['water'];
     $water->update(['costing_method' => CostingMethod::ManualPlusLinked]);
-    expect($water->refresh()->load('recipeLines.piece')->costPerSale($this->menu['water500']))->toBeNull();
+    expect($water->refresh()->load('recipeLines.piece')->costPerSale($this->menu['water500']))->toBe(11.0);
+
+    // No typed cost: unknown, even with links.
+    $this->regular->update(['cost' => null]);
+    expect($this->burger->refresh()->load('recipeLines.piece')->costPerSale($this->regular->refresh()))->toBeNull();
+});
+
+it('shows a typed cost in Inventory and locks it at checkout when nothing is linked', function () {
+    $water = $this->menu['water'];
+    $water->update(['costing_method' => CostingMethod::ManualPlusLinked]);
+
+    $this->actingAs($this->owner)->get(route('admin.inventory'))
+        ->assertOk()->assertSee('₱11.00');
+
+    $this->actingAs($this->owner)->postJson(route('pos.orders.store'), orderPayload([[$this->menu['water500'], 1]]))->assertCreated();
+
+    expect((float) Order::withoutGlobalScopes()->sole()->lines->sole()->unit_cost)->toBe(11.0);
 });
 
 it('locks an unknown cost as null at checkout, never rounding it to zero', function () {
