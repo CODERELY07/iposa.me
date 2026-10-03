@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['item_id', 'label', 'cost', 'cost_updated_at', 'price', 'sort'])]
+#[Fillable(['item_id', 'label', 'cost', 'cost_updated_at', 'price', 'on_hand', 'sort'])]
 class ItemVariant extends Model
 {
     /**
@@ -19,6 +19,7 @@ class ItemVariant extends Model
         return [
             'cost' => 'decimal:2',
             'price' => 'decimal:2',
+            'on_hand' => 'decimal:3',
             'cost_updated_at' => 'datetime',
         ];
     }
@@ -29,6 +30,14 @@ class ItemVariant extends Model
     public function item(): BelongsTo
     {
         return $this->belongsTo(Item::class);
+    }
+
+    /**
+     * Whether this size keeps its own count (a menu item that counts itself, per size).
+     */
+    public function tracksStock(): bool
+    {
+        return $this->on_hand !== null;
     }
 
     /**

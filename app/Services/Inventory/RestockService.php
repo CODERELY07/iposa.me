@@ -6,6 +6,7 @@ use App\Enums\ExpenseCategory;
 use App\Enums\StockMovementReason;
 use App\Models\Item;
 use App\Models\ItemContainer;
+use App\Models\ItemVariant;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -24,23 +25,31 @@ class RestockService
     /**
      * @return array{added: float, unit_cost: ?float, expense_logged: bool}
      */
-    public function restock(Item $item, User $user, float $quantity, ?ItemContainer $container, ?float $paid, bool $logExpense, ?CarbonInterface $at = null): array
+    public function restock(Item $item, User $user, float $quantity, ?ItemContainer $container, ?float $paid, bool $logExpense, ?CarbonInterface $at = null, ?ItemVariant $variant = null): array
     {
         $at ??= now();
 
-        return DB::transaction(function () use ($item, $user, $quantity, $container, $paid, $logExpense, $at): array {
+        return DB::transaction(function () use ($item, $user, $quantity, $container, $paid, $logExpense, $at, $variant): array {
             $added = round($container !== null ? $quantity * (float) $container->size : $quantity, 3);
             $unitCost = null;
 
-            if (! $item->tracksStock()) {
-                $item->forceFill(['on_hand' => 0])->save();
-            }
+            if ($variant !== null) {
+                $this->stock->applyToVariants($item->business, [$variant->id => $added], StockMovementReason::Restock, ['user_id' => $user->id], $at);
+            } else {
+                if (! $item->tracksStock()) {
+                    $item->forceFill(['on_hand' => 0])->save();
+                }
 
-            $this->stock->apply($item->business, [$item->id => $added], StockMovementReason::Restock, ['user_id' => $user->id], $at);
+                $this->stock->apply($item->business, [$item->id => $added], StockMovementReason::Restock, ['user_id' => $user->id], $at);
+            }
 
             if ($paid !== null && $paid > 0 && $added > 0) {
                 $unitCost = round($paid / $added, 6);
-                $item->forceFill(['unit_cost' => $unitCost])->save();
+
+                // A size has no cost per unit of its own: the price paid is only logged, never copied onto the item.
+                if ($variant === null) {
+                    $item->forceFill(['unit_cost' => $unitCost])->save();
+                }
 
                 // Next time, the form and the restock screen start from this price.
                 $container?->update(['price' => round($paid / $quantity, 2)]);
@@ -55,7 +64,7 @@ class RestockService
                     'date' => $at->toDateString(),
                     'category' => $category,
                     'kind' => $category->defaultKind(),
-                    'description' => $this->describe($item, $quantity, $container, $added),
+                    'description' => $this->describe($item, $quantity, $container, $added, $variant),
                     'amount' => round($paid, 2),
                     'user_id' => $user->id,
                     'logged_by' => $user->name,
@@ -70,14 +79,16 @@ class RestockService
     /**
      * "Cooking oil · 1 tin (18,000 ml)" or "Burger buns · 50 pc".
      */
-    private function describe(Item $item, float $quantity, ?ItemContainer $container, float $added): string
+    private function describe(Item $item, float $quantity, ?ItemContainer $container, float $added, ?ItemVariant $variant = null): string
     {
+        $name = $variant !== null ? "{$item->name} ({$variant->label})" : $item->name;
+
         if ($container === null) {
-            return trim("{$item->name} · ".Item::trimNumber($quantity).' '.($item->unit ?? ''));
+            return trim("{$name} · ".Item::trimNumber($quantity).' '.($item->unit ?? ''));
         }
 
         $count = Item::trimNumber($quantity).' '.str($container->label)->plural($quantity);
 
-        return "{$item->name} · {$count} (".Item::trimNumber($added).' '.$item->unit.')';
+        return "{$name} · {$count} (".Item::trimNumber($added).' '.$item->unit.')';
     }
 }

@@ -49,6 +49,7 @@ class RegisterController extends Controller
                 'id' => $variant->id,
                 'label' => $variant->label,
                 'price' => (float) $variant->price,
+                'stockLeft' => $this->sizeSalesLeft($item, $variant),
             ])->values()->all(),
             'stockLeft' => $this->salesLeft($item),
         ])->values()->all();
@@ -81,6 +82,20 @@ class RegisterController extends Controller
                 'receipt_url' => route('pos.orders.receipt', $order),
             ],
         ], $order->wasRecentlyCreated ? 201 : 200);
+    }
+
+    /**
+     * Same as salesLeft(), for a size that keeps its own count.
+     */
+    private function sizeSalesLeft(Item $item, ItemVariant $variant): ?int
+    {
+        if (! $variant->tracksStock() || $item->recipeLines->isNotEmpty()) {
+            return null;
+        }
+
+        $left = (int) floor(max(0, (float) $variant->on_hand));
+
+        return $left <= self::LOW_AVAILABILITY ? $left : null;
     }
 
     /**

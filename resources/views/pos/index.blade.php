@@ -91,7 +91,7 @@
                                     </span>
                                     <span class="flex items-end justify-between gap-2">
                                         <span class="num text-base font-semibold" x-text="formatPeso(item.variants[0].price)"></span>
-                                        <span x-show="item.stockLeft !== null" class="pill bg-loss-500/15 text-loss-600 dark:text-loss-300" x-text="item.stockLeft + ' left'"></span>
+                                        <span x-show="(item.variants[0].stockLeft ?? item.stockLeft) !== null" class="pill bg-loss-500/15 text-loss-600 dark:text-loss-300" x-text="(item.variants[0].stockLeft ?? item.stockLeft) + ' left'"></span>
                                     </span>
                                 </button>
                             </template>
@@ -108,6 +108,7 @@
                                             <button type="button" @click="add(item, variant)" class="rounded-xl bg-white/70 px-2 py-2 text-left ring-1 ring-ink-900/5 transition hover:bg-white active:scale-[0.97] dark:bg-ink-950/40 dark:ring-white/10 dark:hover:bg-ink-950/70">
                                                 <span class="block text-[11px] font-medium text-ink-500 dark:text-ink-400" x-text="variant.label"></span>
                                                 <span class="num block text-sm font-semibold" x-text="formatPeso(variant.price)"></span>
+                                                <span x-show="variant.stockLeft !== null" class="mt-0.5 block text-[10px] font-medium text-loss-600 dark:text-loss-300" x-text="variant.stockLeft + ' left'"></span>
                                             </button>
                                         </template>
                                     </div>

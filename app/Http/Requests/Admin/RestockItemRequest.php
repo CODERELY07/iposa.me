@@ -4,6 +4,7 @@ namespace App\Http\Requests\Admin;
 
 use App\Models\Item;
 use App\Models\ItemContainer;
+use App\Models\ItemVariant;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -18,7 +19,7 @@ class RestockItemRequest extends FormRequest
     {
         $item = $this->item();
 
-        return $item !== null && ($item->kind->value !== 'menu' || $item->tracksStock());
+        return $item !== null && ($item->kind->value !== 'menu' || $item->tracksAnyStock());
     }
 
     /**
@@ -29,6 +30,7 @@ class RestockItemRequest extends FormRequest
         return [
             'quantity' => ['required', 'numeric', 'gt:0', 'max:999999'],
             'container_id' => ['nullable', 'integer', Rule::exists('item_containers', 'id')->where('item_id', $this->item()?->id)],
+            'item_variant_id' => $this->variantRules(),
             'paid' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
             'log_expense' => ['nullable', 'boolean'],
             'date' => ['nullable', 'date', 'before_or_equal:today'],
@@ -44,6 +46,8 @@ class RestockItemRequest extends FormRequest
             'quantity.required' => 'How many did you buy?',
             'quantity.gt' => 'How many did you buy?',
             'container_id.exists' => 'Pick one of this item’s containers.',
+            'item_variant_id.required' => 'Which size did you restock?',
+            'item_variant_id.exists' => 'Pick one of the sizes that keep their own count.',
         ];
     }
 
@@ -52,6 +56,30 @@ class RestockItemRequest extends FormRequest
         $id = $this->validated('container_id');
 
         return $id === null ? null : $this->item()?->containers()->whereKey($id)->first();
+    }
+
+    /**
+     * Which size was restocked, when the item keeps a separate count per size.
+     *
+     * @return list<mixed>
+     */
+    protected function variantRules(): array
+    {
+        $item = $this->item();
+
+        return [
+            Rule::requiredIf($item !== null && $item->tracksStockPerSize()),
+            'nullable',
+            'integer',
+            Rule::exists('item_variants', 'id')->where('item_id', $item?->id)->whereNotNull('on_hand'),
+        ];
+    }
+
+    public function variant(): ?ItemVariant
+    {
+        $id = $this->validated('item_variant_id');
+
+        return $id === null ? null : $this->item()?->variants()->whereKey($id)->first();
     }
 
     public function paid(): ?float

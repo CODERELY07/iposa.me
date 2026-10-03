@@ -20,18 +20,22 @@ class ProductRestockController extends Controller
     {
         $quantity = (float) $request->validated('quantity');
         $container = $request->container();
+        $variant = $request->variant();
 
-        $result = DB::transaction(function () use ($item, $request, $restocks, $deliveries, $quantity, $container): array {
-            $result = $restocks->restock($item, $request->user(), $quantity, $container, null, false);
-            $deliveries->record($item, $request->user(), $quantity, $container, $result['added']);
+        $result = DB::transaction(function () use ($item, $request, $restocks, $deliveries, $quantity, $container, $variant): array {
+            $result = $restocks->restock($item, $request->user(), $quantity, $container, null, false, null, $variant);
+            $deliveries->record($item, $request->user(), $quantity, $container, $result['added'], $variant);
 
             return $result;
         });
 
         $item->refresh();
+        $variant?->refresh();
 
         return redirect()
             ->route('staff.products', array_filter(['q' => $request->query('q')]))
-            ->with('status', "Added {$item->describeQuantity($result['added'])} to {$item->name}. On hand: {$item->describeQuantity($item->on_hand)}.");
+            ->with('status', $variant !== null
+                ? "Added {$item->describeQuantity($result['added'])} to {$item->name} ({$variant->label}). On hand: {$item->describeQuantity($variant->on_hand)}."
+                : "Added {$item->describeQuantity($result['added'])} to {$item->name}. On hand: {$item->describeQuantity($item->on_hand)}.");
     }
 }

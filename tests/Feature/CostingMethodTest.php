@@ -124,6 +124,13 @@ it('stamps when a manual cost was set, and only when it actually changes', funct
     expect($this->regular->refresh()->cost_updated_at->greaterThan($stampedAt))->toBeTrue();
 });
 
+it('offers the bought-how-many cost helper on every size of a menu item', function () {
+    $this->actingAs($this->owner)->get(route('admin.inventory.create'))
+        ->assertOk()
+        ->assertSee('Bought in bulk? Work out the cost')
+        ->assertSee('just fills the Cost box');
+});
+
 it('shows a not-reviewed nudge on the item edit page for a stale manual cost', function () {
     $this->regular->forceFill(['cost' => 46, 'cost_updated_at' => now()->subDays(120)])->save();
 

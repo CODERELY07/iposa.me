@@ -54,11 +54,15 @@ class VoidOrderService
         }
 
         return DB::transaction(function () use ($order, $approver): Order {
-            $saleMovements = StockMovement::withoutGlobalScopes()
+            $allSaleMovements = StockMovement::withoutGlobalScopes()
                 ->where('order_id', $order->id)
                 ->where('reason', StockMovementReason::Sale)
-                ->get()
-                ->groupBy('item_id');
+                ->get();
+
+            $saleMovements = $allSaleMovements->whereNull('item_variant_id')->groupBy('item_id');
+            $variantRestock = $allSaleMovements->whereNotNull('item_variant_id')->groupBy('item_variant_id')
+                ->map(fn ($movements) => -1 * $movements->sum(fn (StockMovement $movement) => (float) $movement->qty_change))
+                ->all();
 
             $restock = $saleMovements->map(fn ($movements) => -1 * $movements->sum(fn (StockMovement $movement) => (float) $movement->qty_change))->all();
             $costedRestock = $saleMovements->map(fn ($movements) => -1 * $movements->sum(fn (StockMovement $movement) => (float) $movement->costed_qty))->all();
@@ -67,6 +71,11 @@ class VoidOrderService
                 'order_id' => $order->id,
                 'user_id' => $approver->id,
             ], costedChanges: $costedRestock);
+
+            $this->stock->applyToVariants($order->business, $variantRestock, StockMovementReason::Void, [
+                'order_id' => $order->id,
+                'user_id' => $approver->id,
+            ]);
 
             $order->update([
                 'status' => OrderStatus::Voided,

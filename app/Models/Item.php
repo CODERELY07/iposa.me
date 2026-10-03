@@ -179,6 +179,25 @@ class Item extends Model
     }
 
     /**
+     * Whether the sizes of this menu item each keep their own count (bottled water,
+     * 500ml and 1L), instead of one count shared by every size.
+     */
+    public function tracksStockPerSize(): bool
+    {
+        return $this->variants->contains(fn (ItemVariant $variant) => $variant->tracksStock());
+    }
+
+    public function tracksAnyStock(): bool
+    {
+        return $this->tracksStock() || $this->tracksStockPerSize();
+    }
+
+    public function isVariantLowStock(ItemVariant $variant, Business $business): bool
+    {
+        return $variant->tracksStock() && (float) $variant->on_hand <= $this->effectiveLowThreshold($business);
+    }
+
+    /**
      * Whether using this item already lowers profit somewhere else: a sale's cost
      * (menu items that count themselves, pieces and liquids in recipes) or the
      * closing count (bulk, and pieces when the shop counts them).

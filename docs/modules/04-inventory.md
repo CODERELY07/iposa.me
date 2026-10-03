@@ -53,9 +53,9 @@ Everything a shop buys, stores and sells. Three kinds of stock, each counted the
 | `categories` | `business_id`, `name` (unique per shop), `color`, `sort` |
 | `items` | `business_id`, `category_id`, `kind`, `name`, `unit`, `on_hand` (12,3), `low_threshold`, `unit_cost` (**14,6**), `costing_method`, `archived_at` |
 | `item_containers` | `item_id`, `label` (bottle, jug, tin), `size` (in the item's unit), `price` (per container), `sort` |
-| `item_variants` | `item_id`, `label`, `cost` (nullable — `NULL` means not configured, `0.00` means intentionally free), `cost_updated_at`, `price`, `sort` |
+| `item_variants` | `item_id`, `label`, `cost` (nullable — `NULL` means not configured, `0.00` means intentionally free), `cost_updated_at`, `price`, `on_hand` (nullable — a size's own count, see [Counting each size](#counting-each-size)), `sort` |
 | `recipe_lines` | `item_id`, `item_variant_id` (null = all sizes), `piece_item_id`, `qty` |
-| `stock_movements` | `business_id`, `item_id`, `qty_change`, `costed_qty` (the part a sale charged in its cost), `reason`, `order_id`, `audit_id`, `user_id`, `created_at` |
+| `stock_movements` | `business_id`, `item_id`, `item_variant_id` (the size, when it keeps its own count), `qty_change`, `costed_qty` (the part a sale charged in its cost), `reason`, `order_id`, `audit_id`, `user_id`, `created_at` |
 | `recipe_changes` | `business_id`, `item_id`, `user_id`, `requested_by`, `status` (saved, pending, approved, rejected, replaced), `before`/`after` (JSON snapshots with names and units), `decided_by`, `decided_by_name`, `decided_at` |
 | `deliveries` | `business_id`, `item_id`, `user_id`, `received_by`, `quantity`, `item_container_id`, `container_label`, `container_size`, `added`, `status` (pending, checked), `receipt_added`, `paid`, `missing_cost`, `checked_by`, `checked_by_name`, `checked_at` |
 
@@ -84,6 +84,16 @@ A manual cost is a first-class input, not a fallback — an owner's own calculat
 With **Manual cost only** or an unconfigured **Linked only**, Inventory tags the item **not in cost**. The menu export keeps the typed cost (so a re-import doesn't add the links twice) while its profit and margin use the full COGS.
 
 The editor shows the margin live, colored green ≥50%, amber ≥25%, red below. `SaveItemRequest` requires at least one size with a price for menu items, and rejects duplicate size names.
+
+### Counting each size
+
+A ready-made menu item that counts itself (bottled water) can keep **one count per size** instead of one shared count: 24 × 500ml and 6 × 1L are separate stock. It is opt-in and additive — `item_variants.on_hand` is `NULL` for every existing size, so existing items keep their single shared count exactly as before.
+
+- **Setting it up.** With several sizes, the item form shows an *On hand* box per size (leave one empty if it's made to order). An item that already has a shared count offers **Count each size separately**; saving counts moves the shared count out (logged as an adjustment, so its history still adds up) and the sizes carry the stock from then on.
+- **Selling.** A sale takes stock off only the size that sold (`StockService::applyToVariants`), logged as a `Sale` movement carrying `item_variant_id`. Voids and *Reset today* put it back on the same size. A recipe, when the item has one, still takes precedence — per-size counts are for items with no recipe.
+- **Restock.** The owner's form and the cashier's Products screen ask *which size*; a cashier's delivery remembers the size, and the owner's check corrects that size's count. A size has no cost per unit of its own, so a restock price is only logged, never copied onto the item.
+- **History and alerts.** Stock history has a tab per size with its own running balance. Low-stock alerts (Today, the Inventory list, the register's "N left") work per size against the item's alert level.
+- **Cost helper.** Every size row also has **Bought in bulk? Work out the cost** — type how many you bought and what you paid, and *Use this* fills that size's Cost box (₱240 ÷ 24 = ₱10). Nothing is saved until you save the item.
 
 ## Pieces
 
@@ -121,7 +131,7 @@ The Bulk tab shows container items as "3 bottles · 3,000 ml" and "₱145 / bott
    - as a **Stock purchase** when using the item already lowers profit elsewhere (`Item::isCostedWhenUsed()`): menu items that count themselves, bulk, pieces in a recipe, and all pieces when the shop counts them at closing. A Stock purchase is a cash outflow, not an operating expense — it counts against [Net profit](08-reports.md) later, through COGS, once that stock actually sells. It does count immediately in **Money Movement**.
    - as **Supplies** otherwise (a paper bag nobody links or counts), landing in **Operating expenses** instead — counted against Net right away.
 
-Pieces and ready-made menu items (bottled water) can be restocked in their own unit too; made-to-order food can't. `App\Services\Inventory\RestockService`.
+Pieces and ready-made menu items (bottled water) can be restocked in their own unit too; made-to-order food can't. An item that [counts each size](#counting-each-size) asks which size was restocked. `App\Services\Inventory\RestockService`.
 
 ## Recipe links
 
@@ -199,6 +209,8 @@ Deleting removes the item with its sizes and its own recipe lines, in one transa
 `InventoryTest`: delete an item with no history · refuse to delete one that was sold, counted or linked · no cross-shop delete · the editor offers delete only when it's allowed · create with sizes and size-specific recipe links · update syncs sizes · menu items need a priced size · pieces and bulk need a unit cost · cross-shop piece refused · on-hand edit logs an adjustment · archive/restore · CSV import (including a broken row) · inline category · recipes hidden on Tindahan.
 
 `RecipeChangesTest`, `DeliveryCheckTest`, `StaffProductsTest`: owner saves recorded only when links change · approve/reject from Today · replaced requests · no-op requests · stale and archived-piece approvals refused · cross-shop and cashier approval blocked · deliveries on Today · matching, short, over-recorded and container deliveries · supplies without missing stock · checked once · cashier pages hide pesos and only change links through requests.
+
+`PerSizeStockTest`: a sale takes stock off only its size and logs it against that size · voids and Reset today put it back · a new multi-size item counts per size from the form · a size's count change is an adjustment on that size · a shared count moves onto the sizes and is logged out, and is kept when the form sends no counts · owner restock asks which size and refuses another item's size · a cashier's delivery and the owner's check stay on the size · a history per size · low sizes alert on their own on Today and the register · the stock export has a row per size.
 
 `CostingMethodTest`: each of the three costing methods prices a size correctly · a manual-only item with no typed cost is unknown, not free · a linked-only item with nothing linked is unknown · manual-plus-linked needs both halves · checkout locks an unknown cost as `NULL`, never rounding to zero · inventory deduction stays independent of costing method · a sale's locked-in cost never changes after the recipe, manual cost or costing method change later · a manual cost is stamped only when it actually changes · the item edit page nudges when a manual cost hasn't been reviewed in a while.
 

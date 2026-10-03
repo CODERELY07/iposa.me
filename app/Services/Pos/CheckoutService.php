@@ -96,6 +96,7 @@ class CheckoutService
 
             $deductions = [];
             $costedDeductions = [];
+            $variantDeductions = [];
 
             foreach ($variants as $variant) {
                 $qty = $quantities[$variant->id];
@@ -121,6 +122,9 @@ class CheckoutService
                             $costedDeductions[$recipeLine->piece_item_id] = ($costedDeductions[$recipeLine->piece_item_id] ?? 0) - $used;
                         }
                     }
+                } elseif ($variant->tracksStock()) {
+                    // This size keeps its own count (bottled water 500ml vs 1L).
+                    $variantDeductions[$variant->id] = ($variantDeductions[$variant->id] ?? 0) - $qty;
                 } elseif ($variant->item->tracksStock()) {
                     $deductions[$variant->item_id] = ($deductions[$variant->item_id] ?? 0) - $qty;
                 }
@@ -130,6 +134,11 @@ class CheckoutService
                 'order_id' => $order->id,
                 'user_id' => $cashier->id,
             ], $order->paid_at, $costedDeductions);
+
+            $this->stock->applyToVariants($lockedBusiness, $variantDeductions, StockMovementReason::Sale, [
+                'order_id' => $order->id,
+                'user_id' => $cashier->id,
+            ], $order->paid_at);
 
             return $order->load('lines');
         });

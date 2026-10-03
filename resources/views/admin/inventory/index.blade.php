@@ -160,6 +160,8 @@
                                                 @else
                                                     <span class="text-ink-400">No links for this size</span>
                                                 @endif
+                                            @elseif ($variant->tracksStock())
+                                                <span @class(['num', 'text-loss-600 dark:text-loss-400' => $item->isVariantLowStock($variant, $business)])>{{ $formatQty($variant->on_hand) }} in stock · counted per size{{ $item->isVariantLowStock($variant, $business) ? ' · low' : '' }}</span>
                                             @elseif ($loop->first)
                                                 @if ($item->tracksStock())
                                                     <span class="num">{{ $formatQty($item->on_hand) }} in stock · counted as itself</span>

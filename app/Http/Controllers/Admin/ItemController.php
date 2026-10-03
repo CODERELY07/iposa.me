@@ -46,7 +46,7 @@ class ItemController extends Controller
             ->with(['category', 'variants', 'recipeLines.piece', 'recipeLines.variant', 'containers'])
             ->orderBy('name')
             ->get()
-            ->when($lowStockOnly, fn (Collection $items) => $items->filter(fn (Item $item) => $item->isLowStock($business)));
+            ->when($lowStockOnly, fn (Collection $items) => $items->filter(fn (Item $item) => $item->isLowStock($business) || $item->variants->contains(fn ($variant) => $item->isVariantLowStock($variant, $business))));
 
         $usedToday = StockMovement::query()
             ->where('reason', StockMovementReason::Sale)
@@ -236,7 +236,7 @@ class ItemController extends Controller
         return [
             'item' => $item,
             'canDelete' => $item->exists && $this->deleteBlockers($item) === [],
-            'canRestock' => $item->exists && ($item->kind !== ItemKind::Menu || $item->tracksStock()),
+            'canRestock' => $item->exists && ($item->kind !== ItemKind::Menu || $item->tracksAnyStock()),
             'expensesEnabled' => $business->hasFeature('expenses'),
             'measures' => Item::MEASURES,
             'categories' => Category::query()->orderBy('sort')->orderBy('name')->get(),
@@ -251,8 +251,9 @@ class ItemController extends Controller
                     'cost' => $variant->cost !== null ? (float) $variant->cost : null,
                     'costUpdatedAt' => $variant->cost_updated_at?->toIso8601String(),
                     'costStale' => $variant->isCostStale(),
+                    'on_hand' => $variant->on_hand !== null ? (float) $variant->on_hand : null,
                     'price' => (float) $variant->price,
-                ])->values()->all() ?: [['id' => null, 'label' => 'Regular', 'cost' => null, 'costUpdatedAt' => null, 'costStale' => false, 'price' => null]]),
+                ])->values()->all() ?: [['id' => null, 'label' => 'Regular', 'cost' => null, 'costUpdatedAt' => null, 'costStale' => false, 'on_hand' => null, 'price' => null]]),
                 // New items start with links counted in cost, so nothing linked goes uncosted by default.
                 'costingMethod' => old('costing_method', $item->exists && $item->costing_method !== null ? $item->costing_method->value : CostingMethod::ManualPlusLinked->value),
                 'unit' => old('unit', $item->unit ?? ''),

@@ -8,6 +8,7 @@ use App\Models\AuditLine;
 use App\Models\Delivery;
 use App\Models\Item;
 use App\Models\ItemContainer;
+use App\Models\ItemVariant;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -25,11 +26,12 @@ class DeliveryService
 {
     public function __construct(private StockService $stock) {}
 
-    public function record(Item $item, User $cashier, float $quantity, ?ItemContainer $container, float $added): Delivery
+    public function record(Item $item, User $cashier, float $quantity, ?ItemContainer $container, float $added, ?ItemVariant $variant = null): Delivery
     {
         return Delivery::withoutGlobalScopes()->create([
             'business_id' => $item->business_id,
             'item_id' => $item->id,
+            'item_variant_id' => $variant?->id,
             'user_id' => $cashier->id,
             'received_by' => $cashier->name,
             'quantity' => $quantity,
@@ -71,6 +73,8 @@ class DeliveryService
 
             if ($countedSince !== null) {
                 $countedSince->update(['used' => round(max(0.0, (float) $countedSince->used - $overcount), 3)]);
+            } elseif ($overcount > 0 && $delivery->item_variant_id !== null) {
+                $this->stock->applyToVariants($business, [$delivery->item_variant_id => -$overcount], StockMovementReason::Adjustment, ['user_id' => $owner->id]);
             } elseif ($overcount > 0) {
                 $this->stock->apply($business, [$item->id => -$overcount], StockMovementReason::Adjustment, ['user_id' => $owner->id]);
             }
@@ -151,6 +155,8 @@ class DeliveryService
             ? Item::trimNumber($receiptQuantity).' '.str($delivery->container_label)->plural($receiptQuantity)
             : trim(Item::trimNumber($receiptQuantity).' '.($item->unit ?: 'pc'));
 
-        return "{$item->name} · {$amount} (delivery received by {$delivery->received_by})";
+        $name = $delivery->variant !== null ? "{$item->name} ({$delivery->variant->label})" : $item->name;
+
+        return "{$name} · {$amount} (delivery received by {$delivery->received_by})";
     }
 }

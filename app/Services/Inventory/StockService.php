@@ -5,6 +5,7 @@ namespace App\Services\Inventory;
 use App\Enums\StockMovementReason;
 use App\Models\Business;
 use App\Models\Item;
+use App\Models\ItemVariant;
 use App\Models\StockMovement;
 use Carbon\CarbonInterface;
 
@@ -59,6 +60,72 @@ class StockService
                 'created_at' => $at ?? now(),
             ]);
         }
+    }
+
+    /**
+     * Apply quantity changes to menu-item sizes that keep their own count (size id => signed
+     * change), logging each against the item and the size. A size that doesn't count itself is skipped.
+     *
+     * @param  array<int, float>  $changes
+     * @param  array{order_id?: int|null, user_id?: int|null}  $references
+     */
+    public function applyToVariants(Business $business, array $changes, StockMovementReason $reason, array $references = [], ?CarbonInterface $at = null): void
+    {
+        $changes = array_filter($changes, fn (float $change) => abs($change) >= 0.0005);
+
+        if ($changes === []) {
+            return;
+        }
+
+        $variants = ItemVariant::query()
+            ->whereKey(array_keys($changes))
+            ->whereHas('item', fn ($query) => $query->withoutGlobalScopes()->where('business_id', $business->id))
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('id');
+
+        foreach ($changes as $variantId => $change) {
+            $variant = $variants->get($variantId);
+
+            if ($variant === null || ! $variant->tracksStock()) {
+                continue;
+            }
+
+            $variant->forceFill(['on_hand' => round((float) $variant->on_hand + $change, 3)])->save();
+
+            StockMovement::withoutGlobalScopes()->create([
+                'business_id' => $business->id,
+                'item_id' => $variant->item_id,
+                'item_variant_id' => $variant->id,
+                'qty_change' => round($change, 3),
+                'costed_qty' => 0,
+                'reason' => $reason,
+                'order_id' => $references['order_id'] ?? null,
+                'user_id' => $references['user_id'] ?? null,
+                'created_at' => $at ?? now(),
+            ]);
+        }
+    }
+
+    /**
+     * Set one size's count directly (owner edit), logging the difference as an adjustment.
+     * Null stops counting that size.
+     */
+    public function setVariantOnHand(ItemVariant $variant, ?float $onHand, ?int $userId): void
+    {
+        if ($onHand === null) {
+            $variant->forceFill(['on_hand' => null])->save();
+
+            return;
+        }
+
+        $difference = $onHand - (float) ($variant->on_hand ?? 0);
+
+        if ($variant->on_hand === null) {
+            $variant->forceFill(['on_hand' => 0])->save();
+        }
+
+        $this->applyToVariants($variant->item->business, [$variant->id => $difference], StockMovementReason::Adjustment, ['user_id' => $userId]);
     }
 
     /**

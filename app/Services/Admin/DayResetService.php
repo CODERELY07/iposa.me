@@ -7,6 +7,7 @@ use App\Models\Business;
 use App\Models\CashFloat;
 use App\Models\Expense;
 use App\Models\Item;
+use App\Models\ItemVariant;
 use App\Models\Order;
 use App\Models\StockMovement;
 use Illuminate\Support\Collection;
@@ -90,7 +91,11 @@ class DayResetService
             return 0;
         }
 
-        $netChangeByItem = $movements->groupBy('item_id')->map(
+        $netChangeByVariant = $movements->whereNotNull('item_variant_id')->groupBy('item_variant_id')->map(
+            fn (Collection $group) => $group->sum(fn (StockMovement $movement) => (float) $movement->qty_change)
+        );
+
+        $netChangeByItem = $movements->whereNull('item_variant_id')->groupBy('item_id')->map(
             fn (Collection $group) => $group->sum(fn (StockMovement $movement) => (float) $movement->qty_change)
         );
 
@@ -108,6 +113,22 @@ class DayResetService
 
             if ($item !== null && $item->tracksStock()) {
                 $item->forceFill(['on_hand' => round((float) $item->on_hand - $netChange, 3)])->save();
+                $restored++;
+            }
+        }
+
+        $variants = ItemVariant::query()
+            ->whereKey($netChangeByVariant->keys())
+            ->whereHas('item', fn ($query) => $query->withoutGlobalScopes()->where('business_id', $business->id))
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('id');
+
+        foreach ($netChangeByVariant as $variantId => $netChange) {
+            $variant = $variants->get($variantId);
+
+            if ($variant !== null && $variant->tracksStock()) {
+                $variant->forceFill(['on_hand' => round((float) $variant->on_hand - $netChange, 3)])->save();
                 $restored++;
             }
         }

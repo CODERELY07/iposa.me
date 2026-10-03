@@ -18,6 +18,7 @@ class RestockProductRequest extends RestockItemRequest
         return [
             'quantity' => ['required', 'numeric', 'gt:0', 'max:999999'],
             'container_id' => ['nullable', 'integer', Rule::exists('item_containers', 'id')->where('item_id', $this->route('item')?->id)],
+            'item_variant_id' => $this->variantRules(),
         ];
     }
 }

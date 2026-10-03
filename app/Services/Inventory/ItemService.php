@@ -21,7 +21,7 @@ class ItemService
      *     kind: string, name: string, category_id?: int|null, unit?: string|null,
      *     on_hand?: float|string|null, low_threshold?: float|string|null, unit_cost?: float|string|null, costing_method?: string|null,
      *     containers?: list<array{id?: int|null, label: string, size: float|string, price?: float|string|null}>,
-     *     variants?: list<array{id?: int|null, label: string, cost?: float|string|null, price: float|string}>,
+     *     variants?: list<array{id?: int|null, label: string, cost?: float|string|null, price: float|string, on_hand?: float|string|null}>,
      *     recipe?: list<array{piece_item_id: int, qty: float|string, variant_index?: int|null, order_type?: string|null}>
      * }  $data
      */
@@ -66,7 +66,7 @@ class ItemService
                 $item->forceFill(['unit_cost' => $costFromContainers])->save();
             }
 
-            $variants = $kind === ItemKind::Menu ? $this->syncVariants($item, $data['variants'] ?? []) : [];
+            $variants = $kind === ItemKind::Menu ? $this->syncVariants($item, $data['variants'] ?? [], $user->id) : [];
 
             if ($kind !== ItemKind::Menu) {
                 $item->variants()->delete();
@@ -80,7 +80,20 @@ class ItemService
 
             $this->recipeChanges->recordSaved($item, $user, $linksBefore);
 
-            $onHand = self::nullableNumber($data['on_hand'] ?? null);
+            // Once any size keeps its own count, the shared count goes: what it held is logged out
+            // as an adjustment so its history still adds up, and the sizes carry the stock from here.
+            $countsPerSize = $kind === ItemKind::Menu && $item->variants()->whereNotNull('on_hand')->exists();
+
+            if ($countsPerSize && ! $isNew && $item->on_hand !== null) {
+                $this->stock->setOnHand($item, 0.0, $user->id);
+                $item->forceFill(['on_hand' => null])->save();
+            }
+
+            $onHand = match (true) {
+                $countsPerSize => null,
+                array_key_exists('on_hand', $data) => self::nullableNumber($data['on_hand']),
+                default => $item->on_hand === null ? null : (float) $item->on_hand,
+            };
 
             if ($isNew) {
                 $item->forceFill(['on_hand' => $onHand])->save();
@@ -142,10 +155,12 @@ class ItemService
     /**
      * Keep existing sizes (by id), add new ones, delete removed ones.
      *
-     * @param  list<array{id?: int|null, label: string, cost?: float|string|null, price: float|string}>  $rows
+     * A size's `on_hand` is its own count when the item counts itself per size. Leave the key out to keep it.
+     *
+     * @param  list<array{id?: int|null, label: string, cost?: float|string|null, price: float|string, on_hand?: float|string|null}>  $rows
      * @return list<int> variant ids in the submitted order
      */
-    private function syncVariants(Item $item, array $rows): array
+    private function syncVariants(Item $item, array $rows, int $userId): array
     {
         $keptIds = [];
 
@@ -167,10 +182,17 @@ class ItemService
                 $attributes['cost_updated_at'] = now();
             }
 
+            $countsItself = array_key_exists('on_hand', $row);
+            $onHand = $countsItself ? self::nullableNumber($row['on_hand']) : null;
+
             if ($variant !== null) {
                 $variant->update($attributes);
             } else {
-                $variant = $item->variants()->create($attributes);
+                $variant = $item->variants()->create($attributes + ['on_hand' => $onHand]);
+            }
+
+            if ($countsItself && $variant->wasRecentlyCreated === false && $onHand !== ($variant->on_hand === null ? null : (float) $variant->on_hand)) {
+                $this->stock->setVariantOnHand($variant, $onHand, $userId);
             }
 
             $keptIds[] = $variant->id;

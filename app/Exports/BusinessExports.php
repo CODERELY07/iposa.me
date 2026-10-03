@@ -108,6 +108,25 @@ class BusinessExports
                 $item->unit_cost !== null ? round((float) $item->on_hand * (float) $item->unit_cost, 2) : null,
             ];
         }
+
+        // Sizes that keep their own count: one row each, valued at the size's own cost.
+        $sizes = ItemVariant::query()
+            ->with(['item' => fn ($query) => $query->withoutGlobalScopes()])
+            ->whereNotNull('on_hand')
+            ->whereHas('item', fn ($query) => $query->withoutGlobalScopes()->where('business_id', $business->id)->whereNull('archived_at'))
+            ->orderBy('item_id')
+            ->orderBy('sort')
+            ->get();
+
+        foreach ($sizes as $size) {
+            $cost = $size->cost !== null ? (float) $size->cost : null;
+
+            yield [
+                $size->item->name.' · '.$size->label, $size->item->kind->label(), null, (float) $size->on_hand,
+                $size->item->low_threshold !== null ? (float) $size->item->low_threshold : null,
+                $cost, $cost !== null ? round((float) $size->on_hand * $cost, 2) : null,
+            ];
+        }
     }
 
     /**

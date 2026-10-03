@@ -23,11 +23,15 @@ class ItemRestockController extends Controller
             $request->paid(),
             $request->boolean('log_expense'),
             $request->boughtOn(),
+            $request->variant(),
         );
 
         $item->refresh()->load('containers');
 
-        $message = "Added {$item->describeQuantity($result['added'])} to {$item->name}. On hand: {$item->describeQuantity($item->on_hand)}.";
+        $variant = $request->variant()?->refresh();
+        $message = $variant !== null
+            ? "Added {$item->describeQuantity($result['added'])} to {$item->name} ({$variant->label}). On hand: {$item->describeQuantity($variant->on_hand)}."
+            : "Added {$item->describeQuantity($result['added'])} to {$item->name}. On hand: {$item->describeQuantity($item->on_hand)}.";
 
         if ($result['expense_logged']) {
             $message .= ' The purchase is in your expenses.';

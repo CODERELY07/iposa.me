@@ -30,6 +30,7 @@
         'wasLegacy' => false,
         'isExistingLegacy' => $isEditing && $item->kind?->value === 'bulk' && $item->containers->isEmpty(),
         'onHand' => old('on_hand', $item->on_hand !== null ? (float) $item->on_hand : ''),
+        'sharedOnHand' => $item->on_hand !== null ? (float) $item->on_hand : null,
         'lowThreshold' => old('low_threshold', $item->low_threshold !== null ? (float) $item->low_threshold : ''),
         'tones' => $tones,
         'categoryUrl' => route('admin.categories.store', absolute: false),
@@ -58,6 +59,7 @@
                 init() {
                     this.originalStock = { onHand: this.onHand, lowThreshold: this.lowThreshold };
                     this.recipe = this.groupRecipe(this.recipe);
+                    this.variants = this.variants.map((variant) => this.withCostHelper(variant));
                     this.$watch('kind', () => this.containerModeChanged());
                     this.containerModeChanged();
                 },
@@ -161,6 +163,18 @@
                 get tone() {
                     const category = this.categories.find((c) => String(c.id) === String(this.categoryId));
                     return this.tones[category?.color ?? 'ink'];
+                },
+                // Per-size helper state for the bought-how-many calculator. Never submitted, only fills the cost box.
+                withCostHelper(variant) {
+                    return { ...variant, on_hand: variant.on_hand ?? '', helperOpen: false, helperQty: null, helperPaid: null };
+                },
+                // A menu item that counts itself keeps one count per size once it has several sizes (or a size already counts).
+                splitSizes: false,
+                get countPerSize() {
+                    return this.isMenu && (this.splitSizes || this.variants.some((variant) => variant.on_hand !== '' && variant.on_hand !== null) || (this.variants.length > 1 && this.sharedOnHand === null));
+                },
+                helperCost(variant) {
+                    return variant.helperQty > 0 && variant.helperPaid >= 0 ? Math.round((variant.helperPaid / variant.helperQty) * 100) / 100 : null;
                 },
                 // null means not typed, not zero -- the cost box being blank must not read as a free item.
                 manualCostFor(index) {
@@ -321,10 +335,31 @@
                                         :class="margin(index) === null ? 'text-ink-400' : (margin(index) >= 50 ? 'text-gain-600 dark:text-gain-400' : (margin(index) >= 25 ? 'text-brand-600 dark:text-brand-300' : 'text-loss-600 dark:text-loss-400'))"
                                         x-text="margin(index) === null ? '—' : margin(index).toFixed(1) + '%'"></p>
                                     <button type="button" x-show="variants.length > 1" @click="removeVariant(index)" class="btn-quiet size-9 justify-self-end !px-0" aria-label="Remove size"><x-icon name="x" class="size-4" /></button>
+
+                                    {{-- Bought in bulk? Same helper as pieces and liquids: it only fills the Cost box. --}}
+                                    <div class="col-span-2 sm:col-span-5 sm:pl-1">
+                                        <button type="button" @click="variant.helperOpen = ! variant.helperOpen" :disabled="! isMenu" class="text-xs font-medium text-brand-600 hover:underline dark:text-brand-300" x-text="variant.helperOpen ? 'Hide cost helper' : 'Bought in bulk? Work out the cost'"></button>
+                                        <div x-show="variant.helperOpen" x-cloak class="mt-2 flex flex-wrap items-end gap-2">
+                                            <div>
+                                                <label class="text-xs text-ink-500" :for="`cost_helper_qty_${index}`">Bought how many?</label>
+                                                <input :id="`cost_helper_qty_${index}`" type="number" step="any" min="0" x-model.number="variant.helperQty" :disabled="! isMenu" class="field num mt-0.5 w-24 px-2 py-1 text-sm" placeholder="qty">
+                                            </div>
+                                            <span class="pb-2 text-xs text-ink-400">for ₱</span>
+                                            <div>
+                                                <label class="text-xs text-ink-500" :for="`cost_helper_paid_${index}`">Total paid</label>
+                                                <input :id="`cost_helper_paid_${index}`" type="number" step="any" min="0" x-model.number="variant.helperPaid" :disabled="! isMenu" class="field num mt-0.5 w-28 px-2 py-1 text-sm" placeholder="amount">
+                                            </div>
+                                            <button type="button" class="btn-quiet px-3 py-1.5 text-xs" :disabled="helperCost(variant) === null" @click="variant.cost = helperCost(variant)">Use this</button>
+                                            <p x-show="helperCost(variant) !== null" class="w-full text-xs text-ink-500">
+                                                = <span class="num font-medium text-ink-700 dark:text-ink-200" x-text="helperCost(variant) === null ? '' : formatPeso(helperCost(variant))"></span> each
+                                                <span x-text="`(₱${variant.helperPaid} ÷ ${variant.helperQty})`"></span> — not saved, just fills the Cost box
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             </template>
                         </div>
-                        <button type="button" @click="variants.push({ id: null, label: '', cost: null, price: null })" class="btn-quiet mt-3 text-brand-600 dark:text-brand-300">
+                        <button type="button" @click="variants.push(withCostHelper({ id: null, label: '', cost: null, price: null }))" class="btn-quiet mt-3 text-brand-600 dark:text-brand-300">
                             <x-icon name="plus" class="size-4" /> Add a size
                         </button>
                     </section>
@@ -544,8 +579,21 @@
                         <div class="grid gap-5 sm:grid-cols-2">
                             <div>
                                 <label class="field-label" for="on_hand" x-text="isMenu ? 'Count this item itself (optional)' : 'On hand now'">On hand now</label>
-                                <div class="relative">
-                                    <input id="on_hand" name="on_hand" type="number" step="any" x-model="onHand" class="field num" :class="containerMode ? 'pr-12' : ''"
+                                <div x-show="countPerSize" x-cloak class="space-y-2">
+                                    <p class="text-xs text-ink-500">Each size keeps its own count. Leave a size empty if it's made to order.</p>
+                                    <template x-for="(variant, index) in variants" :key="index">
+                                        <div class="flex items-center gap-3">
+                                            <span class="w-28 shrink-0 truncate text-sm text-ink-600 dark:text-ink-300" x-text="variant.label || 'Size ' + (index + 1)"></span>
+                                            <input x-model="variant.on_hand" :name="`variants[${index}][on_hand]`" :disabled="! isMenu || ! countPerSize" type="number" step="any" class="field num w-32" placeholder="Not counted" :aria-label="'On hand, ' + (variant.label || 'size ' + (index + 1))">
+                                        </div>
+                                    </template>
+                                    <p x-show="sharedOnHand !== null" class="rounded-lg bg-brand-400/10 px-3 py-2 text-xs text-brand-800 dark:text-brand-200">
+                                        This item has one shared count of <span class="num font-semibold" x-text="trim(sharedOnHand)"></span> right now. Entering a count for a size replaces it, and the change is logged in the stock history.
+                                    </p>
+                                </div>
+                                <button type="button" x-show="isMenu && ! countPerSize && variants.length > 1" x-cloak @click="splitSizes = true" class="mb-2 text-xs font-medium text-brand-600 hover:underline dark:text-brand-300">Count each size separately</button>
+                                <div x-show="! countPerSize" class="relative">
+                                    <input id="on_hand" name="on_hand" type="number" step="any" x-model="onHand" :disabled="countPerSize" class="field num" :class="containerMode ? 'pr-12' : ''"
                                         :required="containerMode && wasLegacy" placeholder="{{ $item->kind?->value === 'menu' ? 'Leave empty if made to order' : '0' }}">
                                     <span x-show="containerMode" class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ink-400" x-text="unitLabel"></span>
                                 </div>
@@ -621,7 +669,10 @@
                     'size' => (float) $container->size,
                     'price' => $container->price !== null ? (float) $container->price : null,
                 ])->values();
+                $stockedSizes = $item->variants->filter->tracksStock()->map(fn ($size) => ['id' => $size->id, 'label' => $size->label, 'onHand' => (float) $size->on_hand])->values();
                 $restockState = [
+                    'sizes' => $stockedSizes,
+                    'sizeId' => (string) old('item_variant_id', $stockedSizes->first()['id'] ?? ''),
                     'containers' => $restockContainers,
                     'containerId' => (string) old('container_id', $restockContainers->first()['id'] ?? ''),
                     'quantity' => old('quantity', 1),
@@ -634,6 +685,7 @@
                 x-data="{
                     ...@js($restockState),
                     get container() { return this.containers.find((c) => String(c.id) === String(this.containerId)) ?? null },
+                    get currentOnHand() { const size = this.sizes.find((s) => String(s.id) === String(this.sizeId)); return size ? size.onHand : this.onHand },
                     get added() { const qty = parseFloat(this.quantity) || 0; return this.container ? qty * this.container.size : qty },
                     get perUnit() { const paid = parseFloat(this.paid); return paid > 0 && this.added > 0 ? paid / this.added : null },
                     suggestPrice() { if (this.container?.price && ! this.paid) this.paid = Math.round(this.container.price * (parseFloat(this.quantity) || 0) * 100) / 100 },
@@ -649,6 +701,16 @@
                 <form method="POST" action="{{ route('admin.inventory.restock', $item) }}" class="mt-5 space-y-4">
                     @csrf
                     <div class="flex flex-wrap items-end gap-3">
+                        <template x-if="sizes.length">
+                            <div>
+                                <label class="field-label" for="restock_size">Which size?</label>
+                                <select id="restock_size" name="item_variant_id" x-model="sizeId" class="field w-40">
+                                    <template x-for="size in sizes" :key="size.id">
+                                        <option :value="size.id" x-text="size.label" :selected="String(size.id) === String(sizeId)"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </template>
                         <div>
                             <label class="field-label" for="restock_quantity">How many?</label>
                             <input id="restock_quantity" name="quantity" type="number" min="0" step="any" required x-model="quantity" @input="paid = ''; suggestPrice()" class="field num w-24 text-center">
@@ -681,7 +743,7 @@
 
                     <p class="rounded-xl bg-ink-100/70 px-4 py-3 text-sm dark:bg-white/[0.04]">
                         + <span class="num font-semibold" x-text="fmt(added)"></span> <span x-text="unit"></span>
-                        → on hand <span class="num font-semibold" x-text="fmt(onHand + added)"></span> <span x-text="unit"></span>
+                        → on hand <span class="num font-semibold" x-text="fmt(currentOnHand + added)"></span> <span x-text="unit"></span>
                         <template x-if="perUnit !== null">
                             <span class="text-ink-500"> · this purchase costs <span class="num font-medium text-ink-900 dark:text-white" x-text="'₱' + Number(perUnit.toFixed(6)).toLocaleString(undefined, { maximumFractionDigits: 6 })"></span> per <span x-text="unit"></span></span>
                         </template>
@@ -700,7 +762,7 @@
                         </label>
                         <p class="-mt-2 pl-6 text-xs text-ink-500">
                             @if ($item->isCostedWhenUsed(auth()->user()->business))
-                                Counted as a Restock cost today, its own line on the profit and loss — separate from {{ $item->name }}'s ingredient cost, which is still tracked per sale for margin reporting.
+                                A cash outflow today (Money movement), not a profit expense — it counts against profit through COGS once {{ $item->name }} sells.
                             @else
                                 {{ $item->name }} isn't linked to a sale or counted at closing, so what you pay for it is logged as an Expense today.
                             @endif

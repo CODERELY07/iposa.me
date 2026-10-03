@@ -26,12 +26,28 @@
                             <li class="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 sm:px-5">
                                 <div class="min-w-0 flex-1">
                                     <p class="truncate text-sm font-medium">{{ $item->name }}</p>
-                                    <p @class(['num text-xs', 'text-loss-600 dark:text-loss-400' => $item->isLowStock($business), 'text-ink-500' => ! $item->isLowStock($business)])>
-                                        On hand: {{ $item->describeQuantity($item->on_hand) }}{{ $item->isLowStock($business) ? ' · low' : '' }}
-                                    </p>
+                                    @if ($item->tracksStockPerSize())
+                                        @foreach ($item->variants->filter->tracksStock() as $size)
+                                            @php($sizeLow = $item->isVariantLowStock($size, $business))
+                                            <p @class(['num text-xs', 'text-loss-600 dark:text-loss-400' => $sizeLow, 'text-ink-500' => ! $sizeLow])>
+                                                {{ $size->label }} on hand: {{ $item->describeQuantity($size->on_hand) }}{{ $sizeLow ? ' · low' : '' }}
+                                            </p>
+                                        @endforeach
+                                    @else
+                                        <p @class(['num text-xs', 'text-loss-600 dark:text-loss-400' => $item->isLowStock($business), 'text-ink-500' => ! $item->isLowStock($business)])>
+                                            On hand: {{ $item->describeQuantity($item->on_hand) }}{{ $item->isLowStock($business) ? ' · low' : '' }}
+                                        </p>
+                                    @endif
                                 </div>
                                 <form method="POST" action="{{ route('staff.products.restock', ['item' => $item, 'q' => $search !== '' ? $search : null]) }}" class="flex items-center gap-2">
                                     @csrf
+                                    @if ($item->tracksStockPerSize())
+                                        <select name="item_variant_id" class="field w-32" aria-label="Size of {{ $item->name }}">
+                                            @foreach ($item->variants->filter->tracksStock() as $size)
+                                                <option value="{{ $size->id }}">{{ $size->label }}</option>
+                                            @endforeach
+                                        </select>
+                                    @endif
                                     <input name="quantity" type="number" min="0" step="any" required value="1" class="field num w-20 text-center" aria-label="How many arrived for {{ $item->name }}">
                                     @if ($item->containers->isNotEmpty())
                                         <select name="container_id" class="field w-40" aria-label="Container">

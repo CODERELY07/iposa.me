@@ -63,6 +63,7 @@ class SaveItemRequest extends FormRequest
             'variants.*.label' => ['required', 'string', 'max:40', 'distinct:ignore_case'],
             'variants.*.cost' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
             'variants.*.price' => ['required', 'numeric', 'min:0', 'max:9999999'],
+            'variants.*.on_hand' => ['nullable', 'numeric', 'min:-99999', 'max:9999999'],
 
             'costing_method' => ['nullable', Rule::enum(CostingMethod::class)],
             'recipe' => ['nullable', 'array', 'max:30'],

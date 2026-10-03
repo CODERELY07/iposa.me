@@ -39,7 +39,7 @@ class ProductController extends Controller
             'search' => $search,
             'canRestock' => $canRestock,
             'canLink' => $canLink,
-            'stockItems' => $canRestock ? $items->filter(fn (Item $item) => $item->kind !== ItemKind::Menu || $item->tracksStock())->values() : collect(),
+            'stockItems' => $canRestock ? $items->filter(fn (Item $item) => $item->kind !== ItemKind::Menu || $item->tracksAnyStock())->values() : collect(),
             'menuItems' => $canLink ? $items->where('kind', ItemKind::Menu)->values() : collect(),
             'pendingItemIds' => $canLink ? RecipeChange::query()->where('status', RecipeChange::PENDING)->pluck('item_id')->flip() : collect(),
         ]);
