@@ -53,6 +53,11 @@
                     <input id="address" name="address" type="text" value="{{ old('address', $business->address) }}" maxlength="255" class="field" placeholder="Street, barangay, city">
                 </div>
                 <div>
+                    <label class="field-label" for="phone">Your mobile number</label>
+                    <input id="phone" name="phone" type="tel" value="{{ old('phone', $business->phone) }}" maxlength="30" class="field num" placeholder="0917 123 4567" inputmode="tel">
+                    @error('phone')<p class="mt-1 text-xs text-loss-600 dark:text-loss-400">{{ $message }}</p>@enderror
+                </div>
+                <div>
                     <label class="field-label" for="tin">TIN <span class="text-ink-400">(optional)</span></label>
                     <input id="tin" name="tin" type="text" value="{{ old('tin', $business->tin) }}" maxlength="30" class="field num" placeholder="000-000-000-000">
                 </div>
@@ -146,7 +151,7 @@
                     </div>
                     <div>
                         <label class="field-label" for="sms_numbers">Mobile number(s)</label>
-                        <input id="sms_numbers" name="sms_numbers" type="text" value="{{ old('sms_numbers', implode(', ', $sms['numbers'])) }}" maxlength="200" class="field num" placeholder="0917 123 4567">
+                        <input id="sms_numbers" name="sms_numbers" type="text" value="{{ old('sms_numbers', implode(', ', $sms['numbers']) ?: ($business->phone ?? '')) }}" maxlength="200" class="field num" placeholder="0917 123 4567">
                         <p class="mt-1 text-xs text-ink-500">Up to 3, separated by commas.</p>
                         @error('sms_numbers')<p class="mt-1 text-xs text-loss-600 dark:text-loss-400">{{ $message }}</p>@enderror
                     </div>

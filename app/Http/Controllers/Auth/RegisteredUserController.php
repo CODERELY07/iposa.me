@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateBusinessProfileRequest;
 use App\Models\User;
 use App\Services\RegisterBusinessUserService;
+use App\Services\Sms\SmsGateClient;
 use App\Support\SafeMail;
+use Closure;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -39,7 +41,14 @@ class RegisteredUserController extends Controller
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'business_name' => ['required', 'string', 'max:255'],
             'business_type' => ['required', Rule::in(UpdateBusinessProfileRequest::BUSINESS_TYPES)],
+            'phone' => ['required', 'string', 'max:30', function (string $attribute, mixed $value, Closure $fail): void {
+                if (SmsGateClient::normalizeNumber((string) $value) === null) {
+                    $fail('Enter a Philippine mobile number like 0917 123 4567.');
+                }
+            }],
         ]);
+
+        $validated['phone'] = SmsGateClient::normalizeNumber($validated['phone']);
 
         $user = $service->register($validated);
 

@@ -58,7 +58,7 @@ it('lets the operator extend a trial and suspend with a password', function () {
 it('starts every new sign-up on a linked 14-day trial', function () {
     $this->post('/register', [
         'name' => 'Maria Santos', 'email' => 'maria@example.com', 'password' => 'password', 'password_confirmation' => 'password',
-        'business_name' => "Kape't Burger", 'business_type' => 'Burger & fast food',
+        'business_name' => "Kape't Burger", 'business_type' => 'Burger & fast food', 'phone' => '09171234567',
     ]);
 
     $owner = User::where('email', 'maria@example.com')->sole();

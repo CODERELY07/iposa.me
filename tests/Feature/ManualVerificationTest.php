@@ -24,7 +24,7 @@ it('still signs the owner up when the verification email fails', function () {
 
     $this->post('/register', [
         'name' => 'Maria Santos', 'email' => 'maria@example.com', 'password' => 'password', 'password_confirmation' => 'password',
-        'business_name' => "Kape't Burger", 'business_type' => 'Burger & fast food',
+        'business_name' => "Kape't Burger", 'business_type' => 'Burger & fast food', 'phone' => '09171234567',
     ])->assertRedirect(route('verification.notice'))->assertSessionHas('status', 'verification-link-failed');
 
     $this->assertAuthenticated();

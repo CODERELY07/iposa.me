@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Services\Sms\SmsGateClient;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -40,6 +41,11 @@ class UpdateBusinessProfileRequest extends FormRequest
             'business_name' => ['required', 'string', 'max:255'],
             'business_type' => ['required', Rule::in(self::BUSINESS_TYPES)],
             'address' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:30', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (filled($value) && SmsGateClient::normalizeNumber((string) $value) === null) {
+                    $fail('Enter a Philippine mobile number like 0917 123 4567.');
+                }
+            }],
             'tin' => ['nullable', 'string', 'max:30', 'regex:/^[0-9\- ]+$/'],
             'receipt_footer' => ['nullable', 'string', 'max:120'],
         ];
@@ -51,5 +57,18 @@ class UpdateBusinessProfileRequest extends FormRequest
     public function messages(): array
     {
         return ['tin.regex' => 'TIN can only have numbers and dashes.'];
+    }
+
+    /**
+     * The validated profile, with the mobile number stored as +639XXXXXXXXX.
+     *
+     * @return array<string, mixed>
+     */
+    public function profile(): array
+    {
+        $profile = $this->validated();
+        $profile['phone'] = filled($profile['phone'] ?? null) ? SmsGateClient::normalizeNumber((string) $profile['phone']) : null;
+
+        return $profile;
     }
 }

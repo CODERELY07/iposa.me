@@ -105,3 +105,17 @@ it('starts a 14-day trial for new sign-ups', function () {
         ->and($business->start_date->toDateTimeString())->toBe(now()->toDateTimeString())
         ->and($business->due_date->toDateTimeString())->toBe(now()->addDays(RegisterBusinessUserService::TRIAL_DAYS)->toDateTimeString());
 });
+
+it('shows the owner\'s mobile number in the list, on the shop page and in search', function () {
+    $withPhone = Business::factory()->active()->create(['business_name' => 'Boba Lab', 'phone' => '+639171234567']);
+    Business::factory()->active()->create(['business_name' => 'No Number Cafe', 'phone' => null]);
+
+    $this->actingAs($this->operator)->get(route('super_admin.businesses.index'))
+        ->assertOk()->assertSee('+639171234567')->assertSee('No mobile number');
+
+    $this->actingAs($this->operator)->get(route('super_admin.businesses.index', ['q' => '1234567']))
+        ->assertOk()->assertSee('Boba Lab')->assertDontSee('No Number Cafe');
+
+    $this->actingAs($this->operator)->get(route('super_admin.businesses.show', $withPhone))
+        ->assertOk()->assertSee('+639171234567');
+});

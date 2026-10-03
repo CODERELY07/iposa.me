@@ -94,6 +94,7 @@
                     @if ($owner)
                         <p class="mt-3 font-medium">{{ $owner->name }}</p>
                         <p class="text-ink-500">{{ $owner->email }}</p>
+                        <p class="num text-ink-500">{{ $business->phone ?: 'No mobile number yet' }}</p>
                         <p class="mt-3">
                             <span @class(['pill', 'bg-gain-500/15 text-gain-700 dark:text-gain-300' => $owner->email_verified_at, 'bg-brand-400/15 text-brand-700 dark:text-brand-300' => ! $owner->email_verified_at])>
                                 {{ $owner->email_verified_at ? 'Email verified' : 'Email not verified' }}

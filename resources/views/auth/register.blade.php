@@ -46,6 +46,13 @@
             <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
 
+        <div>
+            <x-input-label for="phone" :value="__('Mobile number')" />
+            <x-text-input id="phone" type="tel" name="phone" :value="old('phone')" required autocomplete="tel" inputmode="tel" maxlength="30" placeholder="0917 123 4567" />
+            <p class="mt-1 text-xs text-ink-500 dark:text-ink-400">So we can reach you about your account. Not shared.</p>
+            <x-input-error :messages="$errors->get('phone')" class="mt-2" />
+        </div>
+
         <div class="grid gap-5 sm:grid-cols-2">
             <div>
                 <x-input-label for="password" :value="__('Password')" />

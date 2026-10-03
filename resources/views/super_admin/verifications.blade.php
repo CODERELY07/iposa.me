@@ -43,6 +43,7 @@
                                         @if ($person->business)
                                             <a href="{{ route('super_admin.businesses.show', $person->business) }}" class="hover:underline">{{ $person->business->business_name }}</a>
                                             <p class="text-xs text-ink-500">{{ $person->business->business_type }}</p>
+                                            <p class="num text-xs text-ink-500">{{ $person->business->phone ?: 'No mobile number' }}</p>
                                         @else
                                             <span class="text-ink-400">—</span>
                                         @endif

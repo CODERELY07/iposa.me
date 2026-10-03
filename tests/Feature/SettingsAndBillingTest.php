@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\BusinessStatus;
+use App\Enums\PaymentMethod;
 use App\Enums\SubscriptionPaymentStatus;
 use App\Models\SubscriptionPayment;
 use App\Models\User;
@@ -21,12 +22,24 @@ it('saves the business details used on receipts', function () {
 
 it('turns payment methods on and off for the register', function () {
     $this->actingAs($this->owner)->patch(route('admin.settings.register'), [
-        'payment_methods' => ['cash', 'card'], 'audit_reminder_time' => '22:00', 'default_low_threshold' => 15,
+        'payment_methods' => ['cash', 'maya'], 'audit_reminder_time' => '22:00', 'default_low_threshold' => 15,
     ])->assertSessionHasNoErrors();
 
     $business = $this->owner->business->refresh();
-    expect(array_map(fn ($method) => $method->value, $business->enabledPaymentMethods()))->toBe(['cash', 'card'])
+    expect(array_map(fn ($method) => $method->value, $business->enabledPaymentMethods()))->toBe(['cash', 'maya'])
         ->and($business->lowStockThreshold())->toBe(15.0);
+});
+
+it('offers only cash, GCash and Maya, and refuses card', function () {
+    expect(array_map(fn ($method) => $method->value, PaymentMethod::cases()))->toBe(['cash', 'gcash', 'maya']);
+
+    $this->actingAs($this->owner)->patch(route('admin.settings.register'), [
+        'payment_methods' => ['cash', 'card'], 'audit_reminder_time' => '22:00', 'default_low_threshold' => 15,
+    ])->assertSessionHasErrors('payment_methods.1');
+
+    // A shop that had card saved before simply stops seeing it on the register.
+    $this->owner->business->update(['settings' => ['payment_methods' => ['cash', 'card', 'gcash']]]);
+    expect(array_map(fn ($method) => $method->value, $this->owner->business->refresh()->enabledPaymentMethods()))->toBe(['cash', 'gcash']);
 });
 
 it('needs at least one payment method', function () {

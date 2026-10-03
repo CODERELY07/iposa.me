@@ -16,7 +16,7 @@ use Illuminate\Support\Arr;
 
 #[Fillable([
     'business_type', 'business_name', 'user_id', 'status', 'start_date', 'due_date',
-    'plan', 'plan_price', 'address', 'tin', 'receipt_footer', 'settings', 'suspended_at', 'suspension_reason',
+    'plan', 'plan_price', 'address', 'phone', 'tin', 'receipt_footer', 'settings', 'suspended_at', 'suspension_reason',
     'deletion_reason',
 ])]
 class Business extends Model
@@ -164,6 +164,7 @@ class Business extends Model
         $query->where(function (Builder $query) use ($like): void {
             $query->whereLike('business_name', $like)
                 ->orWhereLike('business_type', $like)
+                ->orWhereLike('phone', $like)
                 ->orWhereHas('owner', fn (Builder $owner) => $owner
                     ->whereLike('name', $like)
                     ->orWhereLike('email', $like));

@@ -56,7 +56,7 @@ class SettingsController extends Controller
 
     public function updateBusiness(UpdateBusinessProfileRequest $request): RedirectResponse
     {
-        $request->user()->business->update($request->validated());
+        $request->user()->business->update($request->profile());
 
         return back()->with('status', 'Business details saved.');
     }

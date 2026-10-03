@@ -43,7 +43,7 @@
                     <input type="hidden" name="status" value="{{ $activeStatus->value }}">
                 @endif
                 <x-icon name="search" class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-400" />
-                <input type="search" name="q" value="{{ $search }}" placeholder="Business, type, owner or email" class="field pl-9" aria-label="Search businesses">
+                <input type="search" name="q" value="{{ $search }}" placeholder="Business, type, owner, email or mobile" class="field pl-9" aria-label="Search businesses">
             </form>
         </div>
 
@@ -85,6 +85,7 @@
                                     </td>
                                     <td class="px-3 py-3">
                                         <p class="text-ink-700 dark:text-ink-200">{{ $business->owner?->name ?? '—' }}</p>
+                                        <p class="num text-xs text-ink-500">{{ $business->phone ?: 'No mobile number' }}</p>
                                         <p class="text-xs text-ink-500">
                                             {{ $business->owner?->email }}
                                             @if ($business->owner && ! $business->owner->email_verified_at)

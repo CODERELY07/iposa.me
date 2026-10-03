@@ -19,7 +19,7 @@ class RegisterBusinessUserService
     /**
      * Create the owner account and their business in one transaction.
      *
-     * @param  array{name: string, email: string, password: string, business_name: string, business_type: string}  $data
+     * @param  array{name: string, email: string, password: string, business_name: string, business_type: string, phone?: string|null}  $data
      */
     public function register(array $data): User
     {
@@ -37,6 +37,7 @@ class RegisterBusinessUserService
                 'user_id' => $user->id,
                 'business_name' => $data['business_name'],
                 'business_type' => $data['business_type'],
+                'phone' => $data['phone'] ?? null,
                 'plan' => $plan?->key ?? config('plans.default'),
                 'plan_price' => $plan?->price,
                 'status' => BusinessStatus::Trial,

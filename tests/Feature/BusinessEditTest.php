@@ -171,3 +171,18 @@ it('leaves an archived plan selectable for the shop already on it', function ():
         ->assertSee('Legacy')
         ->assertSee('(archived)');
 });
+
+it('lets an owner add their mobile number in Settings, stored in one format', function () {
+    $owner = shopOwner();
+    $details = ['business_name' => $owner->business->business_name, 'business_type' => $owner->business->business_type];
+
+    $this->actingAs($owner)->patch(route('admin.settings.business'), $details + ['phone' => '0918 765 4321'])
+        ->assertSessionHasNoErrors();
+    expect($owner->business->refresh()->phone)->toBe('+639187654321');
+
+    $this->actingAs($owner)->patch(route('admin.settings.business'), $details + ['phone' => 'call me'])
+        ->assertSessionHasErrors('phone');
+
+    $this->actingAs($owner)->patch(route('admin.settings.business'), $details + ['phone' => ''])->assertSessionHasNoErrors();
+    expect($owner->business->refresh()->phone)->toBeNull();
+});
