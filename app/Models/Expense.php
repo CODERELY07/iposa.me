@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['business_id', 'date', 'category', 'description', 'kind', 'amount', 'asset_id', 'user_id', 'logged_by'])]
+#[Fillable(['business_id', 'uuid', 'date', 'category', 'description', 'kind', 'amount', 'asset_id', 'user_id', 'logged_by'])]
 class Expense extends Model
 {
     use BelongsToBusiness;

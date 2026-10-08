@@ -71,3 +71,47 @@ it('does not double-charge an offline sale that is synced twice', function () {
     expect(Order::withoutGlobalScopes()->count())->toBe(1)
         ->and((float) $menu['water']->refresh()->on_hand)->toBe(28.0);
 });
+
+it('keeps the cashier\'s My orders page ready for offline use', function () {
+    $script = $this->get(route('pwa.service-worker'))->getContent();
+
+    expect($script)->toContain("'/pos', '/staff/orders'")
+        ->and($script)->toContain('cache-page');
+});
+
+it('hands My orders everything needed to print a receipt with no connection', function () {
+    $owner = shopOwner(['address' => '12 Rizal St', 'receipt_footer' => 'Come again!']);
+    $menu = demoMenu($owner);
+    $cashier = cashierOf($owner);
+
+    $orderId = $this->actingAs($cashier)
+        ->postJson(route('pos.orders.store'), orderPayload([[$menu['tea22'], 2]], 'cash', 200))
+        ->assertCreated()
+        ->json('order.id');
+
+    $response = $this->actingAs($cashier)->get(route('staff.orders'))->assertOk();
+    $receipt = $response->viewData('receipts')[$orderId];
+
+    expect($receipt)->toMatchArray([
+        'businessName' => $owner->business->business_name,
+        'address' => '12 Rizal St',
+        'footer' => 'Come again!',
+        'paymentLabel' => 'Cash',
+        'subtotal' => 120.0,
+        'tendered' => 200.0,
+        'change' => 80.0,
+        'offline' => false,
+    ])->and($receipt['lines'])->toHaveCount(1)
+        ->and($receipt['lines'][0])->toMatchArray(['name' => 'Iced Tea', 'variantLabel' => '22oz', 'qty' => 2, 'price' => 60.0, 'total' => 120.0]);
+});
+
+it('gives the register the shop details it needs to print an offline receipt', function () {
+    $owner = shopOwner(['address' => '12 Rizal St']);
+    demoMenu($owner);
+    $cashier = cashierOf($owner);
+
+    $this->actingAs($cashier)->get(route('pos'))
+        ->assertOk()
+        ->assertViewHas('receiptHeader', fn (array $header) => $header['businessName'] === $owner->business->business_name && $header['address'] === '12 Rizal St')
+        ->assertSee(route('staff.orders', absolute: false), false);
+});

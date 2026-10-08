@@ -19,6 +19,10 @@
         'paymentMethods' => $paymentMethods,
         'nextOrderNumber' => $nextOrderNumber,
         'storeUrl' => route('pos.orders.store', absolute: false),
+        'receiptHeader' => $receiptHeader,
+        'cashierName' => $cashierName,
+        // Cashiers only: the page the register keeps ready for when the connection drops.
+        'myOrdersUrl' => auth()->user()->role === 'staff' ? route('staff.orders', absolute: false) : null,
     ];
 @endphp
 
@@ -295,9 +299,9 @@
                         </template>
                         <p class="mt-1 text-sm text-ink-500" x-show="lastOrder.change !== null">Give change: <span class="num font-semibold text-ink-900 dark:text-white" x-text="formatPeso(lastOrder.change)"></span></p>
                         <p class="mt-1 text-xs text-ink-500" x-show="! lastOrder.offline">Stock for linked ingredients was deducted.</p>
-                        <p class="mx-auto mt-2 max-w-xs text-xs text-brand-700 dark:text-brand-300" x-show="lastOrder.offline">No internet right now. It's stored on this device and syncs by itself when the connection is back. Receipt prints after it syncs.</p>
+                        <p class="mx-auto mt-2 max-w-xs text-xs text-brand-700 dark:text-brand-300" x-show="lastOrder.offline">No internet right now. It's stored on this device and syncs by itself when the connection is back. The receipt has ticket <span class="num font-semibold" x-text="'#' + lastOrder.ticket"></span>; the real order number shows in My orders after it syncs.</p>
                         <div class="mt-6 grid grid-cols-2 gap-2">
-                            <button type="button" @click="printReceipt()" :disabled="! lastOrder.receipt_url" class="btn-ghost"><x-icon name="printer" class="size-4" /> Receipt</button>
+                            <button type="button" @click="printReceipt()" :disabled="! lastOrder.receipt_url && ! lastOrder.receipt" class="btn-ghost"><x-icon name="printer" class="size-4" /> Receipt</button>
                             <button type="button" @click="newOrder()" x-init="$nextTick(() => $el.focus())" class="btn-primary">New order</button>
                         </div>
                     </div>

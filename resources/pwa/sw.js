@@ -1,7 +1,8 @@
 /* iPOSa service worker. Served by ServiceWorkerController, which fills in the placeholders.
  *
  * - Precaches the built CSS/JS, icons and the offline page on install.
- * - The register (/pos) is network-first and cached after every online visit, so it opens offline.
+ * - The cashier pages (the register and My orders) are network-first and cached after every online visit,
+ *   so they open offline. The register also asks for My orders to be refreshed after each sale.
  * - Other pages fall back to /offline.html when there's no connection.
  * - Fonts are stale-while-revalidate.
  * POST requests are never touched: offline sales are queued by the page (IndexedDB) and replayed.
@@ -12,7 +13,7 @@ const PAGE_CACHE = 'iposa-pages';
 const FONT_CACHE = 'iposa-fonts';
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = __PRECACHE__;
-const OFFLINE_PAGES = ['/pos'];
+const OFFLINE_PAGES = ['/pos', '/staff/orders'];
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
@@ -36,6 +37,11 @@ self.addEventListener('message', (event) => {
     // Sent on logout: never leave a signed-in page cached on a shared counter tablet.
     if (event.data === 'clear-user-pages') {
         event.waitUntil(caches.delete(PAGE_CACHE));
+    }
+
+    // The register asks for these to be kept fresh while there is a connection.
+    if (event.data?.type === 'cache-page' && OFFLINE_PAGES.includes(event.data.url)) {
+        event.waitUntil(registerPage(new Request(event.data.url, { credentials: 'same-origin' }), new URL(event.data.url, self.location.origin)).catch(() => {}));
     }
 });
 
@@ -68,7 +74,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 /**
- * Network first; keep the latest good copy so the register opens offline.
+ * Network first; keep the latest good copy so the page opens offline.
  */
 async function registerPage(request, url) {
     const cache = await caches.open(PAGE_CACHE);
@@ -76,7 +82,7 @@ async function registerPage(request, url) {
     try {
         const response = await fetch(request);
 
-        // Only cache the real register, never a login redirect or an error page.
+        // Only cache the real page, never a login redirect or an error page.
         if (response.ok && !response.redirected) {
             await cache.put(url.pathname, response.clone());
         }

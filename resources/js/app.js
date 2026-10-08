@@ -1,5 +1,6 @@
 import Alpine from 'alpinejs';
 import { offlineQueueStore } from './offline-queue';
+import { buildReceipt, nextTicketNumber, printReceiptData } from './offline-receipt';
 import './thermal-printer';
 
 window.Alpine = Alpine;
@@ -402,10 +403,13 @@ const newUuid = () => (window.crypto?.randomUUID
  * POS terminal: cart in the browser, sale saved by the server.
  * Each attempt carries a uuid, so retrying after a dropped connection never charges twice.
  */
-Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl }) => ({
+Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl, receiptHeader, cashierName, myOrdersUrl }) => ({
     menu,
     paymentMethods,
     storeUrl,
+    receiptHeader,
+    cashierName,
+    myOrdersUrl,
     category: 'All',
     search: '',
     cart: [],
@@ -424,6 +428,11 @@ Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl })
     flashLineKey: null,
     toast: null,
     toastTimer: null,
+
+    init() {
+        this.keepMyOrdersFresh();
+        window.addEventListener('iposa-synced', () => this.keepMyOrdersFresh());
+    },
 
     get categories() {
         return ['All', ...new Set(this.menu.map((item) => item.category))];
@@ -558,6 +567,7 @@ Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl })
             this.lastOrder = result.data.order;
             this.completed = true;
             Alpine.store('offlineQueue').flush();
+            this.keepMyOrdersFresh();
 
             return;
         }
@@ -577,12 +587,29 @@ Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl })
      */
     async saveOffline(payload) {
         try {
+            const paidAt = new Date().toISOString();
+            const ticket = nextTicketNumber();
+            const receipt = buildReceipt({
+                header: this.receiptHeader,
+                cashierName: this.cashierName,
+                number: ticket,
+                paidAt,
+                payment: this.payment,
+                paymentLabel: this.paymentLabel,
+                cart: this.cart,
+                subtotal: this.subtotal,
+                tendered: parseFloat(this.tendered) || 0,
+                change: this.change,
+                offline: true,
+            });
+
             await Alpine.store('offlineQueue').queue(
-                { ...payload, offline_created_at: new Date().toISOString() },
-                { total: this.subtotal, items: this.itemCount, lines: this.cart.map((line) => `${line.qty}× ${line.name} ${line.variant}`) },
+                { ...payload, offline_created_at: paidAt },
+                { total: this.subtotal, items: this.itemCount, ticket, lines: this.cart.map((line) => `${line.qty}× ${line.name} ${line.variant}`) },
+                receipt,
             );
 
-            this.lastOrder = { id: null, number: null, offline: true, total: this.subtotal, change: this.isCash ? this.change : null, receipt_url: null };
+            this.lastOrder = { id: null, number: null, ticket, offline: true, total: this.subtotal, change: this.isCash ? this.change : null, receipt_url: null, receipt };
             this.completed = true;
         } catch (e) {
             this.error = 'No internet, and this device could not store the sale. Nothing was saved. Write it down and ring it up once online.';
@@ -594,6 +621,17 @@ Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl })
     printReceipt() {
         if (this.lastOrder?.receipt_url) {
             window.open(this.lastOrder.receipt_url, '_blank', 'width=420,height=640');
+        } else if (this.lastOrder?.receipt) {
+            printReceiptData(this.lastOrder.receipt);
+        }
+    },
+
+    /**
+     * Keep My orders ready for when the connection drops: fetch it now and again after each sale.
+     */
+    keepMyOrdersFresh() {
+        if (this.myOrdersUrl && navigator.onLine) {
+            navigator.serviceWorker?.controller?.postMessage({ type: 'cache-page', url: this.myOrdersUrl });
         }
     },
 
@@ -607,6 +645,99 @@ Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl })
         this.lastOrder = null;
         this.payment = this.paymentMethods[0]?.value ?? 'cash';
         this.cartChanged();
+    },
+}));
+
+/**
+ * My orders: works from the copy of the page kept on the device when the connection drops.
+ * Sales and expenses saved offline are listed here and counted into the drawer total.
+ */
+Alpine.data('myOrders', ({ expected, loadedAt, receipts }) => ({
+    expected,
+    loadedAt,
+    receipts,
+    online: navigator.onLine,
+    saving: false,
+    error: null,
+    savedOffline: false,
+    form: { category: 'supplies', description: '', amount: '' },
+
+    init() {
+        window.addEventListener('online', () => (this.online = true));
+        window.addEventListener('offline', () => (this.online = false));
+
+        // Something just synced: reload for the real order numbers, unless the cashier is typing.
+        window.addEventListener('iposa-synced', () => {
+            if (navigator.onLine && !this.saving && !document.activeElement?.matches?.('input, select, textarea')) {
+                window.location.reload();
+            }
+        });
+    },
+
+    get drawerNow() {
+        const queue = Alpine.store('offlineQueue');
+
+        return Math.round((this.expected + queue.cashWaiting - queue.expensesWaiting) * 100) / 100;
+    },
+
+    get hasWaiting() {
+        const queue = Alpine.store('offlineQueue');
+
+        return queue.cashWaiting > 0 || queue.expensesWaiting > 0;
+    },
+
+    printSaved(orderId) {
+        if (this.receipts[orderId]) {
+            printReceiptData(this.receipts[orderId]);
+        }
+    },
+
+    printEntry(entry) {
+        if (entry.receipt) {
+            printReceiptData(entry.receipt);
+        }
+    },
+
+    async addExpense() {
+        const amount = parseFloat(this.form.amount);
+
+        if (this.saving || !this.form.description.trim() || !(amount > 0)) {
+            return;
+        }
+
+        this.saving = true;
+        this.error = null;
+        this.savedOffline = false;
+
+        const payload = {
+            uuid: newUuid(),
+            date: new Date().toLocaleDateString('en-CA'),
+            category: this.form.category,
+            description: this.form.description.trim(),
+            amount,
+        };
+        const result = navigator.onLine ? await window.sendJson('/expenses', payload) : { ok: false, status: 0, data: {} };
+
+        if (result.ok) {
+            window.location.reload();
+
+            return;
+        }
+
+        if (result.status === 0) {
+            try {
+                await Alpine.store('offlineQueue').queue(payload, { total: amount, lines: [payload.description] }, null, 'expense');
+                this.savedOffline = true;
+                this.form.description = '';
+                this.form.amount = '';
+            } catch (e) {
+                this.error = 'No internet, and this device could not store the expense. Nothing was saved.';
+            }
+        } else {
+            this.error = window.errorMessage(result);
+        }
+
+        this.saving = false;
     },
 }));
 

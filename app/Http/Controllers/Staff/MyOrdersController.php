@@ -50,6 +50,9 @@ class MyOrdersController extends Controller
             'expenseCategories' => ExpenseCategory::selectable(),
             // Whole-shop drawer total, not just this cashier's own sales, since the float is shared.
             'cashFloat' => $breakdown->cashFloat($business, CarbonImmutable::today()),
+            // Kept in the page so a receipt can be printed with no connection.
+            'receipts' => $orders->mapWithKeys(fn (Order $order) => [$order->id => $order->receiptData($business)])->all(),
+            'loadedAt' => now()->format('g:i A'),
         ]);
     }
 }

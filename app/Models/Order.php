@@ -69,4 +69,33 @@ class Order extends Model
     {
         return $this->status === OrderStatus::Voided;
     }
+
+    /**
+     * Plain data for printing this order's receipt, here or on the Bluetooth printer.
+     * Needs the lines loaded.
+     *
+     * @return array<string, mixed>
+     */
+    public function receiptData(Business $business): array
+    {
+        return [
+            ...$business->receiptHeader(),
+            'number' => $this->number,
+            'offline' => false,
+            'paidAt' => $this->paid_at->format('M j, Y g:i A'),
+            'cashierName' => $this->cashier_name,
+            'voided' => $this->isVoided(),
+            'paymentLabel' => $this->payment_method->label(),
+            'subtotal' => (float) $this->subtotal,
+            'tendered' => (float) ($this->tendered ?? $this->subtotal),
+            'change' => $this->change !== null ? (float) $this->change : null,
+            'lines' => $this->lines->map(fn (OrderLine $line) => [
+                'name' => $line->name,
+                'variantLabel' => $line->variant_label,
+                'qty' => $line->qty,
+                'price' => (float) $line->price,
+                'total' => $line->lineTotal(),
+            ])->values()->all(),
+        ];
+    }
 }

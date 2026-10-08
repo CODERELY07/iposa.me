@@ -25,6 +25,8 @@ class StoreExpenseRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // Made up by the register for an expense logged offline, so a replay isn't recorded twice.
+            'uuid' => ['nullable', 'uuid'],
             'date' => ['required', 'date', 'before_or_equal:today'],
             'category' => ['required', Rule::enum(ExpenseCategory::class)->only(ExpenseCategory::selectable())],
             'description' => ['required', 'string', 'max:160'],

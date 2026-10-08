@@ -1,12 +1,17 @@
 /**
- * Offline sales queue (IndexedDB).
+ * Offline outbox (IndexedDB).
  *
- * When the register can't reach the server, the sale is stored here with its uuid and
- * replayed later. The server treats a repeated uuid as the same order, so a sale that
- * actually got through before the connection dropped is never charged twice.
+ * When a cashier screen can't reach the server, what they did (a sale, a small expense) is stored
+ * here with its uuid and replayed later, oldest first. The server treats a repeated uuid as the
+ * same record, so something that actually got through before the connection dropped is never
+ * recorded twice.
+ *
+ * Entries without a kind are sales: they were queued before expenses could be.
  */
 const DB_NAME = 'iposa-offline';
 const STORE = 'orders';
+
+const ENDPOINTS = { order: '/pos/orders', expense: '/expenses' };
 
 let dbPromise = null;
 
@@ -43,15 +48,17 @@ async function withStore(mode, callback) {
 
 export const currentUserId = () => document.querySelector('meta[name="user-id"]')?.content ?? null;
 
-export function saveOrder(entry) {
+export const kindOf = (entry) => entry.kind ?? 'order';
+
+export function saveEntry(entry) {
     return withStore('readwrite', (store) => store.put(entry));
 }
 
-export function removeOrder(uuid) {
+export function removeEntry(uuid) {
     return withStore('readwrite', (store) => store.delete(uuid));
 }
 
-export async function ordersFor(userId) {
+export async function entriesFor(userId) {
     const all = await withStore('readonly', (store) => store.getAll());
 
     return (all ?? []).filter((entry) => String(entry.userId) === String(userId)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -64,11 +71,36 @@ export function offlineQueueStore(sendJson, errorMessage) {
     return {
         pending: 0,
         failed: [],
+        items: [],
         syncing: false,
         notice: null,
 
         get total() {
             return this.pending + this.failed.length;
+        },
+
+        /** Sales waiting to sync, oldest first. */
+        get orders() {
+            return this.items.filter((entry) => kindOf(entry) === 'order');
+        },
+
+        /** Small expenses waiting to sync, oldest first. */
+        get expenses() {
+            return this.items.filter((entry) => kindOf(entry) === 'expense');
+        },
+
+        /** Cash taken in sales that haven't reached the server yet. */
+        get cashWaiting() {
+            return this.orders
+                .filter((entry) => entry.status === 'pending' && entry.payload.payment_method === 'cash')
+                .reduce((sum, entry) => sum + entry.summary.total, 0);
+        },
+
+        /** Money paid out in expenses that haven't reached the server yet. */
+        get expensesWaiting() {
+            return this.expenses
+                .filter((entry) => entry.status === 'pending')
+                .reduce((sum, entry) => sum + entry.summary.total, 0);
         },
 
         async refresh() {
@@ -79,29 +111,31 @@ export function offlineQueueStore(sendJson, errorMessage) {
             }
 
             try {
-                const entries = await ordersFor(userId);
-                this.pending = entries.filter((entry) => entry.status === 'pending').length;
-                this.failed = entries.filter((entry) => entry.status === 'failed');
+                this.items = await entriesFor(userId);
+                this.pending = this.items.filter((entry) => entry.status === 'pending').length;
+                this.failed = this.items.filter((entry) => entry.status === 'failed');
             } catch (e) {
                 // IndexedDB unavailable (private mode on some browsers): nothing to show.
             }
         },
 
-        async queue(payload, summary) {
-            await saveOrder({
+        async queue(payload, summary, receipt = null, kind = 'order') {
+            await saveEntry({
                 uuid: payload.uuid,
                 userId: currentUserId(),
+                kind,
                 payload,
                 summary,
+                receipt,
                 status: 'pending',
                 error: null,
-                createdAt: payload.offline_created_at,
+                createdAt: new Date().toISOString(),
             });
             await this.refresh();
         },
 
         /**
-         * Send waiting sales, oldest first. Stops at the first connection problem.
+         * Send everything waiting, oldest first. Stops at the first connection problem.
          */
         async flush() {
             const userId = currentUserId();
@@ -112,28 +146,30 @@ export function offlineQueueStore(sendJson, errorMessage) {
 
             this.syncing = true;
             this.notice = null;
+            let sent = 0;
 
             try {
-                const entries = (await ordersFor(userId)).filter((entry) => entry.status === 'pending');
+                const entries = (await entriesFor(userId)).filter((entry) => entry.status === 'pending');
 
                 for (const entry of entries) {
-                    const result = await sendJson('/pos/orders', entry.payload);
+                    const result = await sendJson(ENDPOINTS[kindOf(entry)], entry.payload);
 
                     if (result.ok) {
-                        await removeOrder(entry.uuid);
+                        await removeEntry(entry.uuid);
+                        sent++;
                         continue;
                     }
 
-                    if (result.status === 422) {
-                        // The server refused this sale (e.g. item removed from the menu). Keep it for review.
-                        await saveOrder({ ...entry, status: 'failed', error: errorMessage(result) });
+                    if (result.status === 422 || result.status === 403) {
+                        // The server refused this one (e.g. item removed from the menu). Keep it for review.
+                        await saveEntry({ ...entry, status: 'failed', error: errorMessage(result) });
                         continue;
                     }
 
                     if (result.status === 401 || result.status === 419) {
-                        this.notice = 'Log in again to sync the sales saved offline.';
+                        this.notice = 'Log in again to sync what was saved offline.';
                     } else if (result.status === 402) {
-                        this.notice = 'Sales saved offline will sync once the subscription is paid.';
+                        this.notice = 'What was saved offline will sync once the subscription is paid.';
                     }
 
                     // Offline again, server error, or session problem: try later.
@@ -144,16 +180,20 @@ export function offlineQueueStore(sendJson, errorMessage) {
             } finally {
                 this.syncing = false;
                 await this.refresh();
+
+                if (sent > 0) {
+                    window.dispatchEvent(new CustomEvent('iposa-synced', { detail: { sent } }));
+                }
             }
         },
 
         async discard(uuid) {
-            await removeOrder(uuid);
+            await removeEntry(uuid);
             await this.refresh();
         },
 
         async retry(entry) {
-            await saveOrder({ ...entry, status: 'pending', error: null });
+            await saveEntry({ ...entry, status: 'pending', error: null });
             await this.refresh();
             await this.flush();
         },

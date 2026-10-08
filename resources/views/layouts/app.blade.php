@@ -110,7 +110,7 @@
                             <span :class="online ? 'bg-gain-500' : 'bg-loss-500'" class="relative inline-flex size-2 rounded-full bg-gain-500"></span>
                         </span>
                         <span @class(['lg:hidden' => $isFocusMode])
-                            x-text="(online ? ($store.offlineQueue.syncing ? 'Syncing offline sales…' : 'Online') : 'Offline · register still works')
+                            x-text="(online ? ($store.offlineQueue.syncing ? 'Syncing offline sales…' : 'Online') : 'Offline · work is saved on this device')
                                 + ($store.offlineQueue.total > 0 ? ' · ' + $store.offlineQueue.total + ' to sync' : '')">Online</span>
                     </div>
 

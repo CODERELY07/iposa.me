@@ -366,6 +366,21 @@ class Business extends Model
         )));
     }
 
+    /**
+     * What the register keeps on the device so it can print a receipt with no connection.
+     *
+     * @return array{businessName: string, address: ?string, tin: ?string, footer: ?string}
+     */
+    public function receiptHeader(): array
+    {
+        return [
+            'businessName' => $this->business_name,
+            'address' => $this->address,
+            'tin' => $this->tin,
+            'footer' => $this->receipt_footer,
+        ];
+    }
+
     public function lowStockThreshold(): float
     {
         return (float) $this->setting('default_low_threshold');

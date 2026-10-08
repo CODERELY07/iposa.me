@@ -59,6 +59,7 @@ class RegisterController extends Controller
             'paymentMethods' => array_map(fn (PaymentMethod $method) => ['value' => $method->value, 'label' => $method->label()], $business->enabledPaymentMethods()),
             'nextOrderNumber' => $business->last_order_number + 1,
             'cashierName' => $request->user()->name,
+            'receiptHeader' => $business->receiptHeader(),
         ]);
     }
 

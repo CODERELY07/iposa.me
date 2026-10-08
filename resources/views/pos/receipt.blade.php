@@ -78,27 +78,7 @@
         </div>
 
         <script>
-            window.__receiptOrder = @js([
-                'businessName' => $business->business_name,
-                'address' => $business->address,
-                'tin' => $business->tin,
-                'number' => $order->number,
-                'paidAt' => $order->paid_at->format('M j, Y g:i A'),
-                'cashierName' => $order->cashier_name,
-                'voided' => $order->isVoided(),
-                'paymentLabel' => $order->payment_method->label(),
-                'subtotal' => (float) $order->subtotal,
-                'tendered' => (float) ($order->tendered ?? $order->subtotal),
-                'change' => $order->change !== null ? (float) $order->change : null,
-                'footer' => $business->receipt_footer,
-                'lines' => $order->lines->map(fn ($line) => [
-                    'name' => $line->name,
-                    'variantLabel' => $line->variant_label,
-                    'qty' => $line->qty,
-                    'price' => (float) $line->price,
-                    'total' => $line->lineTotal(),
-                ])->values(),
-            ]);
+            window.__receiptOrder = @js($order->receiptData($business));
 
             let printing = false;
 

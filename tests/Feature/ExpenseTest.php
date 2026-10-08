@@ -3,6 +3,7 @@
 use App\Enums\ExpenseCategory;
 use App\Models\Asset;
 use App\Models\Expense;
+use Illuminate\Support\Str;
 
 beforeEach(function () {
     $this->owner = shopOwner();
@@ -135,4 +136,42 @@ it('keeps expenses behind the Negosyo plan', function () {
     $this->owner->business->update(['plan' => 'tindahan']);
 
     $this->actingAs($this->owner)->get(route('admin.expenses'))->assertRedirect(route('admin.settings'));
+});
+
+it('records an expense logged offline only once, however often it is replayed', function () {
+    $cashier = cashierOf($this->owner);
+    $payload = [
+        'uuid' => (string) Str::uuid(), 'date' => today()->toDateString(), 'category' => 'supplies',
+        'description' => 'Ice', 'amount' => 150,
+    ];
+
+    $this->actingAs($cashier)->postJson(route('expenses.store'), $payload)->assertCreated()->assertJsonPath('expense.amount', 150);
+    $this->actingAs($cashier)->postJson(route('expenses.store'), $payload)->assertOk();
+
+    expect(Expense::withoutGlobalScopes()->count())->toBe(1)
+        ->and(Expense::withoutGlobalScopes()->sole()->uuid)->toBe($payload['uuid']);
+});
+
+it('keeps the same expense id for two different shops', function () {
+    $uuid = (string) Str::uuid();
+    $other = shopOwner();
+
+    foreach ([$this->owner, $other] as $owner) {
+        $this->actingAs($owner)->postJson(route('expenses.store'), [
+            'uuid' => $uuid, 'date' => today()->toDateString(), 'category' => 'supplies', 'description' => 'Ice', 'amount' => 50,
+        ])->assertCreated();
+    }
+
+    expect(Expense::withoutGlobalScopes()->count())->toBe(2);
+});
+
+it('still takes an expense typed in without an id', function () {
+    $this->actingAs($this->owner)->post(route('expenses.store'), [
+        'date' => today()->toDateString(), 'category' => 'supplies', 'description' => 'Ice', 'amount' => 80,
+    ])->assertRedirect();
+    $this->actingAs($this->owner)->post(route('expenses.store'), [
+        'date' => today()->toDateString(), 'category' => 'supplies', 'description' => 'Ice', 'amount' => 80,
+    ])->assertRedirect();
+
+    expect(Expense::withoutGlobalScopes()->count())->toBe(2);
 });

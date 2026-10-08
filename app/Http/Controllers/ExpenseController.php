@@ -8,6 +8,7 @@ use App\Http\Requests\StoreExpenseRequest;
 use App\Models\Asset;
 use App\Models\Expense;
 use App\Models\RecurringExpense;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -63,12 +64,17 @@ class ExpenseController extends Controller
 
     /**
      * Log an expense (owners from the Expenses page, cashiers from My orders when allowed).
+     * Safe to retry with the same uuid: the first entry is kept.
      */
-    public function store(StoreExpenseRequest $request): RedirectResponse
+    public function store(StoreExpenseRequest $request): RedirectResponse|JsonResponse
     {
         $category = ExpenseCategory::from($request->validated('category'));
+        $uuid = $request->validated('uuid');
 
-        Expense::create([
+        $existing = $uuid !== null ? Expense::query()->where('uuid', $uuid)->first() : null;
+
+        $expense = $existing ?? Expense::create([
+            'uuid' => $uuid,
             'date' => $request->validated('date'),
             'category' => $category,
             'description' => $request->validated('description'),
@@ -77,6 +83,10 @@ class ExpenseController extends Controller
             'user_id' => $request->user()->id,
             'logged_by' => $request->user()->name,
         ]);
+
+        if ($request->expectsJson()) {
+            return response()->json(['expense' => ['id' => $expense->id, 'amount' => (float) $expense->amount]], $expense->wasRecentlyCreated ? 201 : 200);
+        }
 
         return back()->with('status', 'Expense added.');
     }
