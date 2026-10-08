@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Order;
+use App\Services\Team\TeamService;
 
 it('serves an installable app manifest with icons', function () {
     $manifest = json_decode(file_get_contents(public_path('manifest.webmanifest')), true);
@@ -75,7 +76,7 @@ it('does not double-charge an offline sale that is synced twice', function () {
 it('keeps the cashier\'s My orders page ready for offline use', function () {
     $script = $this->get(route('pwa.service-worker'))->getContent();
 
-    expect($script)->toContain("'/pos', '/staff/orders'")
+    expect($script)->toContain("'/pos', '/audit', '/staff/orders', '/staff/products'")
         ->and($script)->toContain('cache-page');
 });
 
@@ -114,4 +115,19 @@ it('gives the register the shop details it needs to print an offline receipt', f
         ->assertOk()
         ->assertViewHas('receiptHeader', fn (array $header) => $header['businessName'] === $owner->business->business_name && $header['address'] === '12 Rizal St')
         ->assertSee(route('staff.orders', absolute: false), false);
+});
+
+it('tells the register which pages to keep ready for a cashier, only the ones allowed', function () {
+    $owner = shopOwner();
+    demoMenu($owner);
+    $cashier = cashierOf($owner);
+
+    $this->actingAs($cashier)->get(route('pos'))
+        ->assertOk()
+        ->assertSee(route('staff.orders', absolute: false), false)
+        ->assertDontSee(route('staff.products', absolute: false), false);
+
+    app(TeamService::class)->updateCashierPermissions($owner->business, ['restock_stock' => true]);
+
+    $this->actingAs($cashier->fresh())->get(route('pos'))->assertSee(route('staff.products', absolute: false), false);
 });

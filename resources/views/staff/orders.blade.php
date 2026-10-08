@@ -1,7 +1,7 @@
 @use('App\Enums\OrderStatus')
 
 <x-app-layout title="My orders">
-    <div x-data="myOrders(@js(['expected' => $cashFloat['expected'], 'loadedAt' => $loadedAt, 'receipts' => $receipts]))" class="mx-auto max-w-4xl space-y-8 px-4 py-8 sm:px-8">
+    <div x-data="myOrders(@js(['expected' => $cashFloat['expected'], 'loadedAt' => $loadedAt, 'receipts' => $receipts, 'canVoid' => $canVoid]))" class="mx-auto max-w-4xl space-y-8 px-4 py-8 sm:px-8">
         <p x-show="! online" x-cloak role="status" class="rounded-2xl border border-brand-400/30 bg-brand-400/10 px-4 py-3 text-sm text-brand-800 dark:text-brand-200">
             You're offline. This list is as of {{ $loadedAt }}. Sales and expenses you save now are kept on this device and sync by themselves.
         </p>
@@ -45,17 +45,20 @@
             <ul class="divide-y divide-ink-100 dark:divide-white/[0.06]">
                 <template x-for="entry in $store.offlineQueue.items" :key="entry.uuid">
                     <li class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 sm:px-5">
-                        <span class="num w-14 shrink-0 text-sm font-semibold" x-text="entry.kind === 'expense' ? 'Expense' : '#' + entry.summary.ticket"></span>
+                        <span class="num w-14 shrink-0 text-sm font-semibold" x-text="{ expense: 'Expense', void: 'Void', restock: 'Restock', audit: 'Audit' }[entry.kind] ?? '#' + entry.summary.ticket"></span>
                         <div class="min-w-0 flex-1">
                             <p class="truncate text-sm" x-text="entry.summary.lines.join(', ')"></p>
                             <p class="text-xs text-ink-500">
                                 <span x-text="new Date(entry.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })"></span>
-                                <span x-show="entry.kind !== 'expense'"> · <span x-text="entry.payload.payment_method"></span></span>
+                                <span x-show="(entry.kind ?? 'order') === 'order'"> · <span x-text="entry.payload.payment_method"></span></span>
                                 · <span :class="entry.status === 'failed' ? 'text-loss-600 dark:text-loss-400' : ''" x-text="entry.status === 'failed' ? entry.error : 'Waiting to sync'"></span>
                             </p>
                         </div>
-                        <span class="num w-24 text-right text-sm font-semibold" x-text="formatPeso(entry.summary.total)"></span>
+                        <span class="num w-24 text-right text-sm font-semibold" x-text="entry.summary.display ?? formatPeso(entry.summary.total)"></span>
                         <div class="flex items-center gap-1">
+                            <button type="button" x-show="(entry.kind ?? 'order') === 'order' && entry.status === 'pending' && ! $store.offlineQueue.hasVoidFor(entry.uuid)"
+                                @click="queueVoid({ target: entry.uuid, number: '#' + entry.summary.ticket, total: entry.summary.total, payment: entry.payload.payment_method })"
+                                class="btn-quiet px-2 text-xs text-loss-600 dark:text-loss-400" x-text="canVoid ? 'Void' : 'Request void'"></button>
                             <button type="button" x-show="entry.receipt" @click="printEntry(entry)" class="btn-quiet size-9 !px-0" title="Print receipt" aria-label="Print receipt"><x-icon name="printer" class="size-4" /></button>
                             <button type="button" x-show="entry.status === 'failed'" @click="$store.offlineQueue.retry(entry)" class="btn-quiet px-2 text-xs">Retry</button>
                             <button type="button" x-show="entry.status === 'failed'" @click="$store.confirm.ask({ title: 'Discard this?', message: 'It was refused by the server and will never be recorded.', action: 'Discard', danger: true }).then((ok) => ok !== false && $store.offlineQueue.discard(entry.uuid))" class="btn-quiet px-2 text-xs text-loss-600 dark:text-loss-400">Discard</button>
@@ -82,6 +85,7 @@
                         @if ($order->status !== OrderStatus::Paid)
                             <span @class(['pill', 'bg-brand-400/15 text-brand-700 dark:text-brand-300' => $order->status === OrderStatus::VoidRequested, 'bg-ink-200 text-ink-600 dark:bg-white/10 dark:text-ink-300' => $order->isVoided()])>{{ $order->status->label() }}</span>
                         @endif
+                        <span x-show="$store.offlineQueue.hasVoidFor(@js($order->uuid))" x-cloak class="pill bg-brand-400/15 text-brand-700 dark:text-brand-300" x-text="canVoid ? 'Void waiting to sync' : 'Void request waiting to sync'"></span>
                         <span @class(['num w-24 text-right text-sm font-semibold', 'text-ink-400 line-through' => $order->isVoided()])>₱{{ number_format((float) $order->subtotal, 2) }}</span>
                         <div class="flex items-center gap-1">
                             <a href="{{ route('pos.orders.receipt', $order) }}" target="_blank" @click="if (! online) { $event.preventDefault(); printSaved({{ $order->id }}) }" class="btn-quiet size-9 !px-0" title="Reprint receipt" aria-label="Reprint receipt for order {{ $order->number }}">
@@ -89,9 +93,11 @@
                             </a>
                             @if ($order->status === OrderStatus::Paid)
                                 <form method="POST" action="{{ route('pos.orders.void', $order) }}"
+                                    @submit="if (! online && $el.dataset.confirmed === 'yes') { $event.preventDefault(); queueVoid(@js(['target' => $order->uuid, 'number' => '#'.$order->number, 'total' => (float) $order->subtotal, 'payment' => $order->payment_method->value])) }"
+                                    x-show="! $store.offlineQueue.hasVoidFor(@js($order->uuid))"
                                     data-confirm-title="{{ $canVoid ? 'Void' : 'Ask the owner to void' }} order #{{ $order->number }}?" data-confirm="{{ $canVoid ? 'The sale leaves your reports and the stock goes back.' : 'The owner sees the request on their Today screen.' }}" data-confirm-action="{{ $canVoid ? 'Void order' : 'Send request' }}" data-confirm-danger>
                                     @csrf
-                                    <button type="submit" :disabled="! online" :title="online ? '' : 'Needs internet'" class="btn-quiet px-2 text-xs text-loss-600 disabled:opacity-40 dark:text-loss-400" data-loading-text="…">
+                                    <button type="submit" class="btn-quiet px-2 text-xs text-loss-600 dark:text-loss-400" data-loading-text="…">
                                         {{ $canVoid ? 'Void' : 'Request void' }}
                                     </button>
                                 </form>

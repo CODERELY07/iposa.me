@@ -1,8 +1,8 @@
 /* iPOSa service worker. Served by ServiceWorkerController, which fills in the placeholders.
  *
  * - Precaches the built CSS/JS, icons and the offline page on install.
- * - The cashier pages (the register and My orders) are network-first and cached after every online visit,
- *   so they open offline. The register also asks for My orders to be refreshed after each sale.
+ * - The cashier pages (the register, Closing audit, My orders and Products) are network-first and cached after every online visit,
+ *   so they open offline. The register also asks for the others to be refreshed after each sale.
  * - Other pages fall back to /offline.html when there's no connection.
  * - Fonts are stale-while-revalidate.
  * POST requests are never touched: offline sales are queued by the page (IndexedDB) and replayed.
@@ -13,7 +13,7 @@ const PAGE_CACHE = 'iposa-pages';
 const FONT_CACHE = 'iposa-fonts';
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = __PRECACHE__;
-const OFFLINE_PAGES = ['/pos', '/staff/orders'];
+const OFFLINE_PAGES = ['/pos', '/audit', '/staff/orders', '/staff/products'];
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
@@ -82,8 +82,8 @@ async function registerPage(request, url) {
     try {
         const response = await fetch(request);
 
-        // Only cache the real page, never a login redirect or an error page.
-        if (response.ok && !response.redirected) {
+        // Only cache the real page (never a login redirect or an error page), and never a filtered view of it.
+        if (response.ok && !response.redirected && url.search === '') {
             await cache.put(url.pathname, response.clone());
         }
 

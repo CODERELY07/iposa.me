@@ -8,6 +8,7 @@
         'storeUrl' => route('audit.store', absolute: false),
         'alreadyClosed' => $alreadyClosed,
         'correctionsCount' => $todaysAudit?->corrections_count ?? 0,
+        'loadedAt' => now()->format('g:i A'),
     ];
 @endphp
 
@@ -26,8 +27,40 @@
                 </p>
             </div>
         @else
+            <p x-show="! online" x-cloak role="status" class="mb-5 rounded-2xl border border-brand-400/30 bg-brand-400/10 px-4 py-3 text-sm text-brand-800 dark:text-brand-200">
+                You're offline. "System says" is as of {{ now()->format('g:i A') }}. Count the shelf as usual: the day closes by itself when the internet is back.
+            </p>
+
+            {{-- Counted offline, waiting to reach the server --}}
+            <template x-if="waiting && ! submitted">
+                <div class="flex min-h-[60dvh] flex-col items-center justify-center text-center">
+                    <div :class="waiting.failed ? 'bg-loss-500/15 text-loss-600 dark:text-loss-300' : 'bg-brand-400/15 text-brand-600 dark:text-brand-300'" class="flex size-16 items-center justify-center rounded-full">
+                        <x-icon name="check" class="size-8" x-show="! waiting.failed" />
+                        <x-icon name="alert" class="size-8" x-show="waiting.failed" x-cloak />
+                    </div>
+                    <template x-if="! waiting.failed">
+                        <div>
+                            <h1 class="mt-5 text-2xl font-semibold">Counts saved on this device</h1>
+                            <p class="mx-auto mt-2 max-w-sm text-sm text-ink-500 dark:text-ink-400">
+                                The day closes by itself when the internet is back.
+                                <span x-show="salesAhead > 0"><span class="num" x-text="salesAhead"></span> sale(s) saved on this device go first.</span>
+                            </p>
+                            <p class="mx-auto mt-2 max-w-sm text-xs text-ink-400">Made sales on another phone with no internet? Let it sync first, so tonight's numbers add up.</p>
+                        </div>
+                    </template>
+                    <template x-if="waiting.failed">
+                        <div>
+                            <h1 class="mt-5 text-2xl font-semibold">The count was not accepted</h1>
+                            <p class="mx-auto mt-2 max-w-sm text-sm text-loss-600 dark:text-loss-400" x-text="waiting.error"></p>
+                            <button type="button" @click="countAgain()" class="btn-primary mt-6">Count again</button>
+                        </div>
+                    </template>
+                    <a href="{{ route('dashboard') }}" class="btn-ghost mt-6">Back to the register</a>
+                </div>
+            </template>
+
             {{-- Already closed today --}}
-            <template x-if="! editing && ! submitted">
+            <template x-if="! editing && ! submitted && ! waiting">
                 <div class="flex min-h-[60dvh] flex-col items-center justify-center text-center">
                     <div class="flex size-16 items-center justify-center rounded-full bg-gain-500/15 text-gain-600 dark:text-gain-300">
                         <x-icon name="check" class="size-8" />
@@ -61,7 +94,7 @@
                 </div>
             </template>
 
-            <template x-if="editing && ! submitted">
+            <template x-if="editing && ! submitted && ! waiting">
                 <div>
                     <div>
                         <p class="eyebrow">Closing audit · {{ now()->format('D j M') }}</p>
@@ -190,7 +223,7 @@
             </template>
 
             {{-- Sticky submit --}}
-            <div x-show="editing && ! submitted" x-cloak class="fixed inset-x-0 bottom-0 z-20 border-t border-ink-200 bg-ink-50/95 px-4 pt-3 backdrop-blur lg:left-64 dark:border-white/[0.06] dark:bg-ink-950/95"
+            <div x-show="editing && ! submitted && ! waiting" x-cloak class="fixed inset-x-0 bottom-0 z-20 border-t border-ink-200 bg-ink-50/95 px-4 pt-3 backdrop-blur lg:left-64 dark:border-white/[0.06] dark:bg-ink-950/95"
                 style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom))">
                 <div class="mx-auto max-w-2xl">
                     <p x-show="error" x-cloak role="alert" class="mb-3 flex gap-2 rounded-xl bg-loss-500/10 px-3 py-2 text-sm text-loss-700 dark:text-loss-300">

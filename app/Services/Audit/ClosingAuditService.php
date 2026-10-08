@@ -45,12 +45,12 @@ class ClosingAuditService
      *
      * @throws ValidationException
      */
-    public function submit(Business $business, User $user, array $counts, ?CarbonInterface $startedAt = null, ?CarbonInterface $date = null, ?CarbonInterface $submittedAt = null, array $surplusReasons = []): Audit
+    public function submit(Business $business, User $user, array $counts, ?CarbonInterface $startedAt = null, ?CarbonInterface $date = null, ?CarbonInterface $submittedAt = null, array $surplusReasons = [], ?string $uuid = null, ?CarbonInterface $rewindTo = null): Audit
     {
         $date ??= now();
         $submittedAt ??= now();
 
-        return DB::transaction(function () use ($business, $user, $counts, $startedAt, $date, $submittedAt, $surplusReasons): Audit {
+        return DB::transaction(function () use ($business, $user, $counts, $startedAt, $date, $submittedAt, $surplusReasons, $uuid, $rewindTo): Audit {
             $items = Item::withoutGlobalScopes()
                 ->where('business_id', $business->id)
                 ->whereIn('kind', self::countedKinds($business))
@@ -72,6 +72,7 @@ class ClosingAuditService
 
             $audit ??= Audit::withoutGlobalScopes()->create([
                 'business_id' => $business->id,
+                'uuid' => $uuid,
                 'date' => $date->toDateString(),
                 'user_id' => $user->id,
                 'counted_by' => $user->name,
@@ -103,7 +104,7 @@ class ClosingAuditService
             foreach ($items as $item) {
                 $counted = round((float) $counts[$item->id], 3);
                 $line = $audit->lines->firstWhere('item_id', $item->id);
-                $expected = $line !== null ? (float) $line->expected : (float) ($item->on_hand ?? 0);
+                $expected = $line !== null ? (float) $line->expected : $this->expectedOnHand($item, $rewindTo);
                 $previouslyCounted = $line !== null ? (float) $line->counted : $expected;
 
                 // A correction keeps the window of the first count.
@@ -146,11 +147,36 @@ class ClosingAuditService
 
             // The first submit is when the shelf was counted; a correction doesn't move it.
             if ($audit->last_movement_id === null) {
-                $audit->forceFill(['last_movement_id' => (int) StockMovement::withoutGlobalScopes()->where('business_id', $business->id)->max('id')])->save();
+                $audit->forceFill(['last_movement_id' => (int) StockMovement::withoutGlobalScopes()
+                    ->where('business_id', $business->id)
+                    ->when($rewindTo !== null, fn ($query) => $query->where('created_at', '<=', $rewindTo))
+                    ->max('id')])->save();
             }
 
             return $audit->refresh()->load('lines.item');
         });
+    }
+
+    /**
+     * What the system expects on the shelf. Normally that is the count it holds right now. A count
+     * saved offline and sent later is compared with the count the system held when the shelf was
+     * counted, so sales rung up since (on any device) don't read as stock that was restocked.
+     */
+    private function expectedOnHand(Item $item, ?CarbonInterface $rewindTo): float
+    {
+        $onHand = (float) ($item->on_hand ?? 0);
+
+        if ($rewindTo === null) {
+            return $onHand;
+        }
+
+        $since = (float) StockMovement::withoutGlobalScopes()
+            ->where('item_id', $item->id)
+            ->whereNull('item_variant_id')
+            ->where('created_at', '>', $rewindTo)
+            ->sum('qty_change');
+
+        return round($onHand - $since, 3);
     }
 
     /**

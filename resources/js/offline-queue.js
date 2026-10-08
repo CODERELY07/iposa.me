@@ -1,7 +1,7 @@
 /**
  * Offline outbox (IndexedDB).
  *
- * When a cashier screen can't reach the server, what they did (a sale, a small expense) is stored
+ * When a cashier screen can't reach the server, what they did (a sale, a small expense, a delivery, a void) is stored
  * here with its uuid and replayed later, oldest first. The server treats a repeated uuid as the
  * same record, so something that actually got through before the connection dropped is never
  * recorded twice.
@@ -12,6 +12,9 @@ const DB_NAME = 'iposa-offline';
 const STORE = 'orders';
 
 const ENDPOINTS = { order: '/pos/orders', expense: '/expenses' };
+
+// Refused for a reason retrying won't fix; the cashier reviews these.
+const REFUSED = [403, 404, 422];
 
 let dbPromise = null;
 
@@ -89,10 +92,39 @@ export function offlineQueueStore(sendJson, errorMessage) {
             return this.items.filter((entry) => kindOf(entry) === 'expense');
         },
 
-        /** Cash taken in sales that haven't reached the server yet. */
+        /** Voids waiting to sync, oldest first. */
+        get voids() {
+            return this.items.filter((entry) => kindOf(entry) === 'void');
+        },
+
+        /** Deliveries added to the count offline, waiting to sync. */
+        get restocks() {
+            return this.items.filter((entry) => kindOf(entry) === 'restock');
+        },
+
+        /** Sales a void is waiting for, so the sale is shown as cancelled. */
+        get voidedOrderUuids() {
+            return new Set(this.voids.map((entry) => entry.summary.target));
+        },
+
+        hasVoidFor(orderUuid) {
+            return this.voidedOrderUuids.has(orderUuid);
+        },
+
+        /** Cash taken in sales that haven't reached the server yet (and aren't being voided). */
         get cashWaiting() {
             return this.orders
                 .filter((entry) => entry.status === 'pending' && entry.payload.payment_method === 'cash')
+                .filter((entry) => !this.voids.some((voided) => voided.summary.target === entry.uuid && voided.summary.direct))
+                .reduce((sum, entry) => sum + entry.summary.total, 0);
+        },
+
+        /** Cash coming back out of the drawer for already-recorded sales the cashier voided offline. */
+        get cashVoidedWaiting() {
+            const waiting = new Set(this.orders.map((entry) => entry.uuid));
+
+            return this.voids
+                .filter((entry) => entry.summary.direct && entry.summary.payment === 'cash' && !waiting.has(entry.summary.target))
                 .reduce((sum, entry) => sum + entry.summary.total, 0);
         },
 
@@ -119,11 +151,12 @@ export function offlineQueueStore(sendJson, errorMessage) {
             }
         },
 
-        async queue(payload, summary, receipt = null, kind = 'order') {
+        async queue(payload, summary, receipt = null, kind = 'order', url = null) {
             await saveEntry({
                 uuid: payload.uuid,
                 userId: currentUserId(),
                 kind,
+                url,
                 payload,
                 summary,
                 receipt,
@@ -152,7 +185,7 @@ export function offlineQueueStore(sendJson, errorMessage) {
                 const entries = (await entriesFor(userId)).filter((entry) => entry.status === 'pending');
 
                 for (const entry of entries) {
-                    const result = await sendJson(ENDPOINTS[kindOf(entry)], entry.payload);
+                    const result = await sendJson(entry.url ?? ENDPOINTS[kindOf(entry)], entry.payload);
 
                     if (result.ok) {
                         await removeEntry(entry.uuid);
@@ -160,7 +193,7 @@ export function offlineQueueStore(sendJson, errorMessage) {
                         continue;
                     }
 
-                    if (result.status === 422 || result.status === 403) {
+                    if (REFUSED.includes(result.status)) {
                         // The server refused this one (e.g. item removed from the menu). Keep it for review.
                         await saveEntry({ ...entry, status: 'failed', error: errorMessage(result) });
                         continue;

@@ -94,3 +94,50 @@ it('refuses to approve a stale void request once the day has rolled over', funct
 
     expect($this->order->refresh()->status)->toBe(OrderStatus::VoidRequested);
 });
+
+it('sends a void request for a sale found by its uuid, as a cashier saved offline', function () {
+    $this->actingAs($this->cashier)->postJson(route('pos.orders.void-by-uuid', $this->order->uuid))
+        ->assertOk()
+        ->assertJsonPath('status', 'void_requested');
+
+    expect($this->order->refresh()->status)->toBe(OrderStatus::VoidRequested);
+});
+
+it('voids by uuid when the cashier may, and puts the stock back', function () {
+    $this->owner->business->update(['settings' => ['cashier_permissions' => ['void_orders' => true]]]);
+    $before = (float) $this->menu['bun']->refresh()->on_hand;
+
+    $this->actingAs($this->cashier->fresh())->postJson(route('pos.orders.void-by-uuid', $this->order->uuid))
+        ->assertOk()
+        ->assertJsonPath('status', 'voided');
+
+    expect($this->order->refresh()->isVoided())->toBeTrue()
+        ->and((float) $this->menu['bun']->refresh()->on_hand)->toBeGreaterThanOrEqual($before);
+});
+
+it('leaves a sale alone when the same void is replayed', function () {
+    $this->actingAs($this->cashier)->postJson(route('pos.orders.void-by-uuid', $this->order->uuid))->assertOk();
+    $this->actingAs($this->cashier)->postJson(route('pos.orders.void-by-uuid', $this->order->uuid))
+        ->assertOk()
+        ->assertJsonPath('status', 'void_requested');
+
+    $this->owner->business->update(['settings' => ['cashier_permissions' => ['void_orders' => true]]]);
+    $this->actingAs($this->cashier->fresh())->postJson(route('pos.orders.void-by-uuid', $this->order->uuid))->assertOk();
+    $this->actingAs($this->cashier->fresh())->postJson(route('pos.orders.void-by-uuid', $this->order->uuid))->assertOk();
+
+    expect($this->order->refresh()->isVoided())->toBeTrue();
+});
+
+it('cannot void another shop\'s sale by uuid', function () {
+    $stranger = shopOwner();
+
+    $this->actingAs($stranger)->postJson(route('pos.orders.void-by-uuid', $this->order->uuid))->assertNotFound();
+
+    expect($this->order->refresh()->status)->toBe(OrderStatus::Paid);
+});
+
+it('still refuses a void by uuid for a sale from an earlier day', function () {
+    $this->order->update(['paid_at' => now()->subDay()]);
+
+    $this->actingAs($this->owner)->postJson(route('pos.orders.void-by-uuid', $this->order->uuid))->assertUnprocessable();
+});

@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * One closing audit per business per day.
  */
-#[Fillable(['business_id', 'date', 'user_id', 'counted_by', 'started_at', 'submitted_at', 'duration_seconds', 'last_movement_id', 'corrections_count', 'reopen_status', 'reopen_requested_by', 'reopen_requested_by_name', 'reopen_requested_at', 'reopen_decided_by', 'reopen_decided_by_name', 'reopen_decided_at'])]
+#[Fillable(['business_id', 'uuid', 'date', 'user_id', 'counted_by', 'started_at', 'submitted_at', 'duration_seconds', 'last_movement_id', 'corrections_count', 'reopen_status', 'reopen_requested_by', 'reopen_requested_by_name', 'reopen_requested_at', 'reopen_decided_by', 'reopen_decided_by_name', 'reopen_decided_at'])]
 class Audit extends Model
 {
     use BelongsToBusiness;

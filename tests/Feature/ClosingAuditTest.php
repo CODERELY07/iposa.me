@@ -1,8 +1,11 @@
 <?php
 
+use App\Enums\StockMovementReason;
 use App\Models\Audit;
 use App\Models\Item;
 use App\Reports\DailyLedger;
+use App\Services\Inventory\StockService;
+use Illuminate\Support\Str;
 
 beforeEach(function () {
     $this->owner = shopOwner();
@@ -132,4 +135,103 @@ it('lets the owner deny a reopen request', function () {
     $this->actingAs($this->cashier)
         ->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 1, $this->mayo->id => 2]))
         ->assertForbidden();
+});
+
+it('closes the day only once when a count saved offline is replayed', function () {
+    $payload = countsFor([$this->menu['oil']->id => 4.5, $this->mayo->id => 2]) + [
+        'uuid' => (string) Str::uuid(),
+        'counted_at' => now()->subMinutes(20)->toIso8601String(),
+    ];
+
+    $this->actingAs($this->cashier)->postJson(route('audit.store'), $payload)->assertOk();
+    $this->actingAs($this->cashier)->postJson(route('audit.store'), $payload)->assertOk();
+
+    expect(Audit::withoutGlobalScopes()->count())->toBe(1)
+        ->and(Audit::withoutGlobalScopes()->sole()->corrections_count)->toBe(0)
+        ->and(Audit::withoutGlobalScopes()->sole()->uuid)->toBe($payload['uuid'])
+        ->and((float) $this->menu['oil']->refresh()->on_hand)->toBe(4.5);
+});
+
+it('closes the day the shelf was counted, even when it is sent later', function () {
+    $countedAt = now()->subDay()->setTime(21, 30);
+
+    $this->actingAs($this->cashier)
+        ->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 4.5, $this->mayo->id => 2]) + ['counted_at' => $countedAt->toIso8601String()])
+        ->assertOk();
+
+    $audit = Audit::withoutGlobalScopes()->sole();
+
+    expect($audit->date->toDateString())->toBe($countedAt->toDateString())
+        ->and($audit->submitted_at->equalTo($countedAt->startOfMinute()) || $audit->submitted_at->diffInSeconds($countedAt) < 2)->toBeTrue();
+});
+
+it('measures a count saved offline against what the system held when it was counted', function () {
+    // Counted an hour ago at 4.5 of 5. Since then another phone synced a sale that took 1 off the shelf.
+    app(StockService::class)->apply($this->owner->business, [$this->menu['oil']->id => -1.0], StockMovementReason::Sale, [], now()->subMinutes(10));
+    expect((float) $this->menu['oil']->refresh()->on_hand)->toBe(4.0);
+
+    $this->actingAs($this->cashier)
+        ->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 4.5, $this->mayo->id => 2]) + ['counted_at' => now()->subHour()->toIso8601String()])
+        ->assertOk();
+
+    $line = Audit::withoutGlobalScopes()->sole()->lines->firstWhere('item_id', $this->menu['oil']->id);
+
+    // Expected was 5 then, so 0.5 was used. Not a phantom restock against today's 4.
+    expect((float) $line->expected)->toBe(5.0)
+        ->and((float) $line->used)->toBe(0.5)
+        ->and((float) $line->restocked)->toBe(0.0)
+        // The shelf now holds what was counted, less the sale that came after.
+        ->and((float) $this->menu['oil']->refresh()->on_hand)->toBe(3.5);
+});
+
+it('still measures against the moment counted when the offline count is sent seconds later', function () {
+    // Counted 30 seconds ago; a sale from another phone landed 10 seconds ago, after the count.
+    app(StockService::class)->apply($this->owner->business, [$this->menu['oil']->id => -1.0], StockMovementReason::Sale, [], now()->subSeconds(10));
+
+    $this->actingAs($this->cashier)
+        ->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 4.5, $this->mayo->id => 2]) + ['counted_at' => now()->subSeconds(30)->toIso8601String()])
+        ->assertOk();
+
+    $line = Audit::withoutGlobalScopes()->sole()->lines->firstWhere('item_id', $this->menu['oil']->id);
+
+    expect((float) $line->expected)->toBe(5.0)
+        ->and((float) $line->restocked)->toBe(0.0)
+        ->and((float) $this->menu['oil']->refresh()->on_hand)->toBe(3.5);
+});
+
+it('compares with the present count when the audit is sent straight away', function () {
+    app(StockService::class)->apply($this->owner->business, [$this->menu['oil']->id => -1.0], StockMovementReason::Sale, [], now()->subMinutes(10));
+
+    $this->actingAs($this->cashier)
+        ->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 3.5, $this->mayo->id => 2]) + ['counted_at' => now()->subSeconds(20)->toIso8601String()])
+        ->assertOk();
+
+    $line = Audit::withoutGlobalScopes()->sole()->lines->firstWhere('item_id', $this->menu['oil']->id);
+
+    expect((float) $line->expected)->toBe(4.0)->and((float) $line->used)->toBe(0.5);
+});
+
+it('refuses a count saved offline from long ago or the future', function () {
+    foreach ([now()->subDays(4), now()->addHour()] as $when) {
+        $this->actingAs($this->cashier)
+            ->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 4, $this->mayo->id => 2]) + ['counted_at' => $when->toIso8601String()])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('counted_at');
+    }
+});
+
+it('does not let a cashier overwrite a day another device already closed', function () {
+    $this->actingAs($this->owner)->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 4, $this->mayo->id => 2]))->assertOk();
+
+    $this->actingAs($this->cashier)
+        ->postJson(route('audit.store'), countsFor([$this->menu['oil']->id => 3, $this->mayo->id => 1]) + ['uuid' => (string) Str::uuid(), 'counted_at' => now()->subMinutes(5)->toIso8601String()])
+        ->assertForbidden();
+
+    expect((float) $this->menu['oil']->refresh()->on_hand)->toBe(4.0);
+});
+
+it('hands the audit page the time it was loaded, for the offline notice', function () {
+    $this->actingAs($this->cashier)->get(route('audit'))
+        ->assertOk()
+        ->assertSee('loadedAt', false);
 });

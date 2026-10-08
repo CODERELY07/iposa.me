@@ -16,6 +16,8 @@ class RestockProductRequest extends RestockItemRequest
     public function rules(): array
     {
         return [
+            // Made up by the register for a delivery added offline, so a replay isn't added twice.
+            'uuid' => ['nullable', 'uuid'],
             'quantity' => ['required', 'numeric', 'gt:0', 'max:999999'],
             'container_id' => ['nullable', 'integer', Rule::exists('item_containers', 'id')->where('item_id', $this->route('item')?->id)],
             'item_variant_id' => $this->variantRules(),

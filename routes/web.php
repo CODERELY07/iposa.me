@@ -60,6 +60,7 @@ Route::middleware(['auth', 'verified', 'role:staff|admin', 'business'])->group(f
     Route::post('/pos/orders', [RegisterController::class, 'store'])->name('pos.orders.store');
     Route::get('/pos/orders/{order}/receipt', [OrderController::class, 'receipt'])->name('pos.orders.receipt');
     Route::post('/pos/orders/{order}/void', [OrderController::class, 'void'])->name('pos.orders.void');
+    Route::post('/pos/orders/uuid/{uuid}/void', [OrderController::class, 'voidByUuid'])->whereUuid('uuid')->name('pos.orders.void-by-uuid');
 
     Route::middleware('can:run-audit')->group(function () {
         Route::get('/audit', [AuditController::class, 'index'])->name('audit');

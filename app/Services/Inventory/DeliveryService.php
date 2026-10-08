@@ -27,10 +27,11 @@ class DeliveryService
 {
     public function __construct(private StockService $stock, private PurchaseRecorder $purchases) {}
 
-    public function record(Item $item, User $cashier, float $quantity, ?ItemContainer $container, float $added, ?ItemVariant $variant = null): Delivery
+    public function record(Item $item, User $cashier, float $quantity, ?ItemContainer $container, float $added, ?ItemVariant $variant = null, ?string $uuid = null): Delivery
     {
         return Delivery::withoutGlobalScopes()->create([
             'business_id' => $item->business_id,
+            'uuid' => $uuid,
             'item_id' => $item->id,
             'item_variant_id' => $variant?->id,
             'user_id' => $cashier->id,

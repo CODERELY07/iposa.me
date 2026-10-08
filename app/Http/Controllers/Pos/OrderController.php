@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Pos;
 
+use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Services\Pos\VoidOrderService;
@@ -29,20 +30,44 @@ class OrderController extends Controller
      */
     public function void(Request $request, Order $order, VoidOrderService $voids): JsonResponse|RedirectResponse
     {
-        $user = $request->user();
-
-        if (Gate::allows('void-orders')) {
-            $voids->void($order, $user);
-            $message = "Order #{$order->number} voided. Stock was put back.";
-        } else {
-            $voids->request($order, $user);
-            $message = "Void request for order #{$order->number} sent to the owner.";
-        }
+        $message = $this->voidOrRequest($request, $order, $voids);
 
         if ($request->expectsJson()) {
             return response()->json(['message' => $message, 'status' => $order->status->value]);
         }
 
         return back()->with('status', $message);
+    }
+
+    /**
+     * The same, found by the sale's uuid: a void saved offline can name a sale that only reached
+     * the server a moment ago. Safe to retry; a sale already voided or already awaiting the owner is left alone.
+     */
+    public function voidByUuid(Request $request, string $uuid, VoidOrderService $voids): JsonResponse
+    {
+        $order = Order::query()->where('uuid', $uuid)->firstOrFail();
+
+        $alreadyDone = Gate::allows('void-orders') ? $order->isVoided() : $order->status !== OrderStatus::Paid;
+
+        $message = $alreadyDone
+            ? "Order #{$order->number} was already handled."
+            : $this->voidOrRequest($request, $order, $voids);
+
+        return response()->json(['message' => $message, 'status' => $order->status->value]);
+    }
+
+    private function voidOrRequest(Request $request, Order $order, VoidOrderService $voids): string
+    {
+        $user = $request->user();
+
+        if (Gate::allows('void-orders')) {
+            $voids->void($order, $user);
+
+            return "Order #{$order->number} voided. Stock was put back.";
+        }
+
+        $voids->request($order, $user);
+
+        return "Void request for order #{$order->number} sent to the owner.";
     }
 }

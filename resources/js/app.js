@@ -403,13 +403,13 @@ const newUuid = () => (window.crypto?.randomUUID
  * POS terminal: cart in the browser, sale saved by the server.
  * Each attempt carries a uuid, so retrying after a dropped connection never charges twice.
  */
-Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl, receiptHeader, cashierName, myOrdersUrl }) => ({
+Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl, receiptHeader, cashierName, warmPages }) => ({
     menu,
     paymentMethods,
     storeUrl,
     receiptHeader,
     cashierName,
-    myOrdersUrl,
+    warmPages,
     category: 'All',
     search: '',
     cart: [],
@@ -627,11 +627,12 @@ Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl, r
     },
 
     /**
-     * Keep My orders ready for when the connection drops: fetch it now and again after each sale.
+     * Keep the cashier's other pages (My orders, Products) ready for when the connection drops:
+     * fetch them now and again after each sale.
      */
     keepMyOrdersFresh() {
-        if (this.myOrdersUrl && navigator.onLine) {
-            navigator.serviceWorker?.controller?.postMessage({ type: 'cache-page', url: this.myOrdersUrl });
+        if (navigator.onLine) {
+            (this.warmPages ?? []).forEach((url) => navigator.serviceWorker?.controller?.postMessage({ type: 'cache-page', url }));
         }
     },
 
@@ -652,10 +653,11 @@ Alpine.data('posTerminal', ({ menu, paymentMethods, nextOrderNumber, storeUrl, r
  * My orders: works from the copy of the page kept on the device when the connection drops.
  * Sales and expenses saved offline are listed here and counted into the drawer total.
  */
-Alpine.data('myOrders', ({ expected, loadedAt, receipts }) => ({
+Alpine.data('myOrders', ({ expected, loadedAt, receipts, canVoid }) => ({
     expected,
     loadedAt,
     receipts,
+    canVoid,
     online: navigator.onLine,
     saving: false,
     error: null,
@@ -677,13 +679,37 @@ Alpine.data('myOrders', ({ expected, loadedAt, receipts }) => ({
     get drawerNow() {
         const queue = Alpine.store('offlineQueue');
 
-        return Math.round((this.expected + queue.cashWaiting - queue.expensesWaiting) * 100) / 100;
+        return Math.round((this.expected + queue.cashWaiting - queue.cashVoidedWaiting - queue.expensesWaiting) * 100) / 100;
     },
 
     get hasWaiting() {
         const queue = Alpine.store('offlineQueue');
 
-        return queue.cashWaiting > 0 || queue.expensesWaiting > 0;
+        return queue.cashWaiting > 0 || queue.cashVoidedWaiting > 0 || queue.expensesWaiting > 0;
+    },
+
+    /**
+     * No connection: keep the void (or the request to the owner) on this device and send it after the sale.
+     * `target` is the uuid of the sale, which the server finds even if the sale only just synced.
+     */
+    async queueVoid({ target, number, total, payment }) {
+        const queue = Alpine.store('offlineQueue');
+
+        if (queue.hasVoidFor(target)) {
+            return;
+        }
+
+        try {
+            await queue.queue(
+                { uuid: newUuid() },
+                { total, target, payment, direct: this.canVoid, display: this.canVoid ? 'Void' : 'Void request', lines: [`${this.canVoid ? 'Void' : 'Ask the owner to void'} ${number}`] },
+                null,
+                'void',
+                `/pos/orders/uuid/${target}/void`,
+            );
+        } catch (e) {
+            this.error = 'No internet, and this device could not store the void. Nothing was saved.';
+        }
     },
 
     printSaved(orderId) {
@@ -742,9 +768,87 @@ Alpine.data('myOrders', ({ expected, loadedAt, receipts }) => ({
 }));
 
 /**
+ * Products (cashier): restock counts. Works from the copy kept on the device when the connection drops;
+ * a delivery added offline waits on this device and is sent later, with its own id so it is added once.
+ */
+Alpine.data('productsPage', () => ({
+    online: navigator.onLine,
+    saving: false,
+    error: null,
+    filter: '',
+
+    init() {
+        window.addEventListener('online', () => (this.online = true));
+        window.addEventListener('offline', () => (this.online = false));
+
+        window.addEventListener('iposa-synced', () => {
+            if (navigator.onLine && !this.saving && !document.activeElement?.matches?.('input, select, textarea')) {
+                window.location.reload();
+            }
+        });
+    },
+
+    /** What is waiting to sync for one product (and size), e.g. ['+2 Sack (25 kg)']. */
+    waitingFor(itemId) {
+        return Alpine.store('offlineQueue').restocks
+            .filter((entry) => entry.summary.itemId === itemId && entry.status === 'pending')
+            .map((entry) => entry.summary.display);
+    },
+
+    async restock(form, item) {
+        const quantity = parseFloat(form.elements.quantity.value);
+
+        if (this.saving || !(quantity > 0)) {
+            return;
+        }
+
+        this.saving = true;
+        this.error = null;
+
+        const payload = { uuid: newUuid(), quantity };
+
+        ['container_id', 'item_variant_id'].forEach((name) => {
+            if (form.elements[name]?.value) {
+                payload[name] = parseInt(form.elements[name].value, 10);
+            }
+        });
+
+        const result = navigator.onLine ? await window.sendJson(form.dataset.url, payload) : { ok: false, status: 0, data: {} };
+
+        if (result.ok) {
+            window.location.reload();
+
+            return;
+        }
+
+        if (result.status === 0) {
+            const container = form.elements.container_id?.selectedOptions?.[0]?.text;
+            const size = form.elements.item_variant_id?.selectedOptions?.[0]?.text;
+
+            try {
+                await Alpine.store('offlineQueue').queue(
+                    payload,
+                    { itemId: item.id, display: `+${quantity} ${container ?? item.unit}`, lines: [`${item.name}${size ? ` (${size})` : ''}`] },
+                    null,
+                    'restock',
+                    form.dataset.url,
+                );
+                form.elements.quantity.value = 1;
+            } catch (e) {
+                this.error = 'No internet, and this device could not store the delivery. Nothing was saved.';
+            }
+        } else {
+            this.error = window.errorMessage(result);
+        }
+
+        this.saving = false;
+    },
+}));
+
+/**
  * Closing audit: staff type what they see on the shelf, in decimals. Saved by the server.
  */
-Alpine.data('closingAudit', ({ items, storeUrl, alreadyClosed, correctionsCount }) => ({
+Alpine.data('closingAudit', ({ items, storeUrl, alreadyClosed, correctionsCount, loadedAt }) => ({
     items: items.map((item) => ({
         ...item,
         counted: item.counted ?? item.expected,
@@ -755,12 +859,51 @@ Alpine.data('closingAudit', ({ items, storeUrl, alreadyClosed, correctionsCount 
         surplus: 'restock',
     })),
     storeUrl,
+    loadedAt,
+    uuid: newUuid(),
+    online: navigator.onLine,
+    discarding: false,
     startedAt: new Date().toISOString(),
     submitted: false,
     saving: false,
     error: null,
     usageCost: null,
     editing: !alreadyClosed,
+
+    init() {
+        window.addEventListener('online', () => (this.online = true));
+        window.addEventListener('offline', () => (this.online = false));
+
+        // The saved count reached the server: reload to show tonight as closed.
+        this.$watch('waiting', (now, before) => {
+            if (before && !before.failed && !now && !this.discarding && navigator.onLine) {
+                window.location.reload();
+            }
+        });
+    },
+
+    /** A count saved on this device that hasn't reached the server (or was refused). */
+    get waiting() {
+        const entry = Alpine.store('offlineQueue').items.find((item) => item.kind === 'audit');
+
+        return entry ? { failed: entry.status === 'failed', error: entry.error, uuid: entry.uuid } : null;
+    },
+
+    /** Sales saved on this device that go to the server before this count does. */
+    get salesAhead() {
+        return Alpine.store('offlineQueue').orders.filter((entry) => entry.status === 'pending').length;
+    },
+
+    async countAgain() {
+        this.discarding = true;
+
+        if (this.waiting) {
+            await Alpine.store('offlineQueue').discard(this.waiting.uuid);
+        }
+
+        this.editing = true;
+        this.uuid = newUuid();
+    },
 
     async submit() {
         if (this.saving || this.touchedCount < 1) {
@@ -784,14 +927,24 @@ Alpine.data('closingAudit', ({ items, storeUrl, alreadyClosed, correctionsCount 
         this.saving = true;
         this.error = null;
 
-        const result = await window.sendJson(this.storeUrl, {
+        const payload = {
+            uuid: this.uuid,
             started_at: this.startedAt,
             counts: this.items.map((item) => ({
                 item_id: item.id,
                 counted: item.counted,
-                surplus: item.inRecipes && item.counted > item.expected ? item.surplus : null,
+                // Offline, "system says" may be out of date, so a liquid in recipes always carries its answer.
+                surplus: item.inRecipes && (item.counted > item.expected || !navigator.onLine) ? item.surplus : null,
             })),
-        });
+        };
+
+        const result = navigator.onLine ? await window.sendJson(this.storeUrl, payload) : { ok: false, status: 0, data: {} };
+
+        if (result.status === 0) {
+            await this.saveOffline(payload);
+
+            return;
+        }
 
         this.saving = false;
 
@@ -803,6 +956,26 @@ Alpine.data('closingAudit', ({ items, storeUrl, alreadyClosed, correctionsCount 
         }
 
         this.error = window.errorMessage(result);
+    },
+
+    /**
+     * No connection: keep the count on this device. It is sent after this device's sales, with the
+     * time the shelf was counted, so it closes the right day against the right numbers.
+     */
+    async saveOffline(payload) {
+        try {
+            await Alpine.store('offlineQueue').queue(
+                { ...payload, counted_at: new Date().toISOString() },
+                { total: 0, display: 'Closing audit', lines: [`${payload.counts.length} items counted`] },
+                null,
+                'audit',
+                this.storeUrl,
+            );
+        } catch (e) {
+            this.error = 'No internet, and this device could not store the count. Nothing was saved. Write the numbers down and enter them once online.';
+        } finally {
+            this.saving = false;
+        }
     },
 
     get touchedCount() {

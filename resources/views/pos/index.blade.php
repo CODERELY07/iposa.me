@@ -21,8 +21,14 @@
         'storeUrl' => route('pos.orders.store', absolute: false),
         'receiptHeader' => $receiptHeader,
         'cashierName' => $cashierName,
-        // Cashiers only: the page the register keeps ready for when the connection drops.
-        'myOrdersUrl' => auth()->user()->role === 'staff' ? route('staff.orders', absolute: false) : null,
+        // The pages the register keeps ready for when the connection drops (cashier pages only for cashiers).
+        'warmPages' => array_values(array_filter([
+            auth()->user()->can('run-audit') ? route('audit', absolute: false) : null,
+            ...(auth()->user()->role === 'staff' ? [
+                route('staff.orders', absolute: false),
+                auth()->user()->can('restock-stock') || auth()->user()->can('link-pieces') ? route('staff.products', absolute: false) : null,
+            ] : []),
+        ])),
     ];
 @endphp
 
@@ -163,7 +169,7 @@
                 <p x-show="$store.offlineQueue.notice" class="mt-1 text-ink-600 dark:text-ink-300" x-text="$store.offlineQueue.notice"></p>
                 <template x-for="entry in $store.offlineQueue.failed" :key="entry.uuid">
                     <div class="mt-2 rounded-lg bg-white/70 p-2 dark:bg-ink-950/40">
-                        <p class="text-ink-700 dark:text-ink-200"><span class="num" x-text="formatPeso(entry.summary.total)"></span> · <span x-text="entry.summary.lines.join(', ')"></span></p>
+                        <p class="text-ink-700 dark:text-ink-200"><span class="num" x-text="entry.summary.display ?? formatPeso(entry.summary.total)"></span> · <span x-text="entry.summary.lines.join(', ')"></span></p>
                         <p class="mt-0.5 text-loss-600 dark:text-loss-400" x-text="entry.error"></p>
                         <div class="mt-1 flex gap-3">
                             <button type="button" @click="$store.offlineQueue.retry(entry)" class="font-semibold hover:underline">Retry</button>

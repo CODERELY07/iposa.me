@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\ItemKind;
 use App\Http\Requests\SubmitAuditRequest;
+use App\Models\Audit;
 use App\Models\Item;
 use App\Models\RecipeLine;
 use App\Services\Audit\ClosingAuditService;
@@ -64,12 +65,27 @@ class AuditController extends Controller
 
     /**
      * Save the counts (JSON). A second submit the same day is a correction, owners only.
+     *
+     * A count saved offline arrives later with the time it was counted: it closes that day, and is
+     * measured against what the system held at that moment. Safe to retry with the same uuid.
      */
     public function store(SubmitAuditRequest $request, ClosingAuditService $audits): JsonResponse
     {
         $business = $request->user()->business;
+        $uuid = $request->validated('uuid');
 
-        if ($audits->forDate($business, now()) !== null) {
+        $existing = $uuid !== null ? Audit::query()->where('uuid', $uuid)->first() : null;
+
+        if ($existing !== null) {
+            return $this->auditResponse($existing);
+        }
+
+        $countedAt = $request->filled('counted_at')
+            ? Carbon::parse($request->validated('counted_at'))->setTimezone(config('app.timezone'))
+            : null;
+        $day = $countedAt ?? now();
+
+        if ($audits->forDate($business, $day) !== null) {
             Gate::authorize('correct-audit');
         }
 
@@ -78,9 +94,19 @@ class AuditController extends Controller
             $request->user(),
             $request->counts(),
             $request->filled('started_at') ? Carbon::parse($request->validated('started_at')) : null,
+            $day,
+            $countedAt,
             surplusReasons: $request->surplusReasons(),
+            uuid: $uuid,
+            // Only a count saved offline carries the time it was counted: compare with what the system held then.
+            rewindTo: $countedAt,
         );
 
+        return $this->auditResponse($audit);
+    }
+
+    private function auditResponse(Audit $audit): JsonResponse
+    {
         return response()->json([
             'audit' => [
                 'id' => $audit->id,

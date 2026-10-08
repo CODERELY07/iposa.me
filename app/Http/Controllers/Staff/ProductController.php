@@ -37,6 +37,7 @@ class ProductController extends Controller
 
         return view('staff.products.index', [
             'search' => $search,
+            'loadedAt' => now()->format('g:i A'),
             'canRestock' => $canRestock,
             'canLink' => $canLink,
             'stockItems' => $canRestock ? $items->filter(fn (Item $item) => $item->kind !== ItemKind::Menu || $item->tracksAnyStock())->values() : collect(),

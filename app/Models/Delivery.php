@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * A cashier's restock, waiting for the owner to check it against the supplier's receipt.
  */
-#[Fillable(['business_id', 'item_id', 'item_variant_id', 'user_id', 'received_by', 'quantity', 'item_container_id', 'container_label', 'container_size', 'added', 'status', 'receipt_added', 'paid', 'missing_cost', 'checked_by', 'checked_by_name', 'checked_at'])]
+#[Fillable(['business_id', 'uuid', 'item_id', 'item_variant_id', 'user_id', 'received_by', 'quantity', 'item_container_id', 'container_label', 'container_size', 'added', 'status', 'receipt_added', 'paid', 'missing_cost', 'checked_by', 'checked_by_name', 'checked_at'])]
 class Delivery extends Model
 {
     use BelongsToBusiness;

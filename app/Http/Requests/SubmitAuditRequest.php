@@ -22,7 +22,11 @@ class SubmitAuditRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // Made up by the page for a count saved offline, so a replay doesn't close the day twice.
+            'uuid' => ['nullable', 'uuid'],
             'started_at' => ['nullable', 'date', 'before_or_equal:now'],
+            // When the shelf was counted, for a count saved offline and sent later.
+            'counted_at' => ['nullable', 'date', 'after:-3 days', 'before:+10 minutes'],
             'counts' => ['required', 'array', 'min:1'],
             'counts.*.item_id' => ['required', 'integer', 'distinct'],
             'counts.*.counted' => ['required', 'numeric', 'min:0', 'max:9999999'],

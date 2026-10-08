@@ -114,3 +114,31 @@ it('shows the products link in the cashier menu once allowed', function () {
 
     $this->actingAs($this->cashier)->get(route('staff.orders'))->assertSee(route('staff.products'));
 });
+
+it('adds a delivery saved offline only once, however often it is replayed', function () {
+    ($this->allow)(['restock_stock' => true]);
+    $payload = ['uuid' => (string) Str::uuid(), 'quantity' => 12];
+
+    $this->actingAs($this->cashier)->postJson(route('staff.products.restock', $this->menu['bun']), $payload)->assertCreated();
+    $this->actingAs($this->cashier)->postJson(route('staff.products.restock', $this->menu['bun']), $payload)->assertOk();
+
+    expect((float) $this->menu['bun']->refresh()->on_hand)->toBe(112.0)
+        ->and(Delivery::withoutGlobalScopes()->count())->toBe(1)
+        ->and(Delivery::withoutGlobalScopes()->sole()->uuid)->toBe($payload['uuid'])
+        ->and(StockMovement::withoutGlobalScopes()->where('item_id', $this->menu['bun']->id)->where('reason', StockMovementReason::Restock)->count())->toBe(1);
+});
+
+it('still takes a restock typed in without an id', function () {
+    ($this->allow)(['restock_stock' => true]);
+
+    $this->actingAs($this->cashier)->post(route('staff.products.restock', $this->menu['bun']), ['quantity' => 5])->assertRedirect();
+    $this->actingAs($this->cashier)->post(route('staff.products.restock', $this->menu['bun']), ['quantity' => 5])->assertRedirect();
+
+    expect((float) $this->menu['bun']->refresh()->on_hand)->toBe(110.0);
+});
+
+it('hands the products page the time it was loaded, for the offline notice', function () {
+    ($this->allow)(['restock_stock' => true]);
+
+    $this->actingAs($this->cashier)->get(route('staff.products'))->assertOk()->assertViewHas('loadedAt');
+});
